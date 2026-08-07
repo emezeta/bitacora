@@ -1,0 +1,654 @@
+/* ============================================================================
+ *  OBRAS ANGIRÜ - BITÁCORA DE OBRA
+ *  Custom Styles - Parte Común (Landing + Dashboard)
+ *  Archivo: child/css/custom.css
+ *  Version: 2.4.4
+ *  Usuario: 60+ años, alfabetización digital 15-20%
+ *  Principio: "Ausencia de fricción > Pureza técnica"
+ *  ============================================================================ */
+
+/* ============================================================================
+ *  1. VARIABLES GLOBALES - ÚNICA DECLARACIÓN
+ *  ============================================================================ */
+:root {
+  --scale: 0.88;
+
+  --color-primary: #2271b1;
+  --color-primary-dark: #135e96;
+  --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, transparent);
+
+  --color-secondary: #6c757d;
+  --color-secondary-dark: #5a6268;
+
+  --color-bg-light: #ffffff;
+  --color-bg-soft: #f5f5f5;
+  --color-bg-dashboard: rgba(34, 113, 177, 0.08);
+
+  --color-text-primary: #1e1e1e;
+  --color-text-secondary: #666666;
+  --color-text-muted: #888888;
+  --color-text-on-primary: #ffffff;
+
+  --color-success: #00a32a;
+  --color-error: #d63638;
+
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-base: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 6px 12px rgba(0, 0, 0, 0.15);
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+  --border-radius-sm: 4px;
+  --border-radius-base: 8px;
+  --border-radius-lg: 12px;
+
+  --space-xs: calc(10px * var(--scale));
+  --space-sm: calc(15px * var(--scale));
+  --space-md: calc(20px * var(--scale));
+  --space-lg: calc(25px * var(--scale));
+  --space-xl: calc(30px * var(--scale));
+  --space-xxl: calc(40px * var(--scale));
+
+  --font-size-sm: calc(0.9em * var(--scale));
+  --font-size-base: calc(1em * var(--scale));
+  --font-size-lg: calc(1.3em * var(--scale));
+  --font-size-xl: calc(1.8em * var(--scale));
+  --font-size-xxl: calc(2.5em * var(--scale));
+}
+
+/* ============================================================================
+ *  2. LOGIN / REGISTER - WORDPRESS DEFAULT PAGES
+ *  El logo se define acá (CSS) para asegurar consistencia en wp-login.php
+ *  ============================================================================ */
+
+body.login,
+body.register {
+  background: var(--color-bg-light);
+}
+
+.login h1 a,
+.register h1 a {
+  background-image: url('../images/login_obras.png') !important;
+  background-size: contain !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  width: 320px !important;
+  height: 130px !important;
+  margin: 0 auto 20px !important;
+  display: block !important;
+}
+
+.login form,
+.register form {
+  background: var(--color-bg-light);
+  border: 1px solid #e0e0e0;
+  border-radius: var(--border-radius-base);
+  box-shadow: var(--shadow-hover);
+  padding: var(--space-xl);
+  margin-top: var(--space-md);
+}
+
+.login input[type="text"],
+.login input[type="password"],
+.login input[type="email"],
+.register input[type="text"],
+.register input[type="password"],
+.register input[type="email"] {
+  border: 1px solid #ddd;
+  border-radius: var(--border-radius-sm);
+  padding: var(--space-sm);
+  font-size: var(--font-size-base);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.login input:focus,
+.register input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.wp-core-ui .button-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.wp-core-ui .button-primary:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+/* ============================================================================
+ *  3. BOTONES FUNCIONALES - APARIENCIA COMÚN
+ *  ============================================================================ */
+.obras-btn,
+.obras-button,
+.obras-landing-btn {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  border-radius: var(--border-radius-base);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-base);
+}
+
+.obras-button {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.obras-button:hover {
+  background: var(--color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.obras-button.secondary {
+  background: var(--color-secondary);
+}
+
+.obras-button.secondary:hover {
+  background: var(--color-secondary-dark);
+}
+
+.obras-button:hover,
+.obras-button:focus,
+.obras-button:active,
+.obras-button.secondary:hover,
+.obras-button.secondary:focus,
+.obras-button.secondary:active {
+  text-decoration: none !important;
+}
+
+.obras-button .icon {
+  text-decoration: none !important;
+  line-height: 1;
+}
+
+
+/* ============================================================================
+ *  4. COMPONENTE VISUAL UNIFICADO: CARD
+ *  Aplica a los 6 bloques de landing y a los 6 botones del dashboard
+ *  ============================================================================ */
+.obras-feature,
+.obras-button {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 260px;
+  aspect-ratio: 432 / 343;
+  padding: 20px;
+  margin: 0;
+
+  text-align: center;
+  line-height: 1.35;
+  border-radius: var(--border-radius-base);
+  box-shadow: var(--shadow-base);
+}
+
+/* variante primaria compartida */
+.obras-feature,
+.obras-button {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+/* hover compartido */
+.obras-feature:hover,
+.obras-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.obras-feature:hover {
+  background: var(--color-primary-dark);
+}
+
+/* iconos */
+.obras-btn .icon,
+.obras-button .icon,
+.obras-landing-btn .icon,
+.obras-feature .icon {
+  display: block;
+  margin-bottom: 15px;
+  font-size: 3em;
+}
+
+/* títulos y textos de las cards informativas */
+.obras-feature h3 {
+  margin: 0 0 8px;
+  font-size: 1.3em;
+  font-weight: 600;
+  color: var(--color-text-on-primary);
+}
+
+.obras-feature p {
+  margin: 0;
+  font-size: 0.96em;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ============================================================================
+ *  5. KIOSK MODE
+ *  Limpieza:
+ *  la ocultación agresiva por CSS se retiró; esto se sostiene por PHP/hooks.
+ *  ============================================================================ */
+
+/* ============================================================================
+ *  6. RESPONSIVE BASE
+ *  ============================================================================ */
+@media (max-width: 768px) {
+  .obras-feature {
+    max-width: 100%;
+  }
+}
+
+/* FIX GLOBAL:
+ n eutraliza el comportamiento full-width problemático del contenido principal       *
+ en entradas/documentos heredado del parent block theme */
+.entry-content.alignfull.wp-block-post-content {
+  box-sizing: border-box;
+  width: min(95vw, var(--wp--style--global--content-size)) !important;
+  max-width: var(--wp--style--global--content-size) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* AU-02: el pie de ndmcp debe arrancar debajo de imágenes flotadas */
+.obras-acf-box {
+  clear: both;
+}
+
+.obras-acf-box::before,
+.obras-acf-box::after {
+  content: "";
+  display: table;
+}
+
+.obras-acf-box::after {
+  clear: both;
+}
+
+
+
+/* ============================================================================
+ *  FIN
+ *  ============================================================================ */
+
+
+/* ============================================================================
+ *  T4 - ALINEACIÓN DE IMÁGENES DEL EDITOR CLÁSICO / MEDIOS INSERTADOS
+ *  Mantiene en frontend las alineaciones guardadas por WordPress
+ *  ============================================================================ */
+
+.entry-content img,
+.entry-content figure,
+.entry-content .wp-caption,
+.wp-block-post-content img,
+.wp-block-post-content figure,
+.wp-block-post-content .wp-caption {
+  max-width: 100%;
+  height: auto;
+}
+
+.entry-content img.alignleft,
+.entry-content .wp-caption.alignleft,
+.entry-content figure.alignleft,
+.wp-block-post-content img.alignleft,
+.wp-block-post-content .wp-caption.alignleft,
+.wp-block-post-content figure.alignleft {
+  float: left;
+  margin: 0.35em 1.25em 1em 0;
+}
+
+.entry-content img.alignright,
+.entry-content .wp-caption.alignright,
+.entry-content figure.alignright,
+.wp-block-post-content img.alignright,
+.wp-block-post-content .wp-caption.alignright,
+.wp-block-post-content figure.alignright {
+  float: right;
+  margin: 0.35em 0 1em 1.25em;
+}
+
+.entry-content img.aligncenter,
+.entry-content .wp-caption.aligncenter,
+.entry-content figure.aligncenter,
+.wp-block-post-content img.aligncenter,
+.wp-block-post-content .wp-caption.aligncenter,
+.wp-block-post-content figure.aligncenter {
+  display: block;
+  float: none;
+  margin: 1em auto;
+}
+
+.entry-content img.alignnone,
+.entry-content .wp-caption.alignnone,
+.entry-content figure.alignnone,
+.wp-block-post-content img.alignnone,
+.wp-block-post-content .wp-caption.alignnone,
+.wp-block-post-content figure.alignnone {
+  float: none;
+  margin: 1em 0;
+}
+
+.entry-content .wp-caption,
+.wp-block-post-content .wp-caption {
+  box-sizing: border-box;
+}
+
+.entry-content .wp-caption img,
+.wp-block-post-content .wp-caption img {
+  display: block;
+  margin: 0;
+}
+
+.entry-content .wp-caption-text,
+.entry-content .wp-element-caption,
+.wp-block-post-content .wp-caption-text,
+.wp-block-post-content .wp-element-caption {
+  margin-top: 0.35em;
+  font-size: 0.95em;
+  color: var(--color-text-secondary, #666666);
+}
+
+.entry-content::after,
+.wp-block-post-content::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+@media (max-width: 768px) {
+  .entry-content img.alignleft,
+  .entry-content .wp-caption.alignleft,
+  .entry-content figure.alignleft,
+  .entry-content img.alignright,
+  .entry-content .wp-caption.alignright,
+  .entry-content figure.alignright,
+  .wp-block-post-content img.alignleft,
+  .wp-block-post-content .wp-caption.alignleft,
+  .wp-block-post-content figure.alignleft,
+  .wp-block-post-content img.alignright,
+  .wp-block-post-content .wp-caption.alignright,
+  .wp-block-post-content figure.alignright {
+    float: none;
+    display: block;
+    margin: 1em auto;
+  }
+}
+
+
+/* Enlaces del contenido en singles de ndmcp */
+.entry-content a,
+.wp-block-post-content a {
+  color:  #4093a6;
+}
+
+/* color: 418598; 003d51; 00506a 61c0cf */
+
+.entry-content a:hover,
+.wp-block-post-content a:hover {
+  color: #86cfda;
+  text-decoration: underline;
+}
+
+
+/* ============================================================
+   Catálogos - Galerías clásicas generadas por shortcode [gallery]
+   Corrige visualización frontend en una sola columna.
+   ============================================================ */
+
+body.single-catalogo_obra .gallery {
+  display: grid !important;
+  gap: 16px;
+  margin: 1.5rem 0;
+}
+
+body.single-catalogo_obra .gallery.gallery-columns-1 {
+  grid-template-columns: 1fr;
+}
+
+body.single-catalogo_obra .gallery.gallery-columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.single-catalogo_obra .gallery.gallery-columns-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.single-catalogo_obra .gallery.gallery-columns-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.single-catalogo_obra .gallery .gallery-item {
+  float: none !important;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+body.single-catalogo_obra .gallery .gallery-icon {
+  margin: 0;
+}
+
+body.single-catalogo_obra .gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+body.single-catalogo_obra .gallery .gallery-caption {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  body.single-catalogo_obra .gallery.gallery-columns-3,
+  body.single-catalogo_obra .gallery.gallery-columns-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  body.single-catalogo_obra .gallery {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ====================
+   formato para el PAD
+   ====================
+*/
+
+.obras-pad-test {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.obras-pad-test iframe {
+  display: block;
+  width: 100%;
+  height: 90vh;
+  min-height: 800px;
+  border: 0;
+}
+
+/* Aux Section - botones internos del listado */
+.obras-lista-auxiliar .obras-aux-btn,
+.obras-single-actions .obras-aux-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: auto;
+  width: auto;
+  max-width: none;
+  padding: 0.55rem 0.9rem;
+  margin: 0.25rem 0.35rem 0.25rem 0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none !important;
+  background: #00506a;
+  color: #ffffff;
+}
+
+.obras-lista-auxiliar .obras-aux-btn-secondary,
+.obras-single-actions .obras-aux-btn-secondary {
+  background: #eef3f5;
+  color: #00506a;
+  border: 1px solid #ccd8dd;
+}
+
+.obras-lista-auxiliar .obras-lista-actions,
+.obras-single-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+/* Aux Section - metadatos del listado */
+.obras-lista-auxiliar .obras-lista-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.75rem 0;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.obras-lista-auxiliar .obras-lista-meta span {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ============================================================================
+ *  COMPATIBILIDAD — JERARQUÍA TIPOGRÁFICA EN CONTENIDO PUBLICADO
+ *
+ *  El CSS frontend del plugin Sheetable aplica un reset global no acotado:
+ *  h1...h6 { font-size: inherit; font-weight: inherit; }
+ *  y elimina sus márgenes. Se restablece la jerarquía solamente en singles:
+ *  título del post y encabezados dentro del contenido.
+ *  ============================================================================ */
+
+/* Título principal de cada entrada/single. */
+body.single .wp-block-post-title {
+  font-size: var(--wp--preset--font-size--xx-large);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Base común para encabezados redactados desde el editor clásico o de bloques. */
+body.single .entry-content :is(h1, h2, h3, h4, h5, h6),
+body.single .wp-block-post-content :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  margin-block: 1.5rem 0;
+}
+
+body.single .entry-content > :is(h1, h2, h3, h4, h5, h6):first-child,
+body.single .wp-block-post-content > :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-block-start: 0;
+}
+
+body.single .entry-content h1,
+body.single .wp-block-post-content h1 {
+  font-size: var(--wp--preset--font-size--xx-large);
+}
+
+body.single .entry-content h2,
+body.single .wp-block-post-content h2 {
+  font-size: var(--wp--preset--font-size--x-large);
+}
+
+body.single .entry-content h3,
+body.single .wp-block-post-content h3 {
+  font-size: var(--wp--preset--font-size--large);
+}
+
+body.single .entry-content h4,
+body.single .wp-block-post-content h4 {
+  font-size: var(--wp--preset--font-size--large);
+}
+
+body.single .entry-content h5,
+body.single .wp-block-post-content h5 {
+  font-size: var(--wp--preset--font-size--medium);
+  letter-spacing: 0;
+}
+
+body.single .entry-content h6,
+body.single .wp-block-post-content h6 {
+  font-size: var(--wp--preset--font-size--small);
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+
+/* ============================================================================
+ *  COMPATIBILIDAD — LISTAS DEL CONTENIDO PUBLICADO
+ *
+ *  El CSS frontend del plugin Sheetable aplica un reset global no acotado:
+ *  ol, ul, menu { list-style: none; }
+ *  Se restauran viñetas y numeración solamente dentro del contenido de singles.
+ *  ============================================================================ */
+
+body.single .entry-content ul,
+body.single .wp-block-post-content ul {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-inline-start: 1.5em;
+  margin-block: 1rem 0;
+}
+
+body.single .entry-content ol,
+body.single .wp-block-post-content ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-inline-start: 1.5em;
+  margin-block: 1rem 0;
+}
+
+/* Jerarquía visual de listas anidadas. */
+body.single .entry-content ul ul,
+body.single .wp-block-post-content ul ul {
+  list-style-type: circle;
+}
+
+body.single .entry-content ul ul ul,
+body.single .wp-block-post-content ul ul ul {
+  list-style-type: square;
+}
+
+body.single .entry-content ol ol,
+body.single .wp-block-post-content ol ol {
+  list-style-type: lower-alpha;
+}
+
+body.single .entry-content ol ol ol,
+body.single .wp-block-post-content ol ol ol {
+  list-style-type: lower-roman;
+}
+
+body.single .entry-content li,
+body.single .wp-block-post-content li {
+  margin-block: 0.25em 0;
+}

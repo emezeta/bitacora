@@ -1,0 +1,582 @@
+/* ============================================================================
+ *  OBRAS ANGIRÜ - BITÁCORA DE OBRA
+ *  Dashboard Frontend Styles
+ *  Archivo: child/css/dashboardfe.css
+ *  Versión: 3.3.0
+ *  ============================================================================ */
+
+/* ============================================================================
+ *  1. DASHBOARD - CONTENEDOR PRINCIPAL
+ *  ============================================================================ */
+.obras-dashboard {
+    margin: 40px auto;
+    max-width: 1400px;
+    padding: 40px 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(34, 113, 177, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================================
+ *  2. DASHBOARD - TÍTULOS
+ *  ============================================================================ */
+.obras-dashboard h1 {
+    margin: 0 0 var(--space-md, 20px);
+    text-align: center;
+    font-size: calc(2.5em * var(--scale, 0.88));
+    color: var(--color-text-primary, #1e1e1e);
+}
+
+.obras-dashboard .welcome {
+    margin: 0 0 var(--space-md, 20px);
+    text-align: center;
+    font-size: calc(1.3em * var(--scale, 0.88));
+    color: var(--color-primary, #2271b1);
+}
+
+.obras-dashboard > p:not(.welcome) {
+    margin: 0 0 var(--space-xl, 30px);
+    text-align: center;
+    font-size: calc(1.1em * var(--scale, 0.88));
+    color: var(--color-text-secondary, #666);
+}
+
+/* ============================================================================
+ *  3. DASHBOARD - GRID DE BOTONES
+ *  ============================================================================ */
+.obras-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    max-width: 1350px;
+    margin: 25px auto 0;
+}
+
+/* ajustes específicos del dashboard sobre la card común */
+.obras-dashboard .obras-button {
+    color: var(--color-text-on-primary, #ffffff);
+}
+
+/* ============================================================================
+ *  4. LISTADOS FRONTEND
+ *  ============================================================================ */
+.obras-lista {
+    max-width: 900px;
+    margin: var(--space-xxl, 40px) auto;
+    padding: var(--space-md, 20px);
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(34, 113, 177, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.obras-lista h1 {
+    margin-bottom: var(--space-md, 20px);
+    text-align: center;
+    font-size: calc(1.8em * var(--scale, 0.88));
+    color: var(--color-text-primary, #1e1e1e);
+}
+
+.obras-lista .item {
+    margin-bottom: calc(10px * var(--scale, 0.88));
+    padding: calc(15px * var(--scale, 0.88)) calc(20px * var(--scale, 0.88));
+    background: var(--color-bg-light, #ffffff);
+    border-left: 4px solid var(--color-primary, #2271b1);
+    border-radius: var(--border-radius-sm, 4px);
+    box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.05));
+}
+
+.obras-lista .item h3 {
+    margin: 0 0 var(--space-xs, 5px);
+    font-size: calc(1.1em * var(--scale, 0.88));
+}
+
+.obras-lista .item h3 a {
+    color: var(--color-primary, #2271b1);
+    text-decoration: none;
+}
+
+.obras-lista .item h3 a:hover {
+    text-decoration: underline;
+}
+
+.obras-lista .item .meta,
+.obras-lista .item .tipo {
+    font-size: calc(0.9em * var(--scale, 0.88));
+    color: var(--color-text-secondary, #666);
+}
+
+.obras-lista .item .tipo {
+    display: inline-block;
+    margin-left: var(--space-sm, 10px);
+    padding: var(--space-xs, 3px) var(--space-sm, 8px);
+    background: #e9ecef;
+    border-radius: var(--border-radius-sm, 3px);
+}
+
+.obras-lista .empty {
+    padding: var(--space-xxl, 40px);
+    text-align: center;
+    color: var(--color-text-secondary, #666);
+}
+
+.obras-lista .back-link {
+    display: inline-block;
+    margin-top: var(--space-md, 20px);
+    color: var(--color-primary, #2271b1);
+    text-decoration: none;
+}
+
+.obras-lista .back-link:hover {
+    text-decoration: underline;
+}
+
+.obras-lista .item[data-type="documento"] {
+    border-left-color: #6c757d;
+}
+
+.obras-lista .item[data-type="material"] {
+    border-left-color: #28a745;
+}
+
+/* ============================================================================
+ *  5. MENÚ LOGOUT FRONTAL
+ *  ============================================================================ */
+.obras-user-menu {
+    position: fixed;
+    top: calc(20px * var(--scale, 0.88));
+    right: calc(20px * var(--scale, 0.88));
+    z-index: 9999;
+}
+
+.obras-user-info {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 10px);
+    padding: calc(10px * var(--scale, 0.88)) calc(20px * var(--scale, 0.88));
+    background: var(--color-primary, #2271b1);
+    color: var(--color-text-on-primary, #ffffff);
+    border-radius: calc(5px * var(--scale, 0.88));
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(34, 113, 177, 0.3);
+}
+
+.obras-user-info:hover {
+    background: var(--color-primary-dark, #135e96);
+}
+
+.obras-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 200px;
+    margin-top: var(--space-md, 10px);
+    overflow: hidden;
+    background: var(--color-bg-light, #ffffff);
+    border: 1px solid rgba(34, 113, 177, 0.2);
+    border-radius: var(--border-radius-sm, 5px);
+    box-shadow: var(--shadow-hover, 0 4px 12px rgba(0, 0, 0, 0.15));
+}
+
+.obras-dropdown.show {
+    display: block;
+}
+
+.obras-dropdown a {
+    display: block;
+    padding: calc(12px * var(--scale, 0.88)) calc(20px * var(--scale, 0.88));
+    color: #333;
+    text-decoration: none;
+    border-bottom: 1px solid #eee;
+}
+
+.obras-dropdown a:hover {
+    background: #f9f9f9;
+}
+
+.obras-dropdown a.logout {
+    background: #fff5f5;
+    color: var(--color-error, #d63638);
+}
+
+.obras-dropdown a.logout:hover {
+    background: #ffe5e5;
+}
+
+.obras-login-link {
+    color: var(--color-primary, #2271b1);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.obras-login-link:hover {
+    text-decoration: underline;
+}
+
+/* ============================================================================
+ *  6. SINGLE BITÁCORA
+ *  ============================================================================ */
+body.logged-in .single-bitacora-container {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 40px 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(34, 113, 177, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+body.logged-in .single-bitacora h1 {
+    text-align: center;
+    color: var(--color-text-primary, #1e1e1e);
+}
+
+/* ============================================================================
+ *  7. ACF BOX
+ *  ============================================================================ */
+.obras-acf-box {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.obras-acf-box h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    color: var(--color-primary, #2271b1);
+}
+
+.obras-acf-box p {
+    margin: 8px 0;
+    color: #333;
+}
+
+.obras-acf-box.bitacora {
+    border-left: 4px solid #2271b1;
+}
+
+.obras-acf-box.documento {
+    border-left: 4px solid #6c757d;
+}
+
+.obras-acf-box.material {
+    border-left: 4px solid #28a745;
+}
+
+/* ============================================================================
+ *  8. RESPONSIVE
+ *  ============================================================================ */
+@media (max-width: 1024px) {
+    .obras-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .obras-dashboard .obras-button {
+        aspect-ratio: auto;
+        min-height: 240px;
+    }
+}
+
+@media (max-width: 768px) {
+    .obras-dashboard {
+        max-width: 100%;
+        margin: 30px 10px;
+        padding: 30px 15px;
+    }
+
+    .obras-dashboard h1 {
+        font-size: calc(1.8em * var(--scale, 0.88));
+    }
+
+    .obras-buttons {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+        margin: 30px 10px 0;
+        padding: 0;
+    }
+
+    .obras-dashboard .obras-button {
+        width: 100%;
+    }
+
+    .obras-lista {
+        margin: var(--space-lg, 25px) 10px;
+        padding: var(--space-lg, 25px) 15px;
+    }
+
+    .single-bitacora-container {
+        margin: 30px 10px;
+        padding: 30px 15px;
+    }
+}
+
+/* ============================================================================
+ *  9. COMENTARIOS EN NOTAS
+ *  ============================================================================ */
+.obras-comments-section {
+    margin: 28px 0 0;
+    padding: 24px;
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm, 0 2px 4px rgba(0,0,0,.08));
+}
+
+.obras-comments-title {
+    margin: 0 0 12px;
+    font-size: 1.5em;
+    color: var(--color-text-primary, #1e1e1e);
+}
+
+.obras-comments-note,
+.obras-comments-empty,
+.obras-comments-closed {
+    margin: 0 0 18px;
+    color: var(--color-text-secondary, #666);
+    line-height: 1.5;
+}
+
+.obras-comment-list,
+.obras-comment-list .children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.obras-comment-list .children {
+    margin-top: 14px;
+    margin-left: 28px;
+    padding-left: 16px;
+    border-left: 3px solid rgba(34, 113, 177, 0.15);
+}
+
+.obras-comment-list li.comment {
+    margin: 0 0 18px;
+}
+
+.obras-comment-list .comment-body {
+    padding: 16px;
+    background: #ffffff;
+    border: 1px solid #e6e6e6;
+    border-radius: 8px;
+}
+
+.obras-comment-list .comment-meta {
+    margin-bottom: 10px;
+    font-size: 0.95em;
+}
+
+.obras-comment-list .comment-author .fn {
+    font-weight: 600;
+    color: var(--color-text-primary, #1e1e1e);
+}
+
+.obras-comment-list .comment-metadata a {
+    color: var(--color-text-secondary, #666);
+    text-decoration: none;
+}
+
+.obras-comment-list .comment-metadata a:hover {
+    text-decoration: underline;
+}
+
+.obras-comment-list .comment-content {
+    color: #333;
+    line-height: 1.6;
+}
+
+.obras-comment-list .reply {
+    margin-top: 12px;
+}
+
+.obras-comment-list .comment-reply-link {
+    display: inline-block;
+    padding: 8px 12px;
+    background: #eef5fb;
+    border-radius: 6px;
+    color: var(--color-primary, #2271b1);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.obras-comment-list .comment-reply-link:hover {
+    background: #e1eef9;
+}
+
+.comment-respond {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid #ddd;
+}
+
+.comment-reply-title {
+    margin: 0 0 14px;
+    font-size: 1.25em;
+    color: var(--color-text-primary, #1e1e1e);
+}
+
+.comment-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.comment-form textarea,
+.comment-form input[type="text"],
+.comment-form input[type="email"],
+.comment-form input[type="url"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    box-sizing: border-box;
+    background: #fff;
+}
+
+.comment-form textarea {
+    min-height: 140px;
+    resize: vertical;
+}
+
+.comment-form .submit,
+.obras-comment-submit {
+    padding: 12px 18px;
+    background: var(--color-primary, #2271b1);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.comment-form .submit:hover,
+.obras-comment-submit:hover {
+    background: var(--color-primary-dark, #1a86d3);
+    /* #135e96 */
+}
+
+@media (max-width: 768px) {
+    .obras-comments-section {
+        padding: 18px;
+    }
+
+    .obras-comment-list .children {
+        margin-left: 12px;
+        padding-left: 10px;
+    }
+}
+
+@media screen and (max-width: 1024px) {
+    .obras-user-menu {
+        position: absolute !important;
+        top: calc(20px * var(--scale, 0.88)) !important;
+        right: calc(20px * var(--scale, 0.88)) !important;
+        left: auto !important;
+        bottom: auto !important;
+        z-index: 9999 !important;
+        max-width: calc(100vw - 20px) !important;
+    }
+
+    .obras-user-info {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+}
+
+/* Dashboard - acceso discreto a más secciones */
+.obras-dashboard-more {
+  margin-top: 1.4rem;
+  text-align: center;
+}
+
+.obras-dashboard-more-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.15rem;
+  border-radius: 999px;
+  background: #eef3f5;
+  color: #00506a;
+  border: 1px solid #ccd8dd;
+  font-size: 1.50rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none !important;
+}
+
+.obras-dashboard-more-link:hover,
+.obras-dashboard-more-link:focus {
+  background: #ddebef;
+  color: #00506a;
+  text-decoration: none !important;
+}
+
+/* Aux dashboard - subtitulo de boton */
+.obras-aux-dashboard .obras-button .obras-aux-card-title {
+  display: block;
+}
+
+.obras-aux-dashboard .obras-button .obras-aux-card-subtitle {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.82em;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.82;
+}
+
+/* Aux single - botones de navegacion */
+.obras-single-actions.obras-single-actions-aux {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.75rem !important;
+  margin-top: 1.75rem !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 54px !important;
+  padding: 0.85rem 1.25rem !important;
+  border-radius: 10px !important;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-decoration: none !important;
+  border: 0 !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-primary {
+  background: #2271b1 !important;
+  color: #ffffff !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-more {
+  background: #eef3f5 !important;
+  color: #00506a !important;
+  border: 1px solid #ccd8dd !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-secondary {
+  background: #6c757d !important;
+  color: #ffffff !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-edit {
+  background: #20895a !important;
+  color: #ffffff !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn:hover,
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn:focus {
+  text-decoration: none !important;
+  filter: brightness(0.96);
+}
