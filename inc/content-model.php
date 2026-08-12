@@ -163,6 +163,94 @@ function bitacora_register_class_taxonomy() {
 
 
 /**
+ * Devuelve las secciones configuradas.
+ *
+ * Argumentos opcionales:
+ * - area:  main | more
+ * - state: active | hidden | archived
+ *
+ * El orden se toma de bitacora_section_order.
+ */
+function bitacora_get_sections( $args = array() ) {
+
+    $defaults = array(
+        'area'  => '',
+        'state' => '',
+    );
+
+    $args = wp_parse_args( $args, $defaults );
+
+    $meta_query = array();
+
+    if ( '' !== $args['area'] ) {
+        $meta_query[] = array(
+            'key'     => 'bitacora_section_area',
+            'value'   => $args['area'],
+            'compare' => '=',
+        );
+    }
+
+    if ( '' !== $args['state'] ) {
+        $meta_query[] = array(
+            'key'     => 'bitacora_section_state',
+            'value'   => $args['state'],
+            'compare' => '=',
+        );
+    }
+
+    $query_args = array(
+        'taxonomy'   => 'bitacora_section',
+        'hide_empty' => false,
+        'meta_key'   => 'bitacora_section_order',
+        'orderby'    => 'meta_value_num',
+        'order'      => 'ASC',
+    );
+
+    if ( ! empty( $meta_query ) ) {
+        $query_args['meta_query'] = $meta_query;
+    }
+
+    return get_terms( $query_args );
+}
+
+
+/**
+ * Devuelve una sección por su slug.
+ */
+function bitacora_get_section( $slug ) {
+
+    if ( ! is_string( $slug ) || '' === $slug ) {
+        return false;
+    }
+
+    return get_term_by(
+        'slug',
+        sanitize_title( $slug ),
+        'bitacora_section'
+    );
+}
+
+
+/**
+ * Devuelve un metadato de configuración de una sección.
+ */
+function bitacora_get_section_meta( $section, $key, $default = '' ) {
+
+    if ( is_string( $section ) ) {
+        $section = bitacora_get_section( $section );
+    }
+
+    if ( ! $section || is_wp_error( $section ) ) {
+        return $default;
+    }
+
+    $value = get_term_meta( $section->term_id, $key, true );
+
+    return '' === $value ? $default : $value;
+}
+
+
+/**
  * Registro del modelo nuevo.
  */
 function bitacora_register_content_model() {
