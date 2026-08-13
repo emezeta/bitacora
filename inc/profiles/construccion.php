@@ -30,6 +30,10 @@ return array(
             'order'     => 10,
             'area'      => 'main',
             'state'     => 'active',
+
+            'feature_file'      => true,
+            'feature_thumbnail' => false,
+            'feature_location'  => false,
         ),
 
         'materiales' => array(
@@ -42,6 +46,10 @@ return array(
             'order'     => 20,
             'area'      => 'main',
             'state'     => 'active',
+
+            'feature_file'      => true,
+            'feature_thumbnail' => true,
+            'feature_location'  => true,
         ),
 
         'catalogos' => array(
@@ -54,6 +62,10 @@ return array(
             'order'     => 30,
             'area'      => 'main',
             'state'     => 'active',
+
+            'feature_file'      => true,
+            'feature_thumbnail' => false,
+            'feature_location'  => false,
         ),
 
         'planos' => array(
@@ -66,6 +78,10 @@ return array(
             'order'     => 40,
             'area'      => 'main',
             'state'     => 'active',
+
+            'feature_file'      => true,
+            'feature_thumbnail' => false,
+            'feature_location'  => false,
         ),
 
         'paisajismo' => array(
@@ -78,6 +94,10 @@ return array(
             'order'     => 50,
             'area'      => 'more',
             'state'     => 'active',
+
+            'feature_file'      => true,
+            'feature_thumbnail' => false,
+            'feature_location'  => false,
         ),
     ),
 );
