@@ -105,6 +105,7 @@ function bitacora_register_section_taxonomy() {
             'public'            => false,
             'show_ui'           => true,
             'show_admin_column' => true,
+            'meta_box_cb'       => false,
             'show_in_rest'      => false,
             'query_var'         => false,
             'rewrite'           => false,
@@ -154,6 +155,7 @@ function bitacora_register_class_taxonomy() {
             'public'            => false,
             'show_ui'           => true,
             'show_admin_column' => true,
+            'meta_box_cb'       => false,
             'show_in_rest'      => false,
             'query_var'         => false,
             'rewrite'           => false,
@@ -349,6 +351,234 @@ function bitacora_get_class_meta( $class, $key, $default = '' ) {
     }
 
     return get_term_meta( $class->term_id, $key, true );
+}
+
+
+/**
+ * Devuelve la sección asignada a un ítem.
+ *
+ * Un bitacora_item debe tener exactamente una sección.
+ * Si no existe una asignación válida, devuelve false.
+ */
+function bitacora_get_item_section( $post_id ) {
+
+    $post_id = (int) $post_id;
+
+    if (
+        ! $post_id
+        || 'bitacora_item' !== get_post_type( $post_id )
+    ) {
+        return false;
+    }
+
+    $terms = wp_get_object_terms(
+        $post_id,
+        'bitacora_section'
+    );
+
+    if (
+        is_wp_error( $terms )
+        || 1 !== count( $terms )
+    ) {
+        return false;
+    }
+
+    return $terms[0];
+}
+
+
+/**
+ * Asigna exactamente una sección a un ítem.
+ *
+ * $section puede ser un slug o un WP_Term.
+ */
+function bitacora_set_item_section( $post_id, $section ) {
+
+    $post_id = (int) $post_id;
+
+    if (
+        ! $post_id
+        || 'bitacora_item' !== get_post_type( $post_id )
+    ) {
+        return new WP_Error(
+            'bitacora_invalid_item',
+            'El contenido no es un bitacora_item válido.'
+        );
+    }
+
+    if ( is_string( $section ) ) {
+        $section = bitacora_get_section( $section );
+    }
+
+    if (
+        ! $section
+        || is_wp_error( $section )
+        || ! $section instanceof WP_Term
+        || 'bitacora_section' !== $section->taxonomy
+    ) {
+        return new WP_Error(
+            'bitacora_invalid_section',
+            'La sección indicada no es válida.'
+        );
+    }
+
+    /*
+     * Si el ítem ya tiene clase, ésta debe pertenecer
+     * también a la nueva sección.
+     */
+    $class = bitacora_get_item_class( $post_id );
+
+    if ( $class ) {
+
+        $scope = bitacora_get_class_meta(
+            $class,
+            'bitacora_class_scope'
+        );
+
+        $scope_id = bitacora_get_class_meta(
+            $class,
+            'bitacora_class_scope_id'
+        );
+
+        if (
+            'section' !== $scope
+            || $section->slug !== $scope_id
+        ) {
+            return new WP_Error(
+                'bitacora_class_section_mismatch',
+                'La clase actual no pertenece a la sección indicada.'
+            );
+        }
+    }
+
+    return wp_set_object_terms(
+        $post_id,
+        array( (int) $section->term_id ),
+        'bitacora_section',
+        false
+    );
+}
+
+
+/**
+ * Devuelve la clase asignada a un ítem.
+ *
+ * Un bitacora_item puede tener 0..1 clase.
+ * Si no tiene clase asignada, devuelve false.
+ */
+function bitacora_get_item_class( $post_id ) {
+
+    $post_id = (int) $post_id;
+
+    if (
+        ! $post_id
+        || 'bitacora_item' !== get_post_type( $post_id )
+    ) {
+        return false;
+    }
+
+    $terms = wp_get_object_terms(
+        $post_id,
+        'bitacora_class'
+    );
+
+    if (
+        is_wp_error( $terms )
+        || 1 !== count( $terms )
+    ) {
+        return false;
+    }
+
+    return $terms[0];
+}
+
+
+/**
+ * Asigna 0..1 clase a un ítem.
+ *
+ * $class puede ser:
+ * - un slug;
+ * - un WP_Term;
+ * - false, null o '' para dejar el ítem sin clasificar.
+ */
+function bitacora_set_item_class( $post_id, $class = false ) {
+
+    $post_id = (int) $post_id;
+
+    if (
+        ! $post_id
+        || 'bitacora_item' !== get_post_type( $post_id )
+    ) {
+        return new WP_Error(
+            'bitacora_invalid_item',
+            'El contenido no es un bitacora_item válido.'
+        );
+    }
+
+    if (
+        false === $class
+        || null === $class
+        || '' === $class
+    ) {
+        return wp_set_object_terms(
+            $post_id,
+            array(),
+            'bitacora_class',
+            false
+        );
+    }
+
+    if ( is_string( $class ) ) {
+        $class = bitacora_get_class( $class );
+    }
+
+    if (
+        ! $class
+        || is_wp_error( $class )
+        || ! $class instanceof WP_Term
+        || 'bitacora_class' !== $class->taxonomy
+    ) {
+        return new WP_Error(
+            'bitacora_invalid_class',
+            'La clase indicada no es válida.'
+        );
+    }
+
+    $section = bitacora_get_item_section( $post_id );
+
+    if ( ! $section ) {
+        return new WP_Error(
+            'bitacora_item_section_required',
+            'El ítem debe tener una sección antes de asignarle una clase.'
+        );
+    }
+
+    $scope = bitacora_get_class_meta(
+        $class,
+        'bitacora_class_scope'
+    );
+
+    $scope_id = bitacora_get_class_meta(
+        $class,
+        'bitacora_class_scope_id'
+    );
+
+    if (
+        'section' !== $scope
+        || $section->slug !== $scope_id
+    ) {
+        return new WP_Error(
+            'bitacora_class_section_mismatch',
+            'La clase indicada no pertenece a la sección del ítem.'
+        );
+    }
+
+    return wp_set_object_terms(
+        $post_id,
+        array( (int) $class->term_id ),
+        'bitacora_class',
+        false
+    );
 }
 
 
