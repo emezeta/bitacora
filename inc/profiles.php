@@ -268,3 +268,213 @@ function bitacora_seed_profile_sections( $profile_id ) {
 
     return $report;
 }
+
+
+/**
+ * Convierte la configuración de una clase de perfil
+ * en los termmeta utilizados por bitacora_class.
+ *
+ * name y slug quedan fuera deliberadamente:
+ * son propiedades nativas del término de WordPress.
+ */
+function bitacora_profile_class_to_term_meta( $class ) {
+
+    if ( ! is_array( $class ) ) {
+        return array();
+    }
+
+    $map = array(
+        'scope'    => 'bitacora_class_scope',
+        'scope_id' => 'bitacora_class_scope_id',
+        'order'    => 'bitacora_class_order',
+        'state'    => 'bitacora_class_state',
+    );
+
+    $meta = array();
+
+    foreach ( $map as $source_key => $meta_key ) {
+
+        if ( ! array_key_exists( $source_key, $class ) ) {
+            continue;
+        }
+
+        $meta[ $meta_key ] = $class[ $source_key ];
+    }
+
+    return $meta;
+}
+
+
+/**
+ * Siembra las clases de un perfil de instalación.
+ *
+ * Reglas:
+ * - crea una clase si todavía no existe;
+ * - identifica las clases existentes por slug;
+ * - nunca renombra una clase existente;
+ * - nunca modifica su slug;
+ * - nunca sobrescribe termmeta existente;
+ * - sólo agrega metadatos que todavía no existen.
+ *
+ * El perfil sirve exclusivamente como configuración inicial.
+ */
+function bitacora_seed_profile_classes( $profile_id ) {
+
+    $profile = bitacora_load_profile( $profile_id );
+
+    if ( ! $profile ) {
+        return new WP_Error(
+            'bitacora_profile_not_found',
+            sprintf(
+                'No se pudo cargar el perfil "%s".',
+                (string) $profile_id
+            )
+        );
+    }
+
+    if (
+        empty( $profile['classes'] )
+        || ! is_array( $profile['classes'] )
+    ) {
+        return new WP_Error(
+            'bitacora_profile_classes_not_found',
+            sprintf(
+                'El perfil "%s" no contiene clases.',
+                $profile['id']
+            )
+        );
+    }
+
+    $report = array(
+        'profile'    => $profile['id'],
+        'created'    => 0,
+        'existing'   => 0,
+        'meta_added' => 0,
+        'errors'     => array(),
+        'classes'    => array(),
+    );
+
+    foreach ( $profile['classes'] as $class_id => $class ) {
+
+        if (
+            empty( $class['name'] )
+            || empty( $class['slug'] )
+        ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": faltan name o slug.',
+                $class_id
+            );
+            continue;
+        }
+
+        $slug = sanitize_title( $class['slug'] );
+
+        $term = get_term_by(
+            'slug',
+            $slug,
+            'bitacora_class'
+        );
+
+        $status = 'existing';
+
+        /*
+         * Crear el término solamente si no existe.
+         */
+        if ( ! $term ) {
+
+            $result = wp_insert_term(
+                $class['name'],
+                'bitacora_class',
+                array(
+                    'slug' => $slug,
+                )
+            );
+
+            if ( is_wp_error( $result ) ) {
+                $report['errors'][] = sprintf(
+                    'Clase "%s": %s',
+                    $slug,
+                    $result->get_error_message()
+                );
+                continue;
+            }
+
+            $term = get_term(
+                $result['term_id'],
+                'bitacora_class'
+            );
+
+            if ( ! $term || is_wp_error( $term ) ) {
+                $report['errors'][] = sprintf(
+                    'Clase "%s": no se pudo recuperar el término creado.',
+                    $slug
+                );
+                continue;
+            }
+
+            $status = 'created';
+            $report['created']++;
+
+        } else {
+            $report['existing']++;
+        }
+
+        /*
+         * Convertir la definición del perfil a termmeta.
+         */
+        $meta = bitacora_profile_class_to_term_meta( $class );
+
+        $class_meta_added = 0;
+
+        foreach ( $meta as $meta_key => $meta_value ) {
+
+            /*
+             * metadata_exists() permite distinguir entre:
+             *
+             * - metadato inexistente;
+             * - metadato existente cuyo valor es ''.
+             *
+             * Esto es importante para scope_id vacío en las
+             * clases cuyo scope es notes.
+             */
+            if (
+                metadata_exists(
+                    'term',
+                    $term->term_id,
+                    $meta_key
+                )
+            ) {
+                continue;
+            }
+
+            $result = add_term_meta(
+                $term->term_id,
+                $meta_key,
+                $meta_value,
+                true
+            );
+
+            if ( is_wp_error( $result ) || false === $result ) {
+                $report['errors'][] = sprintf(
+                    'Clase "%s": no se pudo agregar %s.',
+                    $slug,
+                    $meta_key
+                );
+                continue;
+            }
+
+            $class_meta_added++;
+            $report['meta_added']++;
+        }
+
+        $report['classes'][] = array(
+            'id'         => $class_id,
+            'slug'       => $slug,
+            'term_id'    => (int) $term->term_id,
+            'status'     => $status,
+            'meta_added' => $class_meta_added,
+        );
+    }
+
+    return $report;
+}
