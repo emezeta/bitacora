@@ -244,9 +244,111 @@ function bitacora_get_section_meta( $section, $key, $default = '' ) {
         return $default;
     }
 
-    $value = get_term_meta( $section->term_id, $key, true );
+    if ( ! metadata_exists( 'term', $section->term_id, $key ) ) {
+        return $default;
+    }
 
-    return '' === $value ? $default : $value;
+    return get_term_meta( $section->term_id, $key, true );
+}
+
+
+/**
+ * Devuelve las clases disponibles.
+ *
+ * Filtros opcionales:
+ * - scope
+ * - scope_id
+ * - state
+ *
+ * Los resultados se ordenan por bitacora_class_order.
+ */
+function bitacora_get_classes( $args = array() ) {
+
+    $defaults = array(
+        'scope'    => '',
+        'scope_id' => '',
+        'state'    => '',
+    );
+
+    $args = wp_parse_args( $args, $defaults );
+
+    $meta_query = array();
+
+    if ( '' !== $args['scope'] ) {
+        $meta_query[] = array(
+            'key'     => 'bitacora_class_scope',
+            'value'   => $args['scope'],
+            'compare' => '=',
+        );
+    }
+
+    if ( '' !== $args['scope_id'] ) {
+        $meta_query[] = array(
+            'key'     => 'bitacora_class_scope_id',
+            'value'   => $args['scope_id'],
+            'compare' => '=',
+        );
+    }
+
+    if ( '' !== $args['state'] ) {
+        $meta_query[] = array(
+            'key'     => 'bitacora_class_state',
+            'value'   => $args['state'],
+            'compare' => '=',
+        );
+    }
+
+    $query_args = array(
+        'taxonomy'   => 'bitacora_class',
+        'hide_empty' => false,
+        'meta_key'   => 'bitacora_class_order',
+        'orderby'    => 'meta_value_num',
+        'order'      => 'ASC',
+    );
+
+    if ( ! empty( $meta_query ) ) {
+        $query_args['meta_query'] = $meta_query;
+    }
+
+    return get_terms( $query_args );
+}
+
+
+/**
+ * Devuelve una clase por su slug.
+ */
+function bitacora_get_class( $slug ) {
+
+    if ( ! is_string( $slug ) || '' === $slug ) {
+        return false;
+    }
+
+    return get_term_by(
+        'slug',
+        sanitize_title( $slug ),
+        'bitacora_class'
+    );
+}
+
+
+/**
+ * Devuelve un metadato de configuración de una clase.
+ */
+function bitacora_get_class_meta( $class, $key, $default = '' ) {
+
+    if ( is_string( $class ) ) {
+        $class = bitacora_get_class( $class );
+    }
+
+    if ( ! $class || is_wp_error( $class ) ) {
+        return $default;
+    }
+
+    if ( ! metadata_exists( 'term', $class->term_id, $key ) ) {
+        return $default;
+    }
+
+    return get_term_meta( $class->term_id, $key, true );
 }
 
 
