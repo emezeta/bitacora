@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function obras_author_locked_post_types() {
     return array(
         'bitacora',
+        'bitacora_item',
         'documento_obra',
         'material_obra',
         'catalogo_obra',
