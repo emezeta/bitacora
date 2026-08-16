@@ -255,6 +255,38 @@ function bitacora_get_section_meta( $section, $key, $default = '' ) {
 
 
 /**
+ * Indica si una sección tiene activa una feature.
+ *
+ * Features soportadas:
+ * - file
+ * - thumbnail
+ * - location
+ *
+ * $section puede ser un slug o un WP_Term.
+ */
+function bitacora_section_has_feature( $section, $feature ) {
+
+    $meta_keys = array(
+        'file'      => 'bitacora_section_feature_file',
+        'thumbnail' => 'bitacora_section_feature_thumbnail',
+        'location'  => 'bitacora_section_feature_location',
+    );
+
+    $feature = sanitize_key( $feature );
+
+    if ( ! isset( $meta_keys[ $feature ] ) ) {
+        return false;
+    }
+
+    return '1' === (string) bitacora_get_section_meta(
+        $section,
+        $meta_keys[ $feature ],
+        '0'
+    );
+}
+
+
+/**
  * Devuelve las clases disponibles.
  *
  * Filtros opcionales:
