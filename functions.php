@@ -19,6 +19,7 @@ require_once get_stylesheet_directory() . '/inc/cpt.php';
 require_once get_stylesheet_directory() . '/inc/content-model.php';
 require_once get_stylesheet_directory() . '/inc/profiles.php';
 require_once get_stylesheet_directory() . '/inc/acf.php';
+require_once get_stylesheet_directory() . '/inc/item-editor.php';
 require_once get_stylesheet_directory() . '/inc/kiosk.php';
 require_once get_stylesheet_directory() . '/inc/admin-access.php';
 require_once get_stylesheet_directory() . '/inc/author-control.php';
