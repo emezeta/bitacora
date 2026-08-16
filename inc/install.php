@@ -137,22 +137,22 @@ function obras_theme_install() {
 
 		'documentos' => array(
 			'title'   => 'Documentos',
-			'content' => '[obras_lista_documentos]',
+			'content' => '[bitacora_section slug="documentos"]',
 		),
 
 		'materiales' => array(
 			'title'   => 'Materiales',
-			'content' => '[obras_lista_materiales]',
+			'content' => '[bitacora_section slug="materiales"]',
 		),
 
 		'catalogos' => array(
 			'title'   => 'Catálogos',
-			'content' => '[obras_lista_catalogos]',
+			'content' => '[bitacora_section slug="catalogos"]',
 		),
 
 		'planos' => array(
 			'title'   => 'Planos',
-			'content' => '[obras_lista_planos]',
+			'content' => '[bitacora_section slug="planos"]',
 		),
 
 		'auxiliar' => array(
@@ -162,7 +162,7 @@ function obras_theme_install() {
 
 		'paisajismo' => array(
 			'title'   => 'Paisajismo',
-			'content' => '[obras_lista_aux section="general"]',
+			'content' => '[bitacora_section slug="paisajismo"]',
 		),
 	);
 
