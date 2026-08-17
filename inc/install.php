@@ -13,6 +13,16 @@
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Perfil inicial de esta distribución.
+ *
+ * El sistema de perfiles no posee un perfil universal por defecto.
+ */
+function obras_theme_get_install_profile_id() {
+        return 'construccion';
+}
+
+
 
 /**
  * Comprueba las dependencias funcionales del theme.
@@ -122,6 +132,72 @@ add_action( 'admin_notices', 'obras_theme_dependency_notice' );
  * Instalación estructural.
  */
 function obras_theme_install() {
+
+        /*
+         * Configuración inicial de esta distribución.
+         */
+        $profile_id = obras_theme_get_install_profile_id();
+
+        $section_report = bitacora_seed_profile_sections(
+                $profile_id
+        );
+
+        if ( is_wp_error( $section_report ) ) {
+                error_log(
+                        'Bitácora de Obra: '
+                        . $section_report->get_error_message()
+                );
+
+                return $section_report;
+        }
+
+        if ( ! empty( $section_report['errors'] ) ) {
+                $error = new WP_Error(
+                        'bitacora_install_section_seed_errors',
+                        implode(
+                                ' ',
+                                $section_report['errors']
+                        )
+                );
+
+                error_log(
+                        'Bitácora de Obra: '
+                        . $error->get_error_message()
+                );
+
+                return $error;
+        }
+
+        $class_report = bitacora_seed_profile_classes(
+                $profile_id
+        );
+
+        if ( is_wp_error( $class_report ) ) {
+                error_log(
+                        'Bitácora de Obra: '
+                        . $class_report->get_error_message()
+                );
+
+                return $class_report;
+        }
+
+        if ( ! empty( $class_report['errors'] ) ) {
+                $error = new WP_Error(
+                        'bitacora_install_class_seed_errors',
+                        implode(
+                                ' ',
+                                $class_report['errors']
+                        )
+                );
+
+                error_log(
+                        'Bitácora de Obra: '
+                        . $error->get_error_message()
+                );
+
+                return $error;
+        }
+
 
 	$pages = array(
 
@@ -246,11 +322,21 @@ function obras_theme_install() {
 	 */
 	obras_theme_check_dependencies();
 
-	update_option( 'obras_theme_install_schema', '2' );
+	update_option( 'obras_theme_install_schema', '3' );
 
 	if ( $changed ) {
 		flush_rewrite_rules( false );
 	}
+
+        return array(
+                'profile'  => $profile_id,
+                'sections' => $section_report,
+                'classes'  => $class_report,
+                'pages'    => $page_ids,
+                'changed'  => $changed,
+                'schema'   => 3,
+        );
+
 }
 
 add_action( 'after_switch_theme', 'obras_theme_install', 10, 0 );
