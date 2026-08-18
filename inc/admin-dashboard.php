@@ -74,6 +74,20 @@ if ( ! function_exists( 'obras_get_list_url' ) ) {
 
             case 'plano_obra':
                 return home_url( '/planos/' );
+
+            case 'bitacora_item':
+                if ( function_exists( 'bitacora_get_item_editor_section' ) ) {
+                    $section = bitacora_get_item_editor_section(
+                        $ctx['post_id']
+                    );
+
+                    if ( $section ) {
+                        return home_url(
+                            '/' . $section->slug . '/'
+                        );
+                    }
+                }
+                break;
         }
 
         return obras_get_dashboard_url();
@@ -102,6 +116,22 @@ if ( ! function_exists( 'obras_get_list_label' ) ) {
 
             case 'plano_obra':
                 return 'Planos';
+
+            case 'bitacora_item':
+                if ( function_exists( 'bitacora_get_item_editor_section' ) ) {
+                    $section = bitacora_get_item_editor_section(
+                        $ctx['post_id']
+                    );
+
+                    if ( $section ) {
+                        return bitacora_get_section_meta(
+                            $section,
+                            'bitacora_section_plural',
+                            $section->name
+                        );
+                    }
+                }
+                break;
         }
 
         return 'Inicio';
@@ -176,6 +206,7 @@ function obras_render_editor_navigation_buttons( $post ) {
         'material_obra',
         'catalogo_obra',
         'plano_obra',
+        'bitacora_item',
     );
 
     if ( ! in_array( $post->post_type, $allowed_post_types, true ) ) {

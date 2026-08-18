@@ -151,10 +151,10 @@ function bitacora_add_item_context_metabox( $post ) {
 
     add_meta_box(
         'bitacora-item-context',
-        'Datos de la sección',
+        'Tipo',
         'bitacora_render_item_context_metabox',
         'bitacora_item',
-        'side',
+        'normal',
         'high'
     );
 }
@@ -208,17 +208,6 @@ function bitacora_render_item_context_metabox( $post ) {
         $choices[ $current_class->slug ] =
             $current_class->name . ' (actual)';
     }
-
-    echo '<p>';
-    echo '<strong>Sección</strong><br>';
-    echo esc_html( $section->name );
-    echo '</p>';
-
-    echo '<p>';
-    echo '<label for="bitacora_item_class">';
-    echo '<strong>Clase del contenido</strong>';
-    echo '</label>';
-    echo '</p>';
 
     echo '<select'
         . ' name="bitacora_item_class"'
@@ -335,12 +324,20 @@ function bitacora_register_item_feature_fields() {
     acf_add_local_field_group(
         array(
             'key'   => 'group_bitacora_item_features',
-            'title' => 'Datos del contenido',
+            'title' => 'Más datos',
 
             'fields' => array(
                 array(
+                    'key'     => 'field_bitacora_item_type_placeholder',
+                    'label'   => 'Tipo',
+                    'name'    => 'bitacora_item_type_placeholder',
+                    'type'    => 'message',
+                    'message' => '',
+                ),
+
+                array(
                     'key'           => 'field_bitacora_item_file',
-                    'label'         => 'Adjuntar archivo',
+                    'label'         => 'Archivo de referencia',
                     'name'          => 'bitacora_item_file',
                     'type'          => 'file',
                     'return_format' => 'id',
@@ -353,7 +350,7 @@ function bitacora_register_item_feature_fields() {
                     'name'        => 'bitacora_item_location',
                     'type'        => 'text',
                     'required'    => 0,
-                    'placeholder' => '',
+                    'placeholder' => 'Ej.: está en el depósito del fondo…',
                 ),
             ),
 
@@ -371,6 +368,225 @@ function bitacora_register_item_feature_fields() {
             'label_placement' => 'top',
         )
     );
+}
+
+
+/**
+ * Integra visualmente el selector de Tipo dentro de "Más datos".
+ *
+ * El metabox propio continúa siendo responsable del control y nonce;
+ * ACF sólo proporciona el contenedor visual.
+ */
+add_action(
+    'acf/input/admin_footer',
+    'bitacora_merge_item_context_into_more_data'
+);
+
+function bitacora_merge_item_context_into_more_data() {
+
+    $screen = get_current_screen();
+
+    if (
+        ! $screen
+        || 'bitacora_item' !== $screen->post_type
+    ) {
+        return;
+    }
+    ?>
+    <script>
+    (function($) {
+        $(function() {
+            var $postbox = $('#bitacora-item-context');
+
+            var $target = $(
+                '.acf-field[data-key="field_bitacora_item_type_placeholder"] > .acf-input'
+            );
+
+            if (! $postbox.length || ! $target.length) {
+                return;
+            }
+
+            var $source = $postbox.children('.inside');
+
+            if (! $source.length) {
+                return;
+            }
+
+            $target.empty().append(
+                $source.children()
+            );
+
+            $postbox.remove();
+        });
+    })(jQuery);
+    </script>
+    <?php
+}
+
+
+/**
+ * Ayudas contextuales del editor.
+ *
+ * Se muestran mediante botones accesibles por clic/teclado.
+ * No dependen de hover y no modifican el almacenamiento de datos.
+ */
+add_action(
+    'acf/input/admin_footer',
+    'bitacora_render_item_help_ui',
+    20
+);
+
+function bitacora_render_item_help_ui() {
+
+    $screen = get_current_screen();
+
+    if (
+        ! $screen
+        || 'bitacora_item' !== $screen->post_type
+    ) {
+        return;
+    }
+    ?>
+    <style>
+        .bitacora-help-enabled > .acf-label > label {
+            display: inline-block;
+        }
+
+        .bitacora-help-toggle {
+            display: inline-block;
+            margin: 0 0 0 4px;
+            padding: 0 3px;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+            color: #2271b1;
+            font: inherit;
+            font-weight: 700;
+            line-height: inherit;
+            vertical-align: baseline;
+            cursor: pointer;
+        }
+
+        .bitacora-help-toggle:hover {
+            text-decoration: underline;
+        }
+
+        .bitacora-help-toggle:focus {
+            outline: 1px dotted currentColor;
+            outline-offset: 1px;
+        }
+
+        .bitacora-help-text {
+            margin: 8px 0 4px;
+            max-width: 48em;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+
+    <script>
+    (function($) {
+
+        var helpTexts = {
+            field_bitacora_item_type_placeholder:
+                'Elegí la opción que mejor describe este contenido. Servirá para organizarlo y encontrarlo más fácilmente.',
+
+            field_bitacora_item_file:
+                'Usalo para guardar un archivo que documenta o complementa este contenido.'
+        };
+
+        function addHelp() {
+
+            Object.keys(helpTexts).forEach(function(key) {
+
+                var $field = $(
+                    '.acf-field[data-key="' + key + '"]'
+                );
+
+                if (! $field.length) {
+                    return;
+                }
+
+                if ($field.hasClass('bitacora-help-enabled')) {
+                    return;
+                }
+
+                var $label = $field
+                    .children('.acf-label')
+                    .find('label')
+                    .first();
+
+                if (! $label.length) {
+                    return;
+                }
+
+                var helpId = 'bitacora-help-' + key;
+
+                var $button = $('<button>', {
+                    type: 'button',
+                    class: 'bitacora-help-toggle',
+                    'aria-label': 'Mostrar ayuda',
+                    'aria-expanded': 'false',
+                    'aria-controls': helpId,
+                    text: '?'
+                });
+
+                var $help = $('<div>', {
+                    id: helpId,
+                    class: 'bitacora-help-text',
+                    hidden: true,
+                    text: helpTexts[key]
+                });
+
+                $label.after($button);
+
+                $field
+                    .children('.acf-label')
+                    .append($help);
+
+                $field.addClass('bitacora-help-enabled');
+
+                $button.on('click', function() {
+
+                    var expanded =
+                        $(this).attr('aria-expanded') === 'true';
+
+                    $(this).attr(
+                        'aria-expanded',
+                        expanded ? 'false' : 'true'
+                    );
+
+                    $help.prop('hidden', expanded);
+                });
+
+                $button.on('keydown', function(event) {
+
+                    if (event.key !== 'Escape') {
+                        return;
+                    }
+
+                    $(this).attr(
+                        'aria-expanded',
+                        'false'
+                    );
+
+                    $help.prop('hidden', true);
+                });
+            });
+        }
+
+        $(addHelp);
+
+        if (
+            typeof acf !== 'undefined'
+            && acf.addAction
+        ) {
+            acf.addAction('append', addHelp);
+        }
+
+    })(jQuery);
+    </script>
+    <?php
 }
 
 
