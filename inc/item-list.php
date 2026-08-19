@@ -65,7 +65,7 @@ function bitacora_get_section_items(
             'suppress_filters'       => false,
             'no_found_rows'          => true,
             'ignore_sticky_posts'    => true,
-            'update_post_meta_cache' => false,
+            'update_post_meta_cache' => true,
             'update_post_term_cache' => true,
         )
     );
@@ -90,7 +90,7 @@ function bitacora_get_section_items(
                 'suppress_filters'       => false,
                 'no_found_rows'          => true,
                 'ignore_sticky_posts'    => true,
-                'update_post_meta_cache' => false,
+                'update_post_meta_cache' => true,
                 'update_post_term_cache' => true,
             )
         );
@@ -174,6 +174,85 @@ function bitacora_render_item_class_badge( $post_id ) {
     echo '<span class="tipo">'
         . esc_html( $label )
         . '</span>';
+}
+
+
+/**
+ * Renderiza metadatos opcionales de features de un bitacora_item
+ * en los listados de sección.
+ */
+function bitacora_render_item_feature_meta( $post_id ) {
+
+    $post_id = (int) $post_id;
+
+    $section = bitacora_get_item_section( $post_id );
+
+    if ( ! $section ) {
+        return;
+    }
+
+    $parts = array();
+
+    if ( bitacora_section_has_feature( $section, 'file' ) ) {
+
+        $file_id = absint(
+            get_post_meta(
+                $post_id,
+                'bitacora_item_file',
+                true
+            )
+        );
+
+        if ( $file_id ) {
+
+            $file_url = wp_get_attachment_url( $file_id );
+
+            if ( $file_url ) {
+
+                $file_label = trim(
+                    (string) get_the_title( $file_id )
+                );
+
+                if ( '' === $file_label ) {
+                    $file_label = wp_basename( $file_url );
+                }
+
+                $parts[] =
+                    '📎 <a href="'
+                    . esc_url( $file_url )
+                    . '" target="_blank" rel="noopener">'
+                    . esc_html( $file_label )
+                    . '</a>';
+            }
+        }
+    }
+
+    if ( bitacora_section_has_feature( $section, 'location' ) ) {
+
+        $location = trim(
+            (string) get_post_meta(
+                $post_id,
+                'bitacora_item_location',
+                true
+            )
+        );
+
+        if ( '' !== $location ) {
+            $parts[] = '📍 ' . esc_html( $location );
+        }
+    }
+
+    if ( empty( $parts ) ) {
+        return;
+    }
+
+    echo '<div class="bitacora-item-feature-meta"'
+        . ' style="margin-top:8px; font-size:0.9em;">'
+        . implode(
+            ' <span aria-hidden="true">·</span> ',
+            $parts
+        )
+        . '</div>';
 }
 
 
@@ -349,6 +428,12 @@ function bitacora_render_section_list_shortcode(
 
                     <?php
                     obras_render_post_status_badge(
+                        $list_post->ID
+                    );
+                    ?>
+
+                    <?php
+                    bitacora_render_item_feature_meta(
                         $list_post->ID
                     );
                     ?>

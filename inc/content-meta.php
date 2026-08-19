@@ -21,6 +21,7 @@ function obras_display_acf_fields_on_single( $content ) {
 	$post_id   = get_the_ID();
 
 	$allowed_post_types = array(
+		'bitacora_item',
 		'bitacora',
 		'documento_obra',
 		'material_obra',
@@ -63,6 +64,95 @@ function obras_display_acf_fields_on_single( $content ) {
 
 		$nav_html .= '</div>';
 	}
+
+
+	// ------------------------------------------------------------------------
+	// Ítem genérico 0.2.0
+	// ------------------------------------------------------------------------
+	if ( 'bitacora_item' === $post_type ) {
+
+		$section = bitacora_get_item_section( $post_id );
+		$class   = bitacora_get_item_class( $post_id );
+
+		$file_id  = 0;
+		$location = '';
+
+		if (
+			$section
+			&& bitacora_section_has_feature( $section, 'file' )
+		) {
+			$file_id = absint(
+				get_post_meta(
+					$post_id,
+					'bitacora_item_file',
+					true
+				)
+			);
+		}
+
+		if (
+			$section
+			&& bitacora_section_has_feature( $section, 'location' )
+		) {
+			$location = trim(
+				(string) get_post_meta(
+					$post_id,
+					'bitacora_item_location',
+					true
+				)
+			);
+		}
+
+		$rows = array();
+
+		if ( $class ) {
+			$rows[] =
+				'<p><strong>Clase del contenido:</strong> '
+				. esc_html( $class->name )
+				. '</p>';
+		}
+
+		if ( '' !== $location ) {
+			$rows[] =
+				'<p><strong>📍 Ubicación:</strong> '
+				. esc_html( $location )
+				. '</p>';
+		}
+
+		if ( $file_id ) {
+
+			$file_url = wp_get_attachment_url( $file_id );
+
+			if ( $file_url ) {
+
+				$file_label = trim(
+					(string) get_the_title( $file_id )
+				);
+
+				if ( '' === $file_label ) {
+					$file_label = wp_basename( $file_url );
+				}
+
+				$rows[] =
+					'<p><strong>📎 Archivo de referencia:</strong> '
+					. '<a href="'
+					. esc_url( $file_url )
+					. '" target="_blank" rel="noopener">'
+					. esc_html( $file_label )
+					. '</a></p>';
+			}
+		}
+
+		if ( ! empty( $rows ) ) {
+			$box_html .=
+				'<div class="obras-acf-box bitacora-item">';
+
+			$box_html .= '<h3>Datos del contenido</h3>';
+			$box_html .= implode( '', $rows );
+			$box_html .= '</div>';
+		}
+	}
+
 
 	// ------------------------------------------------------------------------
 	// Nota
