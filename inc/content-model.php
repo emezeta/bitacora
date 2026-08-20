@@ -54,8 +54,12 @@ function bitacora_register_item_cpt() {
                 'thumbnail',
             ),
 
-            'show_in_rest'  => false,
-
+            'capability_type' => array(
+                'bitacora_content',
+                'bitacora_contents',
+            ),
+            'map_meta_cap'    => true,
+            'show_in_rest'    => false,
             /*
              * Durante el desarrollo lo mostramos dentro del menú
              * principal de Bitácora para facilitar las pruebas.
@@ -106,6 +110,13 @@ function bitacora_register_section_taxonomy() {
             'show_ui'           => true,
             'show_admin_column' => true,
             'meta_box_cb'       => false,
+
+            'capabilities' => array(
+                'manage_terms' => 'manage_options',
+                'edit_terms'   => 'manage_options',
+                'delete_terms' => 'manage_options',
+                'assign_terms' => 'edit_bitacora_contents',
+            ),
             'show_in_rest'      => false,
             'query_var'         => false,
             'rewrite'           => false,
@@ -156,6 +167,13 @@ function bitacora_register_class_taxonomy() {
             'show_ui'           => true,
             'show_admin_column' => true,
             'meta_box_cb'       => false,
+
+            'capabilities' => array(
+                'manage_terms' => 'manage_options',
+                'edit_terms'   => 'manage_options',
+                'delete_terms' => 'manage_options',
+                'assign_terms' => 'edit_bitacora_contents',
+            ),
             'show_in_rest'      => false,
             'query_var'         => false,
             'rewrite'           => false,

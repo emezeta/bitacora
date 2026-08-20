@@ -129,6 +129,184 @@ add_action( 'admin_notices', 'obras_theme_dependency_notice' );
 
 
 /**
+ * Capabilities primitivas gestionadas por el modelo de contenido 0.2.0.
+ *
+ * Se aplican exclusivamente a:
+ * - bitacora
+ * - bitacora_item
+ *
+ * Los CPT legacy quedan fuera de esta familia.
+ */
+function bitacora_get_managed_content_capabilities() {
+        return array(
+                'edit_bitacora_contents',
+                'edit_others_bitacora_contents',
+                'publish_bitacora_contents',
+                'read_private_bitacora_contents',
+                'delete_bitacora_contents',
+                'delete_private_bitacora_contents',
+                'delete_published_bitacora_contents',
+                'delete_others_bitacora_contents',
+                'edit_private_bitacora_contents',
+                'edit_published_bitacora_contents',
+        );
+}
+
+
+/**
+ * Crea y sincroniza los roles propios de Bitácora.
+ *
+ * Autor Bitácora:
+ * - administra contenido propio;
+ * - no administra contenido ajeno.
+ *
+ * Supervisor Bitácora:
+ * - posee las capacidades del Autor;
+ * - además puede gestionar contenido ajeno y leer privados ajenos.
+ *
+ * Administrator recibe todas las capabilities de contenido Bitácora,
+ * sin alterar sus capacidades administrativas de WordPress.
+ */
+function bitacora_seed_content_roles() {
+
+        $author_caps = array(
+                'read',
+                'upload_files',
+                'edit_bitacora_contents',
+                'publish_bitacora_contents',
+                'edit_published_bitacora_contents',
+                'edit_private_bitacora_contents',
+                'delete_bitacora_contents',
+                'delete_published_bitacora_contents',
+                'delete_private_bitacora_contents',
+        );
+
+        $supervisor_caps = array_merge(
+                $author_caps,
+                array(
+                        'edit_others_bitacora_contents',
+                        'delete_others_bitacora_contents',
+                        'read_private_bitacora_contents',
+                )
+        );
+
+        $definitions = array(
+                'bitacora_author' => array(
+                        'label' => 'Autor Bitácora',
+                        'caps'  => $author_caps,
+                ),
+                'bitacora_supervisor' => array(
+                        'label' => 'Supervisor Bitácora',
+                        'caps'  => $supervisor_caps,
+                ),
+        );
+
+        $managed_caps = bitacora_get_managed_content_capabilities();
+
+        $report = array(
+                'created'      => array(),
+                'caps_added'   => array(),
+                'caps_removed' => array(),
+                'errors'       => array(),
+                'changed'      => false,
+        );
+
+        foreach ( $definitions as $role_slug => $definition ) {
+
+                $role = get_role( $role_slug );
+
+                if ( ! $role ) {
+                        add_role(
+                                $role_slug,
+                                $definition['label'],
+                                array()
+                        );
+
+                        $role = get_role( $role_slug );
+
+                        if ( ! $role ) {
+                                $report['errors'][] =
+                                        'No se pudo crear el rol '
+                                        . $role_slug
+                                        . '.';
+                                continue;
+                        }
+
+                        $report['created'][] = $role_slug;
+                        $report['changed']   = true;
+                }
+
+                foreach ( $definition['caps'] as $cap ) {
+                        if (
+                                ! isset( $role->capabilities[ $cap ] )
+                                || ! $role->capabilities[ $cap ]
+                        ) {
+                                $role->add_cap( $cap, true );
+
+                                $report['caps_added'][] =
+                                        $role_slug . ':' . $cap;
+                                $report['changed'] = true;
+                        }
+                }
+
+                /*
+                 * Dentro de nuestra propia familia bitacora_*,
+                 * eliminar capacidades que no correspondan al rol.
+                 *
+                 * No se tocan capabilities ajenas a Bitácora.
+                 */
+                foreach ( $managed_caps as $cap ) {
+                        if (
+                                ! in_array(
+                                        $cap,
+                                        $definition['caps'],
+                                        true
+                                )
+                                && array_key_exists(
+                                        $cap,
+                                        $role->capabilities
+                                )
+                        ) {
+                                $role->remove_cap( $cap );
+
+                                $report['caps_removed'][] =
+                                        $role_slug . ':' . $cap;
+                                $report['changed'] = true;
+                        }
+                }
+        }
+
+        /*
+         * El Administrator conserva su rol WordPress normal,
+         * pero recibe toda la familia de contenido Bitácora.
+         */
+        $administrator = get_role( 'administrator' );
+
+        if ( ! $administrator ) {
+                $report['errors'][] =
+                        'No se encontró el rol administrator.';
+        } else {
+                foreach ( $managed_caps as $cap ) {
+                        if (
+                                ! isset(
+                                        $administrator->capabilities[ $cap ]
+                                )
+                                || ! $administrator->capabilities[ $cap ]
+                        ) {
+                                $administrator->add_cap( $cap, true );
+
+                                $report['caps_added'][] =
+                                        'administrator:' . $cap;
+                                $report['changed'] = true;
+                        }
+                }
+        }
+
+        return $report;
+}
+
+
+/**
  * Instalación estructural.
  */
 function obras_theme_install() {
@@ -199,6 +377,26 @@ function obras_theme_install() {
         }
 
 
+	$role_report = bitacora_seed_content_roles();
+
+	if ( ! empty( $role_report['errors'] ) ) {
+	        $error = new WP_Error(
+	                'bitacora_install_role_seed_errors',
+	                implode(
+	                        ' ',
+	                        $role_report['errors']
+	                )
+	        );
+
+	        error_log(
+	                'Bitácora de Obra: '
+	                . $error->get_error_message()
+	        );
+
+	        return $error;
+	}
+
+
 	$pages = array(
 
 		'inicio' => array(
@@ -243,8 +441,7 @@ function obras_theme_install() {
 	);
 
 	$page_ids = array();
-	$changed  = false;
-
+	$changed = ! empty( $role_report['changed'] );
 	foreach ( $pages as $slug => $data ) {
 
 		$existing = get_page_by_path( $slug, OBJECT, 'page' );
@@ -322,7 +519,7 @@ function obras_theme_install() {
 	 */
 	obras_theme_check_dependencies();
 
-	update_option( 'obras_theme_install_schema', '3' );
+	update_option( 'obras_theme_install_schema', '4' );
 
 	if ( $changed ) {
 		flush_rewrite_rules( false );
@@ -332,9 +529,10 @@ function obras_theme_install() {
                 'profile'  => $profile_id,
                 'sections' => $section_report,
                 'classes'  => $class_report,
+                'roles'   => $role_report,
                 'pages'    => $page_ids,
                 'changed'  => $changed,
-                'schema'   => 3,
+                'schema'   => 4,
         );
 
 }

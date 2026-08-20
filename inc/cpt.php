@@ -40,7 +40,12 @@ function obras_register_bitacora_cpt() {
               'supports'      => array( 'title', 'editor', 'author' ),
               'menu_icon'     => 'dashicons-book',
               'menu_position' => 2,
-              'show_in_rest'  => false,
+              'capability_type' => array(
+                  'bitacora_content',
+                  'bitacora_contents',
+              ),
+              'map_meta_cap'    => true,
+              'show_in_rest'    => false,
         )
     );
 }
