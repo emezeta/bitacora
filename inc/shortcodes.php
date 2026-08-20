@@ -230,21 +230,56 @@ function obras_get_post_creation_date_label( $post_id ) {
 
 function obras_render_post_meta_line( $post_id ) {
     $post_id = (int) $post_id;
+
     if ( ! $post_id ) {
         return;
     }
 
     $fecha = obras_get_post_creation_date_label( $post_id );
-    $autor = get_the_author_meta( 'display_name', (int) get_post_field( 'post_author', $post_id ) );
+    $autor = '';
+
+    /*
+     * El autor es información de supervisión.
+     *
+     * La capability se obtiene del propio post type para no acoplar
+     * este render a nombres de roles ni a una familia concreta de CPT.
+     */
+    $post_type = get_post_type( $post_id );
+
+    $post_type_object = $post_type
+        ? get_post_type_object( $post_type )
+        : null;
+
+    $can_edit_others = (
+        $post_type_object
+        && isset( $post_type_object->cap->edit_others_posts )
+        && current_user_can(
+            $post_type_object->cap->edit_others_posts
+        )
+    );
+
+    if ( $can_edit_others ) {
+        $autor = get_the_author_meta(
+            'display_name',
+            (int) get_post_field(
+                'post_author',
+                $post_id
+            )
+        );
+    }
 
     echo '<div class="meta">';
 
     if ( '' !== $fecha ) {
-        echo '<span class="fecha">📅 ' . esc_html( $fecha ) . '</span>';
+        echo '<span class="fecha">📅 '
+            . esc_html( $fecha )
+            . '</span>';
     }
 
     if ( '' !== $autor ) {
-        echo '<span class="author">✍️ ' . esc_html( $autor ) . '</span>';
+        echo '<span class="author">✍ '
+            . esc_html( $autor )
+            . '</span>';
     }
 
     echo '</div>';
