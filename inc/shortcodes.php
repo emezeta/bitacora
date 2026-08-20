@@ -46,7 +46,7 @@ function obras_handle_frontend_trash_post() {
         wp_die( 'Tipo de contenido no permitido.' );
     }
 
-    if ( ! obras_user_can_manage_list_item( $post_id ) ) {
+    if ( ! current_user_can( 'delete_post', $post_id ) ) {
         wp_die( 'No tienes permiso para mover este contenido a la papelera.' );
     }
 
@@ -63,39 +63,18 @@ function obras_handle_frontend_trash_post() {
 
 
 
-if ( ! function_exists( 'obras_user_is_supervisor' ) ) {
-    function obras_user_is_supervisor() {
-        if ( ! is_user_logged_in() ) {
-            return false;
-        }
-
-        if ( current_user_can( 'manage_options' ) ) {
-            return true;
-        }
-
-        $user = wp_get_current_user();
-        if ( ! $user || empty( $user->roles ) ) {
-            return false;
-        }
-
-        return in_array( 'supervisor', (array) $user->roles, true );
-    }
-}
-
 if ( ! function_exists( 'obras_user_can_manage_list_item' ) ) {
     function obras_user_can_manage_list_item( $post_id ) {
         $post_id = (int) $post_id;
+
         if ( ! $post_id || ! is_user_logged_in() ) {
             return false;
         }
 
-        if ( get_current_user_id() === (int) get_post_field( 'post_author', $post_id ) ) {
-            return true;
-        }
-
-        return obras_user_is_supervisor();
+        return current_user_can( 'edit_post', $post_id );
     }
 }
+
 
 // ============================================================================
 // === SHORTCODES FRONTEND ====================================================
@@ -172,29 +151,44 @@ if ( ! function_exists( 'obras_render_notes_search_form' ) ) {
  */
 function obras_render_item_actions( $post_id ) {
     $post_id = (int) $post_id;
-    if ( ! obras_user_can_manage_list_item( $post_id ) ) {
+
+    if ( ! $post_id ) {
         return;
     }
 
-    $edit_url  = get_edit_post_link( $post_id );
-    $trash_url = wp_nonce_url(
-        admin_url( 'admin-post.php?action=obras_trash_post&post_id=' . $post_id ),
-        'obras_trash_post_' . $post_id
-    );
+    $can_edit   = current_user_can( 'edit_post', $post_id );
+    $can_delete = current_user_can( 'delete_post', $post_id );
+
+    if ( ! $can_edit && ! $can_delete ) {
+        return;
+    }
+
+    $edit_url = $can_edit
+        ? get_edit_post_link( $post_id )
+        : '';
+
+    $trash_url = $can_delete
+        ? wp_nonce_url(
+            admin_url( 'admin-post.php?action=obras_trash_post&post_id=' . $post_id ),
+            'obras_trash_post_' . $post_id
+        )
+        : '';
     ?>
     <div style="margin-top:10px; display:flex; gap:12px; flex-wrap:wrap;">
     <?php if ( $edit_url ) : ?>
     <a href="<?php echo esc_url( $edit_url ); ?>"
     style="font-size:0.9em; color:#2271b1; text-decoration:none;">
-    ✏️ Editar
+    ✏ Editar
     </a>
     <?php endif; ?>
 
+    <?php if ( $trash_url ) : ?>
     <a href="<?php echo esc_url( $trash_url ); ?>"
     onclick="return confirm('¿Seguro que quieres mover este contenido a la papelera?');"
     style="font-size:0.9em; color:#d63638; text-decoration:none;">
     🗑 Mover a papelera
     </a>
+    <?php endif; ?>
     </div>
     <?php
 }

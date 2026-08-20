@@ -48,12 +48,7 @@ function obras_display_acf_fields_on_single( $content ) {
 		$nav_html .= '<a href="' . esc_url( $list_url ) . '" style="display:inline-block; padding:10px 16px; background:#2271b1; color:#fff; text-decoration:none; border-radius:8px; font-weight:600;">← ' . esc_html( $list_label ) . '</a>';
 		$nav_html .= '<a href="' . esc_url( $home_url ) . '" style="display:inline-block; padding:10px 16px; background:#6c757d; color:#fff; text-decoration:none; border-radius:8px; font-weight:600;">🏠 Inicio</a>';
 
-		$can_manage_current = false;
-		if ( function_exists( 'obras_user_can_manage_list_item' ) ) {
-			$can_manage_current = obras_user_can_manage_list_item( $post_id );
-		} elseif ( is_user_logged_in() ) {
-			$can_manage_current = ( get_current_user_id() === (int) get_post_field( 'post_author', $post_id ) ) || current_user_can( 'manage_options' );
-		}
+		$can_manage_current = current_user_can( 'edit_post', $post_id );
 
 		if ( $can_manage_current ) {
 			$edit_url = get_edit_post_link( $post_id );

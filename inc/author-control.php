@@ -44,10 +44,13 @@ function obras_hide_author_metabox_for_non_admin( $post_type, $post ) {
 }
 
 /**
- * Forzar autor = usuario logueado para no-admins.
+ * Bloquear cambios de autoría para usuarios no administradores.
+ *
+ * En contenido nuevo, el autor es el usuario que lo crea.
+ * En contenido existente, se conserva siempre el autor original.
  */
-add_filter( 'wp_insert_post_data', 'obras_force_current_user_as_author', 99, 2 );
-function obras_force_current_user_as_author( $data, $postarr ) {
+add_filter( 'wp_insert_post_data', 'obras_preserve_post_author_for_non_admin', 99, 2 );
+function obras_preserve_post_author_for_non_admin( $data, $postarr ) {
     if ( ! is_admin() ) {
         return $data;
     }
@@ -66,6 +69,20 @@ function obras_force_current_user_as_author( $data, $postarr ) {
 
     if ( ! is_user_logged_in() ) {
         return $data;
+    }
+
+    $post_id = isset( $postarr['ID'] )
+        ? absint( $postarr['ID'] )
+        : 0;
+
+    if ( $post_id ) {
+        $existing_post = get_post( $post_id );
+
+        if ( $existing_post instanceof WP_Post ) {
+            $data['post_author'] = (int) $existing_post->post_author;
+
+            return $data;
+        }
     }
 
     $data['post_author'] = get_current_user_id();
