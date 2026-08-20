@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Pad embebido de prueba
+ * Bitácora - Pad embebido de prueba
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

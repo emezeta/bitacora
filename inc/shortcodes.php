@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Shortcodes Frontend.
+ * Bitácora - Shortcodes Frontend.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -463,7 +463,7 @@ function obras_render_dashboard_frontend() {
     ob_start();
     ?>
     <div class="obras-dashboard">
-    <h1>Bitácora de Obra</h1>
+    <h1>Bitácora</h1>
     <p class="welcome">¡Hola, <?php echo esc_html( $user->display_name ); ?>!</p>
     <p>¿Qué querés hacer hoy?</p>
 

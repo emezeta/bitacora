@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Auth / Redirects
+ * Bitácora - Auth / Redirects
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

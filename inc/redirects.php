@@ -74,6 +74,6 @@ add_action( 'template_redirect', function () {
         return;
     }
 
-    wp_redirect( esc_url_raw( $destino ), 302, 'Bitácora de Obra' );
+    wp_redirect( esc_url_raw( $destino ), 302, 'Bitácora' );
     exit;
 } );

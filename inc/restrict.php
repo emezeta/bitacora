@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Restricciones de acceso
+ * Bitácora - Restricciones de acceso
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

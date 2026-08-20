@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Kiosk mode
+ * Bitácora - Kiosk mode
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Admin access control
+ * Bitácora - Admin access control
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

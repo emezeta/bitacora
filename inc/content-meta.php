@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Campos ACF y navegación en single post.
+ * Bitácora - Campos ACF y navegación en single post.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

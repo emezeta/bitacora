@@ -1,6 +1,6 @@
 <?php
 /*
- * Bitácora de Obra - Dashboard Admin Personalizado + Navegación auxiliar
+ * Bitácora - Dashboard Admin Personalizado + Navegación auxiliar
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

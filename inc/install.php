@@ -1,6 +1,6 @@
 <?php
 /**
- * Instalación inicial de Bitácora de Obra.
+ * Instalación inicial de Bitácora.
  *
  * - Crea la estructura mínima de páginas.
  * - Configura la portada en instalaciones nuevas.
@@ -120,7 +120,7 @@ function obras_theme_dependency_notice() {
 	}
 
 	printf(
-		'<div class="notice notice-warning"><p><strong>Bitácora de Obra:</strong> %s</p></div>',
+		'<div class="notice notice-warning"><p><strong>Bitácora:</strong> %s</p></div>',
 		esc_html( implode( ' ', $messages ) )
 	);
 }
@@ -322,7 +322,7 @@ function obras_theme_install() {
 
         if ( is_wp_error( $section_report ) ) {
                 error_log(
-                        'Bitácora de Obra: '
+                        'Bitácora: '
                         . $section_report->get_error_message()
                 );
 
@@ -339,7 +339,7 @@ function obras_theme_install() {
                 );
 
                 error_log(
-                        'Bitácora de Obra: '
+                        'Bitácora: '
                         . $error->get_error_message()
                 );
 
@@ -352,7 +352,7 @@ function obras_theme_install() {
 
         if ( is_wp_error( $class_report ) ) {
                 error_log(
-                        'Bitácora de Obra: '
+                        'Bitácora: '
                         . $class_report->get_error_message()
                 );
 
@@ -369,7 +369,7 @@ function obras_theme_install() {
                 );
 
                 error_log(
-                        'Bitácora de Obra: '
+                        'Bitácora: '
                         . $error->get_error_message()
                 );
 
@@ -389,7 +389,7 @@ function obras_theme_install() {
 	        );
 
 	        error_log(
-	                'Bitácora de Obra: '
+	                'Bitácora: '
 	                . $error->get_error_message()
 	        );
 
@@ -465,7 +465,7 @@ function obras_theme_install() {
 		if ( is_wp_error( $post_id ) ) {
 			error_log(
 				sprintf(
-					'Bitácora de Obra: no se pudo crear la página "%s": %s',
+					'Bitácora: no se pudo crear la página "%s": %s',
 					$slug,
 					$post_id->get_error_message()
 				)
@@ -499,7 +499,7 @@ function obras_theme_install() {
 		'' === $blogname
 		|| 'Just another WordPress site' === $blogname
 	) {
-		update_option( 'blogname', 'Bitácora de Obra' );
+		update_option( 'blogname', 'Bitácora' );
 		$changed = true;
 	}
 

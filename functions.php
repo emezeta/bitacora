@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Theme Functions
+ * Bitácora - Theme Functions
  * Theme autónomo
  * Version: 0.1.0-dev
  */

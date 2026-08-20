@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Sección auxiliar comodín
+ * Bitácora - Sección auxiliar comodín
  *
  * CPT físico único:
  * - aux_section

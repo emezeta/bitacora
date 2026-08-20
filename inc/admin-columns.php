@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Columnas admin
+ * Bitácora - Columnas admin
  *
  * Agrega columna "Estado" en los listados wp-admin de los ndmcp.
  */
@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * CPTs del sistema Bitácora de Obra.
+ * CPTs del sistema Bitácora.
  */
 function obras_admin_columns_post_types() {
     return array(

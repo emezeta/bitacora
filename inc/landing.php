@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Landing Page.
+ * Bitácora - Landing Page.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -25,7 +25,7 @@ function obras_render_landing_page() {
             <img src="<?php echo esc_url( $logo ); ?>" alt="Obras Angirü">
         </div>
 
-        <h1>Bitácora de Obra</h1>
+        <h1>Bitácora</h1>
 
         <p class="subtitle">
             Gestión simplificada de proyectos en construcción.<br>

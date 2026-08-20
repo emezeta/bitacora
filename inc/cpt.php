@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - CPT
+ * Bitácora - CPT
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Comentarios en Notas.
+ * Bitácora - Comentarios en Notas.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

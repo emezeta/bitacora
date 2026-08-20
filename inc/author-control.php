@@ -1,6 +1,6 @@
 <?php
 /**
- * Bitácora de Obra - Control de autoría y fecha
+ * Bitácora - Control de autoría y fecha
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
