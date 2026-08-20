@@ -11,9 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Devuelve los bitacora_item visibles en una sección.
  *
- * Mantiene la política actual de los listados frontend:
+ * Política de los listados frontend:
  * - todos los publicados;
- * - borradores y privados propios;
+ * - Autor Bitácora: borradores y privados propios;
+ * - Supervisor/Administrator: borradores y privados de todos;
  * - orden descendente por fecha.
  *
  * $section puede ser un slug o un WP_Term.
@@ -70,29 +71,48 @@ function bitacora_get_section_items(
         )
     );
 
-    $own_unpublished_posts = array();
-    $current_user_id       = get_current_user_id();
+    $unpublished_posts = array();
+    $current_user_id  = get_current_user_id();
 
     if ( $current_user_id ) {
 
-        $own_unpublished_posts = get_posts(
-            array(
-                'post_type'              => 'bitacora_item',
-                'post_status'            => array(
-                    'draft',
-                    'private',
-                ),
-                'author'                 => $current_user_id,
-                'posts_per_page'         => $posts_per_page,
-                'orderby'                => 'date',
-                'order'                  => 'DESC',
-                'tax_query'              => $tax_query,
-                'suppress_filters'       => false,
-                'no_found_rows'          => true,
-                'ignore_sticky_posts'    => true,
-                'update_post_meta_cache' => true,
-                'update_post_term_cache' => true,
+        $unpublished_args = array(
+            'post_type'              => 'bitacora_item',
+            'post_status'            => array(
+                'draft',
+                'private',
+            ),
+            'posts_per_page'         => $posts_per_page,
+            'orderby'                => 'date',
+            'order'                  => 'DESC',
+            'tax_query'              => $tax_query,
+            'suppress_filters'       => false,
+            'no_found_rows'          => true,
+            'ignore_sticky_posts'    => true,
+            'update_post_meta_cache' => true,
+            'update_post_term_cache' => true,
+        );
+
+        /*
+         * La visibilidad de contenido ajeno sigue la capability
+         * declarada por bitacora_item.
+         */
+        $post_type_object = get_post_type_object( 'bitacora_item' );
+
+        $can_edit_others = (
+            $post_type_object
+            && isset( $post_type_object->cap->edit_others_posts )
+            && current_user_can(
+                $post_type_object->cap->edit_others_posts
             )
+        );
+
+        if ( ! $can_edit_others ) {
+            $unpublished_args['author'] = $current_user_id;
+        }
+
+        $unpublished_posts = get_posts(
+            $unpublished_args
         );
     }
 
@@ -101,7 +121,7 @@ function bitacora_get_section_items(
     foreach (
         array_merge(
             $published_posts,
-            $own_unpublished_posts
+            $unpublished_posts
         ) as $post
     ) {
         if ( $post instanceof WP_Post ) {

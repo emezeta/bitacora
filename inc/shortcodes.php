@@ -312,12 +312,13 @@ function obras_get_frontend_list_posts( $post_type, $posts_per_page = 50, $searc
         's'                      => $search_query,
     ) );
 
-    $own_unpublished_posts = array();
+    $unpublished_posts = array();
+
     if ( $current_user_id ) {
-        $own_unpublished_posts = get_posts( array(
+
+        $unpublished_args = array(
             'post_type'              => $post_type,
             'post_status'            => array( 'draft', 'private' ),
-            'author'                 => $current_user_id,
             'posts_per_page'         => $posts_per_page,
             'orderby'                => 'date',
             'order'                  => 'DESC',
@@ -327,11 +328,33 @@ function obras_get_frontend_list_posts( $post_type, $posts_per_page = 50, $searc
             'update_post_meta_cache' => false,
             'update_post_term_cache' => false,
             's'                      => $search_query,
-        ) );
+        );
+
+        /*
+         * La visibilidad de contenido ajeno sigue la capability
+         * declarada por el propio post type.
+         */
+        $post_type_object = get_post_type_object( $post_type );
+
+        $can_edit_others = (
+            $post_type_object
+            && isset( $post_type_object->cap->edit_others_posts )
+            && current_user_can(
+                $post_type_object->cap->edit_others_posts
+            )
+        );
+
+        if ( ! $can_edit_others ) {
+            $unpublished_args['author'] = $current_user_id;
+        }
+
+        $unpublished_posts = get_posts(
+            $unpublished_args
+        );
     }
 
     $merged = array();
-    foreach ( array_merge( $published_posts, $own_unpublished_posts ) as $post ) {
+    foreach ( array_merge( $published_posts, $unpublished_posts ) as $post ) {
         if ( $post instanceof WP_Post ) {
             $merged[ $post->ID ] = $post;
         }
