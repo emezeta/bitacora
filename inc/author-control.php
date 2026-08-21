@@ -20,24 +20,26 @@ function bitacora_controlled_post_types() {
 
 
 /**
- * Ocultar el selector nativo de Autor para usuarios que no administran
- * WordPress.
+ * Ocultar el selector nativo de Autor a quien no puede administrar
+ * contenido ajeno.
  *
- * El Administrator conserva el selector nativo y puede cambiar autoría.
- * Autor Bitácora y Supervisor no pueden cambiarla.
+ * Autor Bitácora no puede cambiar autoría.
+ * Supervisor Bitácora y Administrator conservan el selector nativo.
  */
 add_action(
     'add_meta_boxes',
-    'obras_hide_author_metabox_for_non_admin',
+    'obras_hide_author_metabox_for_author',
     99,
     2
 );
 
-function obras_hide_author_metabox_for_non_admin(
+function obras_hide_author_metabox_for_author(
     $post_type,
     $post
 ) {
-    if ( current_user_can( 'manage_options' ) ) {
+    if (
+        current_user_can( 'edit_others_bitacora_contents' )
+    ) {
         return;
     }
 
@@ -72,94 +74,25 @@ function obras_hide_author_metabox_for_non_admin(
 
 
 /**
- * Mostrar al Supervisor el autor real del contenido, sólo como dato.
+ * Bloquear cambios de autoría para quien no puede administrar contenido ajeno.
  *
- * El Administrator ya dispone del control nativo de WordPress.
- * El Autor Bitácora no necesita ver este dato en el editor.
- */
-add_action(
-    'add_meta_boxes',
-    'obras_add_supervisor_author_metabox',
-    100,
-    2
-);
-
-function obras_add_supervisor_author_metabox(
-    $post_type,
-    $post
-) {
-    if (
-        ! in_array(
-            $post_type,
-            bitacora_controlled_post_types(),
-            true
-        )
-    ) {
-        return;
-    }
-
-    if (
-        current_user_can( 'manage_options' )
-        || ! current_user_can(
-            'edit_others_bitacora_contents'
-        )
-    ) {
-        return;
-    }
-
-    add_meta_box(
-        'bitacora-author-readonly',
-        'Autor',
-        'obras_render_supervisor_author_metabox',
-        $post_type,
-        'side',
-        'default'
-    );
-}
-
-
-/**
- * Contenido del metabox de autor para Supervisor.
- */
-function obras_render_supervisor_author_metabox( $post ) {
-    $author_id = (
-        $post instanceof WP_Post
-        && (int) $post->post_author
-    )
-        ? (int) $post->post_author
-        : get_current_user_id();
-
-    $author = get_userdata( $author_id );
-
-    if ( ! $author ) {
-        echo '<p>—</p>';
-        return;
-    }
-
-    echo '<p><strong>'
-        . esc_html( $author->display_name )
-        . '</strong></p>';
-}
-
-
-/**
- * Bloquear cambios de autoría para todos salvo Administrator.
- *
- * En contenido nuevo, el autor es el usuario que lo crea.
- * En contenido existente, se conserva siempre el autor original.
+ * Autor Bitácora conserva siempre la autoría real.
+ * Supervisor Bitácora y Administrator pueden reasignar el owner.
  */
 add_filter(
     'wp_insert_post_data',
-    'obras_preserve_post_author_for_non_admin',
+    'obras_preserve_post_author_for_author',
     99,
     2
 );
 
-function obras_preserve_post_author_for_non_admin(
+function obras_preserve_post_author_for_author(
     $data,
     $postarr
 ) {
-    if ( current_user_can( 'manage_options' ) ) {
+    if (
+        current_user_can( 'edit_others_bitacora_contents' )
+    ) {
         return $data;
     }
 
@@ -210,21 +143,22 @@ function obras_preserve_post_author_for_non_admin(
 
 
 /**
- * Bloquear cambios manuales de fecha para Autor Bitácora.
+ * Bloquear cambios manuales de fecha para usuarios de contenido.
  *
- * Supervisor y Administrator pueden corregirla.
+ * Autor Bitácora y Supervisor Bitácora no pueden modificarla.
+ * Sólo Administrator puede corregirla.
  *
  * En contenido existente se conserva la fecha real almacenada.
  * En contenido nuevo se utiliza la fecha actual del sistema.
  */
 add_filter(
     'wp_insert_post_data',
-    'obras_preserve_post_date_for_non_supervisor',
+    'obras_preserve_post_date_for_non_admin',
     100,
     2
 );
 
-function obras_preserve_post_date_for_non_supervisor(
+function obras_preserve_post_date_for_non_admin(
     $data,
     $postarr
 ) {
@@ -246,11 +180,7 @@ function obras_preserve_post_date_for_non_supervisor(
         return $data;
     }
 
-    if (
-        current_user_can(
-            'edit_others_bitacora_contents'
-        )
-    ) {
+    if ( current_user_can( 'manage_options' ) ) {
         return $data;
     }
 
@@ -290,22 +220,23 @@ function obras_preserve_post_date_for_non_supervisor(
 
 
 /**
- * Autor Bitácora puede ver la fecha efectiva, pero no editarla.
+ * Autor Bitácora y Supervisor Bitácora pueden ver la fecha efectiva,
+ * pero no editarla.
  *
  * La protección verdadera está en wp_insert_post_data;
  * este CSS sólo simplifica la interfaz.
  */
 add_action(
     'admin_head-post.php',
-    'obras_lock_post_date_ui_for_author'
+    'obras_lock_post_date_ui_for_non_admin'
 );
 
 add_action(
     'admin_head-post-new.php',
-    'obras_lock_post_date_ui_for_author'
+    'obras_lock_post_date_ui_for_non_admin'
 );
 
-function obras_lock_post_date_ui_for_author() {
+function obras_lock_post_date_ui_for_non_admin() {
     $screen = get_current_screen();
 
     if (
@@ -319,11 +250,7 @@ function obras_lock_post_date_ui_for_author() {
         return;
     }
 
-    if (
-        current_user_can(
-            'edit_others_bitacora_contents'
-        )
-    ) {
+    if ( current_user_can( 'manage_options' ) ) {
         return;
     }
 
