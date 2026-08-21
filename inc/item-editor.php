@@ -790,3 +790,88 @@ function bitacora_customize_item_editor_labels() {
     $post_type->labels->all_items =
         $plural;
 }
+
+
+// ============================================================================
+// === URL CONTEXTUAL DEL BOTÓN NATIVO "NUEVO" ================================
+// ============================================================================
+
+/**
+ * Conserva la sección al usar el botón nativo "Nuevo ..." desde el editor.
+ *
+ * WordPress genera ese botón como:
+ *
+ * post-new.php?post_type=bitacora_item
+ *
+ * pero un bitacora_item nuevo requiere bitacora_section. Sólo se modifica
+ * ese URL mientras se edita un bitacora_item existente.
+ */
+add_action(
+    'load-post.php',
+    'bitacora_enable_contextual_new_item_admin_url',
+    30
+);
+
+function bitacora_enable_contextual_new_item_admin_url() {
+
+    $screen = get_current_screen();
+
+    if (
+        ! $screen
+        || 'bitacora_item' !== $screen->post_type
+    ) {
+        return;
+    }
+
+    $post_id = isset( $_GET['post'] )
+        ? absint( $_GET['post'] )
+        : 0;
+
+    if ( ! $post_id ) {
+        return;
+    }
+
+    $section = bitacora_get_item_editor_section( $post_id );
+
+    if ( ! $section ) {
+        return;
+    }
+
+    add_filter(
+        'admin_url',
+        'bitacora_contextual_new_item_admin_url',
+        10,
+        3
+    );
+}
+
+function bitacora_contextual_new_item_admin_url(
+    $url,
+    $path,
+    $blog_id
+) {
+
+    if ( 'post-new.php?post_type=bitacora_item' !== $path ) {
+        return $url;
+    }
+
+    $post_id = isset( $_GET['post'] )
+        ? absint( $_GET['post'] )
+        : 0;
+
+    if ( ! $post_id ) {
+        return $url;
+    }
+
+    $section = bitacora_get_item_editor_section( $post_id );
+
+    if ( ! $section ) {
+        return $url;
+    }
+
+    return add_query_arg(
+        'bitacora_section',
+        $section->slug,
+        $url
+    );
+}
