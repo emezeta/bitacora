@@ -50,3 +50,44 @@ add_filter( 'screen_options_show_screen', 'obras_hide_screen_options' );
 function obras_hide_screen_options( $show ) {
     return current_user_can( 'manage_options' ) ? $show : false;
 }
+
+
+// ============================================================================
+// === INTERFAZ WP-ADMIN LIMPIA PARA USUARIOS DE CONTENIDO =====================
+// ============================================================================
+
+/**
+ * Oculta el chrome administrativo de WordPress a los usuarios de contenido.
+ *
+ * Las pantallas permanecen registradas normalmente y el acceso efectivo sigue
+ * gobernado por capabilities y por admin-access.php. Esta capa es sólo visual.
+ */
+add_action( 'admin_head', 'obras_kiosk_hide_admin_chrome', 999 );
+
+function obras_kiosk_hide_admin_chrome() {
+
+    if (
+        ! current_user_can( 'edit_bitacora_contents' )
+        || current_user_can( 'manage_options' )
+    ) {
+        return;
+    }
+
+    ?>
+    <style id="bitacora-kiosk-admin-chrome">
+        #wpadminbar,
+        #adminmenumain {
+            display: none !important;
+        }
+
+        html.wp-toolbar {
+            padding-top: 0 !important;
+        }
+
+        #wpcontent,
+        #wpfooter {
+            margin-left: 0 !important;
+        }
+    </style>
+    <?php
+}

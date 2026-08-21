@@ -61,10 +61,12 @@ function bitacora_register_item_cpt() {
             'map_meta_cap'    => true,
             'show_in_rest'    => false,
             /*
-             * Durante el desarrollo lo mostramos dentro del menú
-             * principal de Bitácora para facilitar las pruebas.
+             * Se registra como pantalla administrativa independiente.
+             * La navegación funcional se realiza desde las secciones,
+             * mientras WordPress conserva el registro necesario para
+             * resolver correctamente el acceso según capabilities.
              */
-            'show_in_menu'  => 'edit.php?post_type=bitacora',
+            'show_in_menu'  => true,
         )
     );
 }
