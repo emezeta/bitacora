@@ -508,3 +508,115 @@ function bitacora_render_section_list_shortcode(
 
     return ob_get_clean();
 }
+
+
+/**
+ * Dashboard de secciones configuradas en el área "more".
+ *
+ * Shortcode:
+ *
+ * [bitacora_more_sections]
+ */
+add_shortcode(
+    'bitacora_more_sections',
+    'bitacora_render_more_sections_shortcode'
+);
+
+function bitacora_render_more_sections_shortcode() {
+
+    if ( ! is_user_logged_in() ) {
+        return '<p>Debes <a href="'
+            . esc_url(
+                wp_login_url(
+                    get_permalink()
+                )
+            )
+            . '">iniciar sesión</a> para ver el contenido.</p>';
+    }
+
+    $sections = bitacora_get_sections(
+        array(
+            'area'  => 'more',
+            'state' => 'active',
+        )
+    );
+
+    if ( is_wp_error( $sections ) ) {
+        return '<p>No fue posible cargar las secciones.</p>';
+    }
+
+    ob_start();
+    ?>
+    <div class="obras-dashboard bitacora-more-sections-dashboard">
+
+        <h1>Más secciones</h1>
+
+        <p>Elegí una sección.</p>
+
+        <?php if ( ! empty( $sections ) ) : ?>
+
+            <div class="obras-buttons">
+
+                <?php foreach ( $sections as $section ) : ?>
+
+                    <?php
+                    $subtitle = bitacora_get_section_meta(
+                        $section,
+                        'bitacora_section_subtitle',
+                        ''
+                    );
+
+                    $page = get_page_by_path(
+                        $section->slug,
+                        OBJECT,
+                        'page'
+                    );
+
+                    $url = $page
+                        ? get_permalink( $page )
+                        : home_url(
+                            '/' . $section->slug . '/'
+                        );
+                    ?>
+
+                    <a
+                        href="<?php echo esc_url( $url ); ?>"
+                        class="obras-button secondary"
+                    >
+                        <span class="icon">🧩</span>
+
+                        <span class="obras-aux-card-title">
+                            <?php echo esc_html( $section->name ); ?>
+                        </span>
+
+                        <?php if ( '' !== $subtitle ) : ?>
+                            <span class="obras-aux-card-subtitle">
+                                <?php echo esc_html( $subtitle ); ?>
+                            </span>
+                        <?php endif; ?>
+                    </a>
+
+                <?php endforeach; ?>
+
+            </div>
+
+        <?php else : ?>
+
+            <p>No hay más secciones disponibles.</p>
+
+        <?php endif; ?>
+
+        <div class="obras-dashboard-more">
+            <a
+                href="<?php echo esc_url( home_url( '/' ) ); ?>"
+                class="obras-dashboard-more-link"
+            >
+                Inicio
+            </a>
+        </div>
+
+    </div>
+    <?php
+
+    return ob_get_clean();
+}

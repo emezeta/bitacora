@@ -39,7 +39,6 @@ function obras_handle_frontend_trash_post() {
         'material_obra',
         'catalogo_obra',
         'plano_obra',
-        'aux_section',
     );
 
     if ( ! in_array( $post->post_type, $allowed_post_types, true ) ) {

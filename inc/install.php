@@ -431,7 +431,7 @@ function obras_theme_install() {
 
 		'auxiliar' => array(
 			'title'   => 'Más secciones',
-			'content' => '[obras_aux_dashboard]',
+			'content' => '[bitacora_more_sections]',
 		),
 
 		'paisajismo' => array(

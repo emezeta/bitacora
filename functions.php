@@ -35,7 +35,6 @@ require_once get_stylesheet_directory() . '/inc/landing.php';
 require_once get_stylesheet_directory() . '/inc/comments.php';
 require_once get_stylesheet_directory() . '/inc/admin-columns.php';
 require_once get_stylesheet_directory() . '/inc/pad.php';
-require_once get_stylesheet_directory() . '/inc/aux-section.php';
 require_once get_stylesheet_directory() . '/inc/sala-jitsi.php';
 require_once get_stylesheet_directory() . '/inc/redirects.php';
 
