@@ -236,37 +236,18 @@ function obras_render_post_meta_line( $post_id ) {
     }
 
     $fecha = obras_get_post_creation_date_label( $post_id );
-    $autor = '';
 
     /*
-     * El autor es información de supervisión.
-     *
-     * La capability se obtiene del propio post type para no acoplar
-     * este render a nombres de roles ni a una familia concreta de CPT.
+     * El autor forma parte de la información de trabajo del contenido.
+     * Debe ser visible para cualquier usuario que pueda ver el ítem.
      */
-    $post_type = get_post_type( $post_id );
-
-    $post_type_object = $post_type
-        ? get_post_type_object( $post_type )
-        : null;
-
-    $can_edit_others = (
-        $post_type_object
-        && isset( $post_type_object->cap->edit_others_posts )
-        && current_user_can(
-            $post_type_object->cap->edit_others_posts
+    $autor = get_the_author_meta(
+        'display_name',
+        (int) get_post_field(
+            'post_author',
+            $post_id
         )
     );
-
-    if ( $can_edit_others ) {
-        $autor = get_the_author_meta(
-            'display_name',
-            (int) get_post_field(
-                'post_author',
-                $post_id
-            )
-        );
-    }
 
     echo '<div class="meta">';
 

@@ -427,6 +427,19 @@ function bitacora_render_section_list_shortcode(
 
                 <div class="item">
 
+                      <?php
+                      $has_share_controls =
+                          bitacora_user_can_manage_share_link(
+                              $list_post->ID
+                          );
+                      ?>
+
+                      <?php if ( $has_share_controls ) : ?>
+                          <div class="bitacora-item-share-layout">
+                              <div class="bitacora-item-share-main">
+                      <?php endif; ?>
+
+
                     <?php
                     obras_render_list_item_title(
                         $list_post->ID,
@@ -462,7 +475,21 @@ function bitacora_render_section_list_shortcode(
                     obras_render_item_actions(
                         $list_post->ID
                     );
+
                     ?>
+
+                      <?php if ( $has_share_controls ) : ?>
+                              </div>
+
+                              <div class="bitacora-item-share-panel">
+                                  <?php
+                                  bitacora_render_share_controls(
+                                      $list_post->ID
+                                  );
+                                  ?>
+                              </div>
+                          </div>
+                      <?php endif; ?>
 
                 </div>
 

@@ -29,6 +29,7 @@ require_once get_stylesheet_directory() . '/inc/restrict.php';
 require_once get_stylesheet_directory() . '/inc/branding.php';
 require_once get_stylesheet_directory() . '/inc/content-meta.php';
 require_once get_stylesheet_directory() . '/inc/shortcodes.php';
+require_once get_stylesheet_directory() . '/inc/share-links.php';
 require_once get_stylesheet_directory() . '/inc/item-list.php';
 require_once get_stylesheet_directory() . '/inc/landing.php';
 require_once get_stylesheet_directory() . '/inc/comments.php';

@@ -16,6 +16,7 @@ if ( ! function_exists( 'obras_enqueue_styles' ) ) {
 		$land_style_path      = get_theme_file_path( '/css/landpage.css' );
 		$dashboard_style_path = get_theme_file_path( '/css/dashboardfe.css' );
 		$navigation_style_path = get_theme_file_path( '/css/navigation.css' );
+		$share_style_path      = get_theme_file_path( '/css/share-links.css' );
 
 		wp_enqueue_style(
 			'bitacora-style',
@@ -53,6 +54,15 @@ if ( ! function_exists( 'obras_enqueue_styles' ) ) {
 				get_theme_file_uri( '/css/dashboardfe.css' ),
 				array( 'bitacora-navigation' ),
 				file_exists( $dashboard_style_path ) ? filemtime( $dashboard_style_path ) : null
+			);
+
+			wp_enqueue_style(
+			    'bitacora-share-links',
+			    get_theme_file_uri( '/css/share-links.css' ),
+			    array( 'obras-dashboardfe' ),
+			    file_exists( $share_style_path )
+			        ? filemtime( $share_style_path )
+			        : null
 			);
 		}
 	}
