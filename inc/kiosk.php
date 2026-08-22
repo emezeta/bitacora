@@ -91,3 +91,49 @@ function obras_kiosk_hide_admin_chrome() {
     </style>
     <?php
 }
+
+
+// ============================================================================
+// === NAVEGACIÓN PROPIA EN PERFIL ============================================
+// ============================================================================
+
+/**
+ * Ofrece una salida explícita de profile.php a los usuarios de contenido.
+ *
+ * Autor y Supervisor Bitácora no ven el chrome administrativo de WordPress,
+ * por lo que Perfil necesita su propia navegación de regreso a Inicio.
+ */
+add_action(
+    'admin_notices',
+    'obras_kiosk_render_profile_navigation'
+);
+
+function obras_kiosk_render_profile_navigation() {
+
+    global $pagenow;
+
+    if ( 'profile.php' !== $pagenow ) {
+        return;
+    }
+
+    if (
+        ! current_user_can( 'edit_bitacora_contents' )
+        || current_user_can( 'manage_options' )
+    ) {
+        return;
+    }
+
+    $home_url = function_exists( 'obras_get_dashboard_url' )
+        ? obras_get_dashboard_url()
+        : home_url( '/' );
+
+    echo '<div class="bitacora-profile-navigation '
+        . 'obras-single-actions obras-single-actions-aux">';
+
+    echo '<a class="obras-aux-single-btn '
+        . 'obras-aux-single-btn-secondary" href="'
+        . esc_url( $home_url )
+        . '">← Volver al Inicio</a>';
+
+    echo '</div>';
+}

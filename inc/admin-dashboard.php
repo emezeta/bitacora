@@ -217,9 +217,9 @@ function obras_render_editor_navigation_buttons( $post ) {
     $list_label = obras_get_list_label( $post );
     $home_url   = obras_get_dashboard_url();
     ?>
-    <div style="margin:12px 0 18px; display:flex; gap:10px; flex-wrap:wrap;">
-    <a href="<?php echo esc_url( $list_url ); ?>" class="button button-secondary">← <?php echo esc_html( $list_label ); ?></a>
-    <a href="<?php echo esc_url( $home_url ); ?>" class="button button-secondary">🏠 Inicio</a>
+    <div class="obras-single-actions obras-single-actions-aux">
+    <a href="<?php echo esc_url( $list_url ); ?>" class="obras-aux-single-btn obras-aux-single-btn-primary">← <?php echo esc_html( $list_label ); ?></a>
+    <a href="<?php echo esc_url( $home_url ); ?>" class="obras-aux-single-btn obras-aux-single-btn-secondary">🏠 Inicio</a>
     </div>
     <?php
 }

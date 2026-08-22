@@ -1,0 +1,54 @@
+/*
+ * Bitácora - Navegación compartida
+ *
+ * Componente visual común para navegación contextual en frontend y wp-admin.
+ */
+
+/* Aux single - botones de navegacion */
+.obras-single-actions.obras-single-actions-aux {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.75rem !important;
+  margin-top: 1.75rem !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 54px !important;
+  padding: 0.85rem 1.25rem !important;
+  border-radius: 10px !important;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-decoration: none !important;
+  border: 0 !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-primary {
+  background: #2271b1 !important;
+  color: #ffffff !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-more {
+  background: #eef3f5 !important;
+  color: #00506a !important;
+  border: 1px solid #ccd8dd !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-secondary {
+  background: #6c757d !important;
+  color: #ffffff !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn-edit {
+  background: #20895a !important;
+  color: #ffffff !important;
+}
+
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn:hover,
+.obras-single-actions.obras-single-actions-aux .obras-aux-single-btn:focus {
+  text-decoration: none !important;
+  filter: brightness(0.96);
+}

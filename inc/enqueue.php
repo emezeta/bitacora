@@ -15,6 +15,7 @@ if ( ! function_exists( 'obras_enqueue_styles' ) ) {
 		$custom_style_path    = get_theme_file_path( '/css/custom.css' );
 		$land_style_path      = get_theme_file_path( '/css/landpage.css' );
 		$dashboard_style_path = get_theme_file_path( '/css/dashboardfe.css' );
+		$navigation_style_path = get_theme_file_path( '/css/navigation.css' );
 
 		wp_enqueue_style(
 			'bitacora-style',
@@ -41,13 +42,59 @@ if ( ! function_exists( 'obras_enqueue_styles' ) ) {
 
 		if ( is_user_logged_in() ) {
 			wp_enqueue_style(
+				'bitacora-navigation',
+				get_theme_file_uri( '/css/navigation.css' ),
+				array( 'obras-custom' ),
+				file_exists( $navigation_style_path ) ? filemtime( $navigation_style_path ) : null
+			);
+
+			wp_enqueue_style(
 				'obras-dashboardfe',
 				get_theme_file_uri( '/css/dashboardfe.css' ),
-				array( 'obras-custom' ),
+				array( 'bitacora-navigation' ),
 				file_exists( $dashboard_style_path ) ? filemtime( $dashboard_style_path ) : null
 			);
 		}
 	}
 
 	add_action( 'wp_enqueue_scripts', 'obras_enqueue_styles', 10 );
+}
+
+/**
+ * Carga el componente de navegación Bitácora en las pantallas wp-admin
+ * donde se utiliza: editor de contenido y Perfil.
+ */
+add_action(
+    'admin_enqueue_scripts',
+    'obras_enqueue_admin_navigation_styles',
+    10
+);
+
+function obras_enqueue_admin_navigation_styles() {
+
+    $screen = get_current_screen();
+
+    if (
+        ! $screen
+        || ! in_array(
+            $screen->base,
+            array( 'post', 'profile' ),
+            true
+        )
+    ) {
+        return;
+    }
+
+    $navigation_style_path = get_theme_file_path(
+        '/css/navigation.css'
+    );
+
+    wp_enqueue_style(
+        'bitacora-navigation-admin',
+        get_theme_file_uri( '/css/navigation.css' ),
+        array(),
+        file_exists( $navigation_style_path )
+            ? filemtime( $navigation_style_path )
+            : null
+    );
 }
