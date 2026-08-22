@@ -12,10 +12,6 @@ if ( ! function_exists( 'obras_comments_managed_post_types' ) ) {
         return array(
             'bitacora',
             'bitacora_item',
-            'documento_obra',
-            'material_obra',
-            'catalogo_obra',
-            'plano_obra',
         );
     }
 }
@@ -27,7 +23,7 @@ function obras_configure_comments_support() {
     remove_post_type_support( 'bitacora', 'trackbacks' );
 
     // Resto de ndmcp: sin comentarios ni trackbacks.
-    foreach ( array( 'bitacora_item', 'documento_obra', 'material_obra', 'catalogo_obra', 'plano_obra' ) as $post_type ) {
+    foreach ( array( 'bitacora_item' ) as $post_type ) {
         remove_post_type_support( $post_type, 'comments' );
         remove_post_type_support( $post_type, 'trackbacks' );
     }
@@ -91,7 +87,7 @@ function obras_adjust_discussion_metaboxes() {
     remove_meta_box( 'commentsdiv', 'bitacora', 'normal' );
 
     // Resto de ndmcp: sin discusión/comentarios.
-    foreach ( array( 'bitacora_item', 'documento_obra', 'material_obra', 'catalogo_obra', 'plano_obra' ) as $post_type ) {
+    foreach ( array( 'bitacora_item' ) as $post_type ) {
         remove_meta_box( 'commentstatusdiv', $post_type, 'normal' );
         remove_meta_box( 'trackbacksdiv', $post_type, 'normal' );
         remove_meta_box( 'commentsdiv', $post_type, 'normal' );

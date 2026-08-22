@@ -15,10 +15,6 @@ if ( ! function_exists( 'obras_get_protected_post_types' ) ) {
         return array(
             'bitacora',
             'bitacora_item',
-            'documento_obra',
-            'material_obra',
-            'catalogo_obra',
-            'plano_obra',
         );
     }
 }

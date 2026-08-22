@@ -23,10 +23,6 @@ function obras_display_acf_fields_on_single( $content ) {
 	$allowed_post_types = array(
 		'bitacora_item',
 		'bitacora',
-		'documento_obra',
-		'material_obra',
-		'catalogo_obra',
-		'plano_obra',
 	);
 
 	if ( ! in_array( $post_type, $allowed_post_types, true ) ) {
@@ -179,106 +175,5 @@ function obras_display_acf_fields_on_single( $content ) {
 		$box_html .= '</div>';
 	}
 
-	// ------------------------------------------------------------------------
-	// Documento
-	// ------------------------------------------------------------------------
-	if ( 'documento_obra' === $post_type ) {
-		$archivo_id   = get_post_meta( $post_id, 'archivo_documento', true );
-		$class_label  = function_exists( 'obras_get_post_class_label' ) ? obras_get_post_class_label( $post_id ) : '';
-
-		$box_html .= '<div class="obras-acf-box documento">';
-		$box_html .= '<h3>Datos del Documento</h3>';
-
-		if ( ! empty( $class_label ) ) {
-			$box_html .= '<p><strong>Clase del contenido:</strong> ' . esc_html( $class_label ) . '</p>';
-		}
-
-		if ( ! empty( $archivo_id ) && is_numeric( $archivo_id ) ) {
-			$archivo_url = wp_get_attachment_url( $archivo_id );
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_url ) . '" target="_blank">' . esc_html( basename( $archivo_url ) ) . '</a></p>';
-		} elseif ( is_array( $archivo_id ) && isset( $archivo_id['url'] ) ) {
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_id['url'] ) . '" target="_blank">' . esc_html( $archivo_id['filename'] ?? basename( $archivo_id['url'] ) ) . '</a></p>';
-		}
-
-		$box_html .= '</div>';
-	}
-
-	// ------------------------------------------------------------------------
-	// Material
-	// ------------------------------------------------------------------------
-	if ( 'material_obra' === $post_type ) {
-		$archivo_id  = get_post_meta( $post_id, 'archivo_recurso', true );
-		$ubicacion   = get_post_meta( $post_id, 'ubicacion_fisica', true );
-		$class_label = function_exists( 'obras_get_post_class_label' ) ? obras_get_post_class_label( $post_id ) : '';
-
-		$box_html .= '<div class="obras-acf-box material">';
-		$box_html .= '<h3>Datos del Material</h3>';
-
-		if ( ! empty( $class_label ) ) {
-			$box_html .= '<p><strong>Clase del contenido:</strong> ' . esc_html( $class_label ) . '</p>';
-		}
-
-		if ( ! empty( $ubicacion ) ) {
-			$box_html .= '<p><strong>📍 Ubicación:</strong> ' . esc_html( $ubicacion ) . '</p>';
-		}
-
-		if ( ! empty( $archivo_id ) && is_numeric( $archivo_id ) ) {
-			$archivo_url = wp_get_attachment_url( $archivo_id );
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_url ) . '" target="_blank">' . esc_html( basename( $archivo_url ) ) . '</a></p>';
-		} elseif ( is_array( $archivo_id ) && isset( $archivo_id['url'] ) ) {
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_id['url'] ) . '" target="_blank">' . esc_html( $archivo_id['filename'] ?? basename( $archivo_id['url'] ) ) . '</a></p>';
-		}
-
-		$box_html .= '</div>';
-	}
-
-	// ------------------------------------------------------------------------
-	// Catálogo
-	// ------------------------------------------------------------------------
-	if ( 'catalogo_obra' === $post_type ) {
-		$archivo_id  = get_post_meta( $post_id, 'archivo_catalogo', true );
-		$class_label = function_exists( 'obras_get_post_class_label' ) ? obras_get_post_class_label( $post_id ) : '';
-
-		$box_html .= '<div class="obras-acf-box catalogo">';
-		$box_html .= '<h3>Datos del Catálogo</h3>';
-
-		if ( ! empty( $class_label ) ) {
-			$box_html .= '<p><strong>Clase del contenido:</strong> ' . esc_html( $class_label ) . '</p>';
-		}
-
-		if ( ! empty( $archivo_id ) && is_numeric( $archivo_id ) ) {
-			$archivo_url = wp_get_attachment_url( $archivo_id );
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_url ) . '" target="_blank">' . esc_html( basename( $archivo_url ) ) . '</a></p>';
-		} elseif ( is_array( $archivo_id ) && isset( $archivo_id['url'] ) ) {
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_id['url'] ) . '" target="_blank">' . esc_html( $archivo_id['filename'] ?? basename( $archivo_id['url'] ) ) . '</a></p>';
-		}
-
-		$box_html .= '</div>';
-	}
-
-	// ------------------------------------------------------------------------
-	// Plano
-	// ------------------------------------------------------------------------
-	if ( 'plano_obra' === $post_type ) {
-		$archivo_id  = get_post_meta( $post_id, 'archivo_plano', true );
-		$class_label = function_exists( 'obras_get_post_class_label' ) ? obras_get_post_class_label( $post_id ) : '';
-
-		$box_html .= '<div class="obras-acf-box plano">';
-		$box_html .= '<h3>Datos del Plano</h3>';
-
-		if ( ! empty( $class_label ) ) {
-			$box_html .= '<p><strong>Clase del contenido:</strong> ' . esc_html( $class_label ) . '</p>';
-		}
-
-		if ( ! empty( $archivo_id ) && is_numeric( $archivo_id ) ) {
-			$archivo_url = wp_get_attachment_url( $archivo_id );
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_url ) . '" target="_blank">' . esc_html( basename( $archivo_url ) ) . '</a></p>';
-		} elseif ( is_array( $archivo_id ) && isset( $archivo_id['url'] ) ) {
-			$box_html .= '<p><strong>📎 Archivo:</strong> <a href="' . esc_url( $archivo_id['url'] ) . '" target="_blank">' . esc_html( $archivo_id['filename'] ?? basename( $archivo_id['url'] ) ) . '</a></p>';
-		}
-
-		$box_html .= '</div>';
-	}
-
-	return $content . $box_html . $nav_html;
+return $content . $box_html . $nav_html;
 }

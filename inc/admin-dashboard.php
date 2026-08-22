@@ -63,18 +63,6 @@ if ( ! function_exists( 'obras_get_list_url' ) ) {
             case 'bitacora':
                 return home_url( '/entradas/' );
 
-            case 'documento_obra':
-                return home_url( '/documentos/' );
-
-            case 'material_obra':
-                return home_url( '/materiales/' );
-
-            case 'catalogo_obra':
-                return home_url( '/catalogos/' );
-
-            case 'plano_obra':
-                return home_url( '/planos/' );
-
             case 'bitacora_item':
                 if ( function_exists( 'bitacora_get_item_editor_section' ) ) {
                     $section = bitacora_get_item_editor_section(
@@ -104,18 +92,6 @@ if ( ! function_exists( 'obras_get_list_label' ) ) {
         switch ( $ctx['post_type'] ) {
             case 'bitacora':
                 return 'Notas';
-
-            case 'documento_obra':
-                return 'Documentos';
-
-            case 'material_obra':
-                return 'Materiales';
-
-            case 'catalogo_obra':
-                return 'Catálogos';
-
-            case 'plano_obra':
-                return 'Planos';
 
             case 'bitacora_item':
                 if ( function_exists( 'bitacora_get_item_editor_section' ) ) {
@@ -177,10 +153,6 @@ function obras_render_dashboard() {
     <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:30px;">
     <a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=bitacora' ) ); ?>" class="button button-primary button-hero">✍️<br>Nueva Nota</a>
     <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=bitacora' ) ); ?>" class="button button-secondary button-hero">📋<br>Notas</a>
-    <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=documento_obra' ) ); ?>" class="button button-secondary button-hero">📄<br>Documentos</a>
-    <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=material_obra' ) ); ?>" class="button button-secondary button-hero">🧰<br>Materiales</a>
-    <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=catalogo_obra' ) ); ?>" class="button button-secondary button-hero">📚<br>Catálogos</a>
-    <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=plano_obra' ) ); ?>" class="button button-secondary button-hero">📐<br>Planos</a>
     <a href="<?php echo esc_url( obras_get_dashboard_url() ); ?>" class="button button-secondary button-hero">🏠<br>Inicio</a>
     </div>
     </div>
@@ -202,10 +174,6 @@ function obras_render_editor_navigation_buttons( $post ) {
 
     $allowed_post_types = array(
         'bitacora',
-        'documento_obra',
-        'material_obra',
-        'catalogo_obra',
-        'plano_obra',
         'bitacora_item',
     );
 

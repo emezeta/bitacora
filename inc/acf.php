@@ -7,19 +7,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-if ( ! function_exists( 'obras_get_document_class_choices' ) ) {
-    function obras_get_document_class_choices() {
-        
-        return array(
-            ''              => 'Sin clasificar',
-            'memo'          => 'Memo',
-            'instructivo'   => 'Instructivo',
-            'informe'       => 'Informe',
-            'estado_cuenta' => 'Estado de cuenta',
-        );
-    }
-}
-
 if ( ! function_exists( 'obras_get_bitacora_class_choices' ) ) {
     function obras_get_bitacora_class_choices() {
         
@@ -37,35 +24,6 @@ if ( ! function_exists( 'obras_get_bitacora_class_choices' ) ) {
     }
 }
 
-if ( ! function_exists( 'obras_get_material_class_choices' ) ) {
-    function obras_get_material_class_choices() {
-        
-        return array(
-            ''            => 'Sin clasificar',
-            'foto'        => 'Foto',
-            'video'       => 'Video',
-            'muestra'     => 'Muestra',
-            'insumo'      => 'Insumo',
-            'observacion' => 'Observación',
-            'referencia'  => 'Referencia',
-        );
-    }
-}
-
-if ( ! function_exists( 'obras_get_catalogo_plano_class_choices' ) ) {
-    function obras_get_catalogo_plano_class_choices() {
-        
-        return array(
-            ''            => 'Sin clasificar',
-            'observacion' => 'Observación',
-            'novedad'     => 'Novedad',
-            'explicacion' => 'Explicación',
-            'referencia'  => 'Referencia',
-            'tecnico'     => 'Dato técnico',
-        );
-    }
-}
-
 if ( ! function_exists( 'obras_get_post_class_label' ) ) {
     function obras_get_post_class_label( $post_id ) {
         $post_type = get_post_type( $post_id );
@@ -78,25 +36,6 @@ if ( ! function_exists( 'obras_get_post_class_label' ) ) {
                 $choices = obras_get_bitacora_class_choices();
                 break;
 
-            case 'documento_obra':
-                $value   = get_post_meta( $post_id, 'tipo_documento', true );
-                $choices = obras_get_document_class_choices();
-                break;
-
-            case 'material_obra':
-                $value   = get_post_meta( $post_id, 'clase_material', true );
-                $choices = obras_get_material_class_choices();
-                break;
-
-            case 'catalogo_obra':
-                $value   = get_post_meta( $post_id, 'clase_catalogo', true );
-                $choices = obras_get_catalogo_plano_class_choices();
-                break;
-
-            case 'plano_obra':
-                $value   = get_post_meta( $post_id, 'clase_plano', true );
-                $choices = obras_get_catalogo_plano_class_choices();
-                break;
         }
 
         if ( $value && isset( $choices[ $value ] ) ) {
@@ -149,154 +88,6 @@ if ( function_exists( 'acf_add_local_field_group' ) ) :
         'label_placement' => 'top',
     ) );
 
-    // Documentos
-    acf_add_local_field_group( array(
-        'key' => 'group_documento_obras',
-        'title' => 'Datos del Documento',
-        'fields' => array(
-            array(
-                'key' => 'field_tipo_documento',
-                'label' => 'Clase del contenido',
-                'name' => 'tipo_documento',
-                'type' => 'select',
-                'choices' => obras_get_document_class_choices(),
-                  'allow_null' => 0,
-                  'return_format' => 'value',
-            ),
-            array(
-                'key' => 'field_archivo_doc',
-                'label' => 'Adjuntar archivo',
-                'name' => 'archivo_documento',
-                'type' => 'file',
-                'return_format' => 'array',
-                'required' => 0,
-            ),
-        ),
-        'location' => array(
-            array(
-                array(
-                    'param' => 'post_type',
-                    'operator' => '==',
-                    'value' => 'documento_obra',
-                ),
-            ),
-        ),
-        'position' => 'normal',
-        'label_placement' => 'top',
-    ) );
-
-    // Materiales
-    acf_add_local_field_group( array(
-        'key' => 'group_material_obras',
-        'title' => 'Datos del Material',
-        'fields' => array(
-            array(
-                'key' => 'field_clase_mat',
-                'label' => 'Clase del contenido',
-                'name' => 'clase_material',
-                'type' => 'select',
-                'choices' => obras_get_material_class_choices(),
-                  'allow_null' => 0,
-                  'return_format' => 'value',
-            ),
-            array(
-                'key' => 'field_archivo_mat',
-                'label' => 'Adjuntar archivo',
-                'name' => 'archivo_recurso',
-                'type' => 'file',
-                'return_format' => 'array',
-            ),
-            array(
-                'key' => 'field_ubicacion',
-                'label' => 'Ubicación Física',
-                'name' => 'ubicacion_fisica',
-                'type' => 'text',
-                'placeholder' => 'Ej: Galpón B, Estante 3',
-            ),
-        ),
-        'location' => array(
-            array(
-                array(
-                    'param' => 'post_type',
-                    'operator' => '==',
-                    'value' => 'material_obra',
-                ),
-            ),
-        ),
-        'position' => 'normal',
-        'label_placement' => 'top',
-    ) );
-
-    // Catálogos
-    acf_add_local_field_group( array(
-        'key' => 'group_catalogo_obras',
-        'title' => 'Datos del Catálogo',
-        'fields' => array(
-            array(
-                'key' => 'field_clase_catalogo',
-                'label' => 'Clase del contenido',
-                'name' => 'clase_catalogo',
-                'type' => 'select',
-                'choices' => obras_get_catalogo_plano_class_choices(),
-                  'allow_null' => 0,
-                  'return_format' => 'value',
-            ),
-            array(
-                'key' => 'field_archivo_catalogo',
-                'label' => 'Adjuntar archivo',
-                'name' => 'archivo_catalogo',
-                'type' => 'file',
-                'return_format' => 'array',
-            ),
-        ),
-        'location' => array(
-            array(
-                array(
-                    'param' => 'post_type',
-                    'operator' => '==',
-                    'value' => 'catalogo_obra',
-                ),
-            ),
-        ),
-        'position' => 'normal',
-        'label_placement' => 'top',
-    ) );
-
-    // Planos
-    acf_add_local_field_group( array(
-        'key' => 'group_plano_obras',
-        'title' => 'Datos del Plano',
-        'fields' => array(
-            array(
-                'key' => 'field_clase_plano',
-                'label' => 'Clase del contenido',
-                'name' => 'clase_plano',
-                'type' => 'select',
-                'choices' => obras_get_catalogo_plano_class_choices(),
-                  'allow_null' => 0,
-                  'return_format' => 'value',
-            ),
-            array(
-                'key' => 'field_archivo_plano',
-                'label' => 'Adjuntar archivo',
-                'name' => 'archivo_plano',
-                'type' => 'file',
-                'return_format' => 'array',
-            ),
-        ),
-        'location' => array(
-            array(
-                array(
-                    'param' => 'post_type',
-                    'operator' => '==',
-                    'value' => 'plano_obra',
-                ),
-            ),
-        ),
-        'position' => 'normal',
-        'label_placement' => 'top',
-    ) );
-
     endif;
 
 
@@ -321,10 +112,6 @@ if ( function_exists( 'acf_add_local_field_group' ) ) :
 
         $allowed_post_types = array(
             'bitacora',
-            'documento_obra',
-            'material_obra',
-            'catalogo_obra',
-            'plano_obra',
         );
 
         if ( ! in_array( $screen->post_type, $allowed_post_types, true ) ) {
@@ -333,10 +120,6 @@ if ( function_exists( 'acf_add_local_field_group' ) ) :
 
         $file_help_map = array(
             'archivo_adjunto'   => 'Adjunta un archivo a esta publicación. No se inserta dentro del texto: quedará disponible como archivo adjunto al final.',
-            'archivo_documento' => 'Adjunta un archivo a esta publicación. No se inserta dentro del texto: quedará disponible como archivo adjunto al final.',
-            'archivo_recurso'   => 'Adjunta un archivo a esta publicación. No se inserta dentro del texto: quedará disponible como archivo adjunto al final.',
-            'archivo_catalogo'  => 'Adjunta un archivo a esta publicación. No se inserta dentro del texto: quedará disponible como archivo adjunto al final.',
-            'archivo_plano'     => 'Adjunta un archivo a esta publicación. No se inserta dentro del texto: quedará disponible como archivo adjunto al final.',
         );
 
         $media_help = 'Usa “Añadir medios” para insertar una foto o imagen dentro del texto. Usa “Adjuntar archivo” para dejar un archivo asociado a la publicación.';
@@ -451,10 +234,6 @@ if ( function_exists( 'acf_add_local_field_group' ) ) :
 
         <style>
         .acf-field[data-name="archivo_adjunto"] .acf-label,
-        .acf-field[data-name="archivo_documento"] .acf-label,
-        .acf-field[data-name="archivo_recurso"] .acf-label,
-        .acf-field[data-name="archivo_catalogo"] .acf-label,
-        .acf-field[data-name="archivo_plano"] .acf-label,
         .obras-media-help-anchor {
             position: relative;
         }
