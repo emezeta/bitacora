@@ -190,6 +190,7 @@ function bitacora_register_class_taxonomy() {
  * Argumentos opcionales:
  * - area:  main | more
  * - state: active | hidden | archived
+ * - role:  core | section
  *
  * El orden se toma de bitacora_section_order.
  */
@@ -198,6 +199,7 @@ function bitacora_get_sections( $args = array() ) {
     $defaults = array(
         'area'  => '',
         'state' => '',
+        'role'  => '',
     );
 
     $args = wp_parse_args( $args, $defaults );
@@ -220,6 +222,14 @@ function bitacora_get_sections( $args = array() ) {
         );
     }
 
+    if ( '' !== $args['role'] ) {
+        $meta_query[] = array(
+            'key'     => 'bitacora_section_role',
+            'value'   => $args['role'],
+            'compare' => '=',
+        );
+    }
+
     $query_args = array(
         'taxonomy'   => 'bitacora_section',
         'hide_empty' => false,
@@ -233,6 +243,39 @@ function bitacora_get_sections( $args = array() ) {
     }
 
     return get_terms( $query_args );
+}
+
+
+/**
+ * Devuelve el único contenedor principal de la instalación.
+ *
+ * La ausencia de core o la existencia de más de uno son estados
+ * inválidos del modelo.
+ */
+function bitacora_get_core_section() {
+
+    $sections = bitacora_get_sections(
+        array(
+            'role' => 'core',
+        )
+    );
+
+    if ( is_wp_error( $sections ) ) {
+        return $sections;
+    }
+
+    if ( 1 !== count( $sections ) ) {
+
+        return new WP_Error(
+            'bitacora_invalid_core_section_count',
+            sprintf(
+                'Se esperaba exactamente una sección core; se encontraron %d.',
+                count( $sections )
+            )
+        );
+    }
+
+    return $sections[0];
 }
 
 
@@ -281,6 +324,7 @@ function bitacora_get_section_meta( $section, $key, $default = '' ) {
  * - file
  * - thumbnail
  * - location
+ * - comments
  *
  * $section puede ser un slug o un WP_Term.
  */
@@ -290,6 +334,7 @@ function bitacora_section_has_feature( $section, $feature ) {
         'file'      => 'bitacora_section_feature_file',
         'thumbnail' => 'bitacora_section_feature_thumbnail',
         'location'  => 'bitacora_section_feature_location',
+        'comments'  => 'bitacora_section_feature_comments',
     );
 
     $feature = sanitize_key( $feature );

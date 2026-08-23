@@ -17,6 +17,33 @@ defined( 'ABSPATH' ) || exit;
  *
  * Devuelve el array del perfil o false si no existe o no es válido.
  */
+/**
+ * Configuración mínima del contenedor principal de toda Bitácora.
+ *
+ * El perfil puede sobrescribir estos valores mediante su clave "core".
+ * Las secciones complementarias siguen viviendo en "sections".
+ */
+function bitacora_get_default_core_section_definition() {
+
+    return array(
+        'name'      => 'Notas',
+        'slug'      => 'notas',
+        'singular'  => 'Nota',
+        'plural'    => 'Notas',
+        'subtitle'  => '',
+        'new_label' => 'Nueva nota',
+        'order'     => 0,
+        'area'      => 'main',
+        'state'     => 'active',
+
+        'feature_file'      => true,
+        'feature_thumbnail' => false,
+        'feature_location'  => false,
+        'feature_comments'  => false,
+    );
+}
+
+
 function bitacora_load_profile( $profile_id ) {
 
     if ( ! is_string( $profile_id ) || '' === $profile_id ) {
@@ -43,10 +70,60 @@ function bitacora_load_profile( $profile_id ) {
     if (
         empty( $profile['id'] )
         || $profile_id !== $profile['id']
-        || empty( $profile['sections'] )
-        || ! is_array( $profile['sections'] )
+        || (
+            isset( $profile['sections'] )
+            && ! is_array( $profile['sections'] )
+        )
+        || (
+            isset( $profile['core'] )
+            && ! is_array( $profile['core'] )
+        )
     ) {
         return false;
+    }
+
+    /*
+     * El core pertenece al sistema, no a la lista de secciones
+     * opcionales del perfil.
+     *
+     * Si el perfil no lo configura, se usa Notas.
+     */
+    $core_overrides = isset( $profile['core'] )
+        ? $profile['core']
+        : array();
+
+    $profile['core'] = array_replace(
+        bitacora_get_default_core_section_definition(),
+        $core_overrides
+    );
+
+    /*
+     * El rol no es configurable libremente:
+     * exactamente un término nace como core y todos los demás
+     * nacen como secciones complementarias.
+     */
+    $profile['core']['role'] = 'core';
+
+    if ( ! isset( $profile['sections'] ) ) {
+        $profile['sections'] = array();
+    }
+
+    foreach ( $profile['sections'] as $section_id => $section ) {
+
+        if ( ! is_array( $section ) ) {
+            continue;
+        }
+
+        $profile['sections'][ $section_id ]['role'] = 'section';
+
+        if (
+            ! array_key_exists(
+                'feature_comments',
+                $profile['sections'][ $section_id ]
+            )
+        ) {
+            $profile['sections'][ $section_id ]['feature_comments'] = false;
+        }
     }
 
     return $profile;
@@ -75,10 +152,12 @@ function bitacora_profile_section_to_term_meta( $section ) {
         'order'             => 'bitacora_section_order',
         'area'              => 'bitacora_section_area',
         'state'             => 'bitacora_section_state',
+        'role'              => 'bitacora_section_role',
 
         'feature_file'      => 'bitacora_section_feature_file',
         'feature_thumbnail' => 'bitacora_section_feature_thumbnail',
         'feature_location'  => 'bitacora_section_feature_location',
+        'feature_comments'  => 'bitacora_section_feature_comments',
     );
 
     $boolean_keys = array(
@@ -144,7 +223,28 @@ function bitacora_seed_profile_sections( $profile_id ) {
         'sections'   => array(),
     );
 
+    /*
+     * El core se siembra primero; después vienen las secciones
+     * complementarias del perfil.
+     */
+    $sections_to_seed = array(
+        array(
+            'id'      => 'core',
+            'section' => $profile['core'],
+        ),
+    );
+
     foreach ( $profile['sections'] as $section_id => $section ) {
+        $sections_to_seed[] = array(
+            'id'      => $section_id,
+            'section' => $section,
+        );
+    }
+
+    foreach ( $sections_to_seed as $section_entry ) {
+
+        $section_id = $section_entry['id'];
+        $section    = $section_entry['section'];
 
         if (
             empty( $section['name'] )

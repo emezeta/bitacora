@@ -18,6 +18,16 @@ return array(
     'id'    => 'construccion',
     'label' => 'Construcción',
 
+    /*
+     * El contenedor principal usa los defaults del sistema:
+     * Notas / Nota / Nueva nota.
+     *
+     * Construcción añade comentarios al core.
+     */
+    'core' => array(
+        'feature_comments' => true,
+    ),
+
     'sections' => array(
 
         'documentos' => array(
@@ -109,8 +119,8 @@ return array(
         'notes-observacion' => array(
             'name'     => 'Observación',
             'slug'     => 'notes-observacion',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 10,
             'state'    => 'active',
         ),
@@ -118,8 +128,8 @@ return array(
         'notes-novedad' => array(
             'name'     => 'Novedad',
             'slug'     => 'notes-novedad',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 20,
             'state'    => 'active',
         ),
@@ -127,8 +137,8 @@ return array(
         'notes-explicacion' => array(
             'name'     => 'Explicación',
             'slug'     => 'notes-explicacion',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 30,
             'state'    => 'active',
         ),
@@ -136,8 +146,8 @@ return array(
         'notes-referencia' => array(
             'name'     => 'Referencia',
             'slug'     => 'notes-referencia',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 40,
             'state'    => 'active',
         ),
@@ -145,8 +155,8 @@ return array(
         'notes-dato-tecnico' => array(
             'name'     => 'Dato técnico',
             'slug'     => 'notes-dato-tecnico',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 50,
             'state'    => 'active',
         ),
@@ -154,8 +164,8 @@ return array(
         'notes-audio' => array(
             'name'     => 'Audio',
             'slug'     => 'notes-audio',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 60,
             'state'    => 'active',
         ),
@@ -163,8 +173,8 @@ return array(
         'notes-video' => array(
             'name'     => 'Video',
             'slug'     => 'notes-video',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 70,
             'state'    => 'active',
         ),
@@ -172,8 +182,8 @@ return array(
         'notes-foto-imagen' => array(
             'name'     => 'Foto Imágen',
             'slug'     => 'notes-foto-imagen',
-            'scope'    => 'notes',
-            'scope_id' => '',
+            'scope'    => 'section',
+            'scope_id' => 'notas',
             'order'    => 80,
             'state'    => 'active',
         ),
