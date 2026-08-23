@@ -306,7 +306,7 @@ function bitacora_seed_content_roles() {
 /**
  * Instalación estructural.
  */
-function obras_theme_install() {
+function bitacora_theme_install() {
 
         /*
          * Configuración inicial de esta distribución.
@@ -536,4 +536,4 @@ function obras_theme_install() {
 
 }
 
-add_action( 'after_switch_theme', 'obras_theme_install', 10, 0 );
+add_action( 'after_switch_theme', 'bitacora_theme_install', 10, 0 );
