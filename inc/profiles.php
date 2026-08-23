@@ -164,6 +164,7 @@ function bitacora_profile_section_to_term_meta( $section ) {
         'feature_file',
         'feature_thumbnail',
         'feature_location',
+        'feature_comments',
     );
 
     $meta = array();

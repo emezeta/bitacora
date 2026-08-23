@@ -397,50 +397,59 @@ function obras_theme_install() {
 	}
 
 
-	$pages = array(
+    /*
+     * Páginas estructurales.
+     *
+     * Entradas se mantiene únicamente mientras exista el CPT legacy
+     * bitacora. Las páginas del modelo nuevo se generan desde
+     * bitacora_section.
+     */
+    $pages = array(
 
-		'inicio' => array(
-			'title'   => 'Inicio',
-			'content' => '[obras_dashboard]',
-		),
+            'inicio' => array(
+                    'title'   => 'Inicio',
+                    'content' => '[obras_dashboard]',
+            ),
 
-		'entradas' => array(
-			'title'   => 'Entradas',
-			'content' => '[obras_lista_entradas]',
-		),
+            'entradas' => array(
+                    'title'   => 'Entradas',
+                    'content' => '[obras_lista_entradas]',
+            ),
 
-		'documentos' => array(
-			'title'   => 'Documentos',
-			'content' => '[bitacora_section slug="documentos"]',
-		),
+            'auxiliar' => array(
+                    'title'   => 'Más secciones',
+                    'content' => '[bitacora_more_sections]',
+            ),
+    );
 
-		'materiales' => array(
-			'title'   => 'Materiales',
-			'content' => '[bitacora_section slug="materiales"]',
-		),
+    /*
+     * Cada sección activa —core incluido— tiene su página frontend.
+     *
+     * El installer no conoce slugs concretos de secciones:
+     * la estructura procede del modelo sembrado por el perfil.
+     */
+    $active_sections = bitacora_get_sections(
+            array(
+                    'state' => 'active',
+            )
+    );
 
-		'catalogos' => array(
-			'title'   => 'Catálogos',
-			'content' => '[bitacora_section slug="catalogos"]',
-		),
+    foreach ( $active_sections as $section ) {
 
-		'planos' => array(
-			'title'   => 'Planos',
-			'content' => '[bitacora_section slug="planos"]',
-		),
+            $pages[ $section->slug ] = array(
+                    'title' => bitacora_get_section_meta(
+                            $section,
+                            'bitacora_section_plural',
+                            $section->name
+                    ),
+                    'content' => sprintf(
+                            '[bitacora_section slug="%s"]',
+                            $section->slug
+                    ),
+            );
+    }
 
-		'auxiliar' => array(
-			'title'   => 'Más secciones',
-			'content' => '[bitacora_more_sections]',
-		),
-
-		'paisajismo' => array(
-			'title'   => 'Paisajismo',
-			'content' => '[bitacora_section slug="paisajismo"]',
-		),
-	);
-
-	$page_ids = array();
+    $page_ids = array();
 	$changed = ! empty( $role_report['changed'] );
 	foreach ( $pages as $slug => $data ) {
 
