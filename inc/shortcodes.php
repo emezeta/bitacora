@@ -430,11 +430,41 @@ function obras_render_list_item_title( $post_id, $fallback_title ) {
 // [obras_dashboard]
 add_shortcode( 'obras_dashboard', 'obras_render_dashboard_frontend' );
 function obras_render_dashboard_frontend() {
+
     if ( ! is_user_logged_in() ) {
         return '<p>Debes <a href="' . wp_login_url( get_permalink() ) . '">iniciar sesión</a> para ver el contenido.</p>';
     }
 
     $user = wp_get_current_user();
+    $core = bitacora_get_core_section();
+
+    if ( ! $core instanceof WP_Term ) {
+        return '<p>No existe una sección principal válida.</p>';
+    }
+
+    $core_list_url = home_url(
+        '/' . $core->slug . '/'
+    );
+
+    $core_new_url = add_query_arg(
+        array(
+            'post_type'        => 'bitacora_item',
+            'bitacora_section' => $core->slug,
+        ),
+        admin_url( 'post-new.php' )
+    );
+
+    $core_plural = bitacora_get_section_meta(
+        $core,
+        'bitacora_section_plural',
+        $core->name
+    );
+
+    $core_new_label = bitacora_get_section_meta(
+        $core,
+        'bitacora_section_new_label',
+        'Nuevo contenido'
+    );
 
     ob_start();
     ?>
@@ -444,14 +474,14 @@ function obras_render_dashboard_frontend() {
     <p>¿Qué querés hacer hoy?</p>
 
     <div class="obras-buttons">
-    <a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=bitacora' ) ); ?>" class="obras-button">
-    <span class="icon">✍️</span>
-    Nueva Nota
+    <a href="<?php echo esc_url( $core_new_url ); ?>" class="obras-button">
+    <span class="icon">✍</span>
+    <?php echo esc_html( $core_new_label ); ?>
     </a>
 
-    <a href="<?php echo esc_url( home_url( '/entradas/' ) ); ?>" class="obras-button secondary">
+    <a href="<?php echo esc_url( $core_list_url ); ?>" class="obras-button secondary">
     <span class="icon">📋</span>
-    Notas
+    <?php echo esc_html( $core_plural ); ?>
     </a>
 
     <a href="<?php echo esc_url( home_url( '/documentos/' ) ); ?>" class="obras-button secondary">
@@ -475,11 +505,12 @@ function obras_render_dashboard_frontend() {
     </a>
     </div>
 
-      <div class="obras-dashboard-more">
-      <a href="<?php echo esc_url( home_url( '/auxiliar/' ) ); ?>" class="obras-dashboard-more-link">Más secciones…</a>
-      </div>
+    <div class="obras-dashboard-more">
+    <a href="<?php echo esc_url( home_url( '/auxiliar/' ) ); ?>" class="obras-dashboard-more-link">Más secciones…</a>
+    </div>
     </div>
     <?php
+
     return ob_get_clean();
 }
 

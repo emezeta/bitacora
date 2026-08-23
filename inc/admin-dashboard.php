@@ -145,14 +145,46 @@ function obras_hide_bitacora_menu_for_non_admin() {
  * Panel interno wp-admin para admin.
  */
 function obras_render_dashboard() {
+
+    $core = bitacora_get_core_section();
+
+    if ( ! $core instanceof WP_Term ) {
+        echo '<div class="wrap"><p>No existe una sección principal válida.</p></div>';
+        return;
+    }
+
+    $core_list_url = home_url(
+        '/' . $core->slug . '/'
+    );
+
+    $core_new_url = add_query_arg(
+        array(
+            'post_type'        => 'bitacora_item',
+            'bitacora_section' => $core->slug,
+        ),
+        admin_url( 'post-new.php' )
+    );
+
+    $core_plural = bitacora_get_section_meta(
+        $core,
+        'bitacora_section_plural',
+        $core->name
+    );
+
+    $core_new_label = bitacora_get_section_meta(
+        $core,
+        'bitacora_section_new_label',
+        'Nuevo contenido'
+    );
+
     ?>
     <div class="wrap">
     <h1>Panel Bitácora</h1>
     <p>¡Hola, <?php echo esc_html( wp_get_current_user()->display_name ); ?>!</p>
 
     <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:30px;">
-    <a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=bitacora' ) ); ?>" class="button button-primary button-hero">✍️<br>Nueva Nota</a>
-    <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=bitacora' ) ); ?>" class="button button-secondary button-hero">📋<br>Notas</a>
+    <a href="<?php echo esc_url( $core_new_url ); ?>" class="button button-primary button-hero">✍<br><?php echo esc_html( $core_new_label ); ?></a>
+    <a href="<?php echo esc_url( $core_list_url ); ?>" class="button button-secondary button-hero">📋<br><?php echo esc_html( $core_plural ); ?></a>
     <a href="<?php echo esc_url( obras_get_dashboard_url() ); ?>" class="button button-secondary button-hero">🏠<br>Inicio</a>
     </div>
     </div>
