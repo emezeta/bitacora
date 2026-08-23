@@ -131,11 +131,8 @@ add_action( 'admin_notices', 'obras_theme_dependency_notice' );
 /**
  * Capabilities primitivas gestionadas por el modelo de contenido 0.2.0.
  *
- * Se aplican exclusivamente a:
- * - bitacora
+ * Se aplican al CPT unificado:
  * - bitacora_item
- *
- * Los CPT legacy quedan fuera de esta familia.
  */
 function bitacora_get_managed_content_capabilities() {
         return array(
@@ -398,11 +395,7 @@ function obras_theme_install() {
 
 
     /*
-     * Páginas estructurales.
-     *
-     * Entradas se mantiene únicamente mientras exista el CPT legacy
-     * bitacora. Las páginas del modelo nuevo se generan desde
-     * bitacora_section.
+     * Páginas estructurales independientes de las secciones.
      */
     $pages = array(
 
@@ -411,10 +404,7 @@ function obras_theme_install() {
                     'content' => '[obras_dashboard]',
             ),
 
-            'entradas' => array(
-                    'title'   => 'Entradas',
-                    'content' => '[obras_lista_entradas]',
-            ),
+
 
             'auxiliar' => array(
                     'title'   => 'Más secciones',

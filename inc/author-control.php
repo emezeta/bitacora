@@ -13,7 +13,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function bitacora_controlled_post_types() {
     return array(
-        'bitacora',
         'bitacora_item',
     );
 }

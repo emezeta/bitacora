@@ -9,14 +9,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 
 /**
- * CPTs gestionados por la política de comentarios de Bitácora.
- *
- * bitacora se mantiene únicamente durante la transición del modelo legacy.
+ * CPT gestionado por la política de comentarios de Bitácora.
  */
 if ( ! function_exists( 'obras_comments_managed_post_types' ) ) {
     function obras_comments_managed_post_types() {
         return array(
-            'bitacora',
             'bitacora_item',
         );
     }
@@ -78,18 +75,8 @@ add_action(
 
 function obras_configure_comments_support() {
 
-    // Legacy transitorio.
-    add_post_type_support(
-        'bitacora',
-        'comments'
-    );
 
-    remove_post_type_support(
-        'bitacora',
-        'trackbacks'
-    );
-
-    // Modelo nuevo.
+    // Modelo unificado.
     add_post_type_support(
         'bitacora_item',
         'comments'
@@ -130,18 +117,6 @@ function obras_default_comment_status_for_ndmcp(
     // Pingbacks / trackbacks siempre cerrados.
     $data['ping_status'] = 'closed';
 
-    /*
-     * Legacy transitorio:
-     * conservar exactamente el comportamiento actual de Notas.
-     */
-    if ( 'bitacora' === $data['post_type'] ) {
-
-        if ( empty( $data['comment_status'] ) ) {
-            $data['comment_status'] = 'open';
-        }
-
-        return $data;
-    }
 
     $post_id = isset( $postarr['ID'] )
         ? absint( $postarr['ID'] )
@@ -211,14 +186,6 @@ function obras_comments_open_policy(
         return false;
     }
 
-    /*
-     * Legacy transitorio.
-     */
-    if ( 'bitacora' === $post->post_type ) {
-        return (
-            'open' === $post->comment_status
-        );
-    }
 
     if (
         ! bitacora_item_comments_feature_enabled(
@@ -244,9 +211,8 @@ add_filter(
 /**
  * Ajustes del metabox Discusión.
  *
- * - legacy bitacora: conservar Discusión, sin trackbacks ni commentsdiv;
- * - bitacora_item con feature_comments: igual;
- * - bitacora_item sin feature_comments: ocultar toda la UI de comentarios.
+ * - bitacora_item con feature comments: conservar Discusión;
+ * - bitacora_item sin feature comments: ocultar la UI de comentarios.
  */
 add_action(
     'add_meta_boxes',
@@ -259,22 +225,6 @@ function obras_adjust_discussion_metaboxes(
     $post_type,
     $post
 ) {
-    if ( 'bitacora' === $post_type ) {
-
-        remove_meta_box(
-            'trackbacksdiv',
-            'bitacora',
-            'normal'
-        );
-
-        remove_meta_box(
-            'commentsdiv',
-            'bitacora',
-            'normal'
-        );
-
-        return;
-    }
 
     if ( 'bitacora_item' !== $post_type ) {
         return;
@@ -531,7 +481,7 @@ function obras_validate_bitacora_comments(
     // Máximo: raíz + dos niveles de respuesta.
     if ( $resulting_depth > 3 ) {
         wp_die(
-            'La profundidad máxima de respuestas es 3.'
+            'La profundidad máxima de respuestas es 3. Probá hacer un nuevo comentario sin usar el botón "Responder"'
         );
     }
 

@@ -29,7 +29,6 @@ function obras_block_admin_access() {
     }
 
     $allowed_post_types = array(
-        'bitacora',
         'bitacora_item',
     );
 

@@ -22,7 +22,6 @@ function obras_display_acf_fields_on_single( $content ) {
 
 	$allowed_post_types = array(
 		'bitacora_item',
-		'bitacora',
 	);
 
 	if ( ! in_array( $post_type, $allowed_post_types, true ) ) {
@@ -148,32 +147,6 @@ function obras_display_acf_fields_on_single( $content ) {
 	// ------------------------------------------------------------------------
 	// Nota
 	// ------------------------------------------------------------------------
-	if ( 'bitacora' === $post_type ) {
-		$archivo_id = get_post_meta( $post_id, 'archivo_adjunto', true );
-
-		$box_html .= '<div class="obras-acf-box bitacora">';
-		$box_html .= '<h3>Datos de la Nota</h3>';
-
-		if ( function_exists( 'obras_get_post_creation_date_label' ) ) {
-			$fecha_formateada = obras_get_post_creation_date_label( $post_id );
-		} else {
-			$fecha_formateada = get_the_date( get_option( 'date_format' ), $post_id );
-		}
-
-		$box_html .= '<p><strong>📅 Fecha:</strong> ' . esc_html( $fecha_formateada ) . '</p>';
-
-		if ( ! empty( $archivo_id ) ) {
-			if ( is_numeric( $archivo_id ) ) {
-				$archivo_url      = wp_get_attachment_url( $archivo_id );
-				$archivo_filename = get_post_meta( $archivo_id, '_wp_attachment_image_alt', true ) ?: basename( $archivo_url );
-				$box_html .= '<p><strong>📎 Archivo adjunto:</strong> <a href="' . esc_url( $archivo_url ) . '" target="_blank">' . esc_html( $archivo_filename ) . '</a></p>';
-			} elseif ( is_array( $archivo_id ) && isset( $archivo_id['url'] ) ) {
-				$box_html .= '<p><strong>📎 Archivo adjunto:</strong> <a href="' . esc_url( $archivo_id['url'] ) . '" target="_blank">' . esc_html( $archivo_id['filename'] ?? basename( $archivo_id['url'] ) ) . '</a></p>';
-			}
-		}
-
-		$box_html .= '</div>';
-	}
 
 return $content . $box_html . $nav_html;
 }

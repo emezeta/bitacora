@@ -2,7 +2,7 @@
 /**
  * Bitácora - Modelo de contenido 0.2.0
  *
- * Modelo nuevo, coexistiendo temporalmente con los CPT legacy.
+ * Modelo unificado de contenido de Bitácora.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -130,7 +130,7 @@ function bitacora_register_section_taxonomy() {
 /**
  * Taxonomía de clases de contenido.
  *
- * Puede aplicarse tanto a Notas como a los ítems de sección.
+ * Se aplica a los ítems del modelo unificado.
  * Cada contenido admitirá 0..1 clase a nivel de aplicación.
  */
 function bitacora_register_class_taxonomy() {
@@ -138,7 +138,6 @@ function bitacora_register_class_taxonomy() {
     register_taxonomy(
         'bitacora_class',
         array(
-            'bitacora',
             'bitacora_item',
         ),
         array(

@@ -60,8 +60,6 @@ if ( ! function_exists( 'obras_get_list_url' ) ) {
         $ctx = obras_get_ndmcp_context( $post );
 
         switch ( $ctx['post_type'] ) {
-            case 'bitacora':
-                return home_url( '/entradas/' );
 
             case 'bitacora_item':
                 if ( function_exists( 'bitacora_get_item_editor_section' ) ) {
@@ -90,8 +88,6 @@ if ( ! function_exists( 'obras_get_list_label' ) ) {
         $ctx = obras_get_ndmcp_context( $post );
 
         switch ( $ctx['post_type'] ) {
-            case 'bitacora':
-                return 'Notas';
 
             case 'bitacora_item':
                 if ( function_exists( 'bitacora_get_item_editor_section' ) ) {
@@ -115,21 +111,6 @@ if ( ! function_exists( 'obras_get_list_label' ) ) {
 }
 
 /**
- * Submenú admin interno.
- */
-add_action( 'admin_menu', 'obras_add_dashboard_page' );
-function obras_add_dashboard_page() {
-    add_submenu_page(
-        'edit.php?post_type=bitacora',
-        'Panel Bitácora',
-        'Panel Bitácora',
-        'read',
-        'bitacora-dashboard',
-        'obras_render_dashboard'
-    );
-}
-
-/**
  * Ocultar menú Bitácora en wp-admin para no-admin.
  */
 add_action( 'admin_menu', 'obras_hide_bitacora_menu_for_non_admin', 999 );
@@ -138,57 +119,7 @@ function obras_hide_bitacora_menu_for_non_admin() {
         return;
     }
 
-    remove_menu_page( 'edit.php?post_type=bitacora' );
-}
-
-/**
- * Panel interno wp-admin para admin.
- */
-function obras_render_dashboard() {
-
-    $core = bitacora_get_core_section();
-
-    if ( ! $core instanceof WP_Term ) {
-        echo '<div class="wrap"><p>No existe una sección principal válida.</p></div>';
-        return;
-    }
-
-    $core_list_url = home_url(
-        '/' . $core->slug . '/'
-    );
-
-    $core_new_url = add_query_arg(
-        array(
-            'post_type'        => 'bitacora_item',
-            'bitacora_section' => $core->slug,
-        ),
-        admin_url( 'post-new.php' )
-    );
-
-    $core_plural = bitacora_get_section_meta(
-        $core,
-        'bitacora_section_plural',
-        $core->name
-    );
-
-    $core_new_label = bitacora_get_section_meta(
-        $core,
-        'bitacora_section_new_label',
-        'Nuevo contenido'
-    );
-
-    ?>
-    <div class="wrap">
-    <h1>Panel Bitácora</h1>
-    <p>¡Hola, <?php echo esc_html( wp_get_current_user()->display_name ); ?>!</p>
-
-    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:30px;">
-    <a href="<?php echo esc_url( $core_new_url ); ?>" class="button button-primary button-hero">✍<br><?php echo esc_html( $core_new_label ); ?></a>
-    <a href="<?php echo esc_url( $core_list_url ); ?>" class="button button-secondary button-hero">📋<br><?php echo esc_html( $core_plural ); ?></a>
-    <a href="<?php echo esc_url( obras_get_dashboard_url() ); ?>" class="button button-secondary button-hero">🏠<br>Inicio</a>
-    </div>
-    </div>
-    <?php
+    remove_menu_page( 'edit.php?post_type=bitacora_item' );
 }
 
 /**
@@ -205,7 +136,6 @@ function obras_render_editor_navigation_buttons( $post ) {
     }
 
     $allowed_post_types = array(
-        'bitacora',
         'bitacora_item',
     );
 
