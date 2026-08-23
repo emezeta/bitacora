@@ -446,8 +446,46 @@ function bitacora_theme_install() {
 		$existing = get_page_by_path( $slug, OBJECT, 'page' );
 
 		if ( $existing ) {
-			$page_ids[ $slug ] = (int) $existing->ID;
-			continue;
+		        $page_ids[ $slug ] = (int) $existing->ID;
+
+		        $page_update = array(
+		                'ID' => (int) $existing->ID,
+		        );
+
+		        if ( $data['title'] !== $existing->post_title ) {
+		                $page_update['post_title'] = $data['title'];
+		        }
+
+		        if ( $data['content'] !== $existing->post_content ) {
+		                $page_update['post_content'] = $data['content'];
+		        }
+
+		        if ( 'publish' !== $existing->post_status ) {
+		                $page_update['post_status'] = 'publish';
+		        }
+
+		        if ( count( $page_update ) > 1 ) {
+		                $updated_id = wp_update_post(
+		                        $page_update,
+		                        true
+		                );
+
+		                if ( is_wp_error( $updated_id ) ) {
+		                        error_log(
+		                                sprintf(
+		                                        'Bitácora: no se pudo actualizar la página "%s": %s',
+		                                        $slug,
+		                                        $updated_id->get_error_message()
+		                                )
+		                        );
+
+		                        continue;
+		                }
+
+		                $changed = true;
+		        }
+
+		        continue;
 		}
 
 		$post_id = wp_insert_post(
