@@ -21,7 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function bitacora_get_section_items(
     $section,
-    $posts_per_page = 50
+    $posts_per_page = 50,
+    $search_query = ''
 ) {
 
     if ( is_string( $section ) ) {
@@ -45,6 +46,10 @@ function bitacora_get_section_items(
         (int) $posts_per_page
     );
 
+    $search_query = trim(
+        (string) $search_query
+    );
+
     $tax_query = array(
         array(
             'taxonomy' => 'bitacora_section',
@@ -63,6 +68,7 @@ function bitacora_get_section_items(
             'orderby'                => 'date',
             'order'                  => 'DESC',
             'tax_query'              => $tax_query,
+            's'                      => $search_query,
             'suppress_filters'       => false,
             'no_found_rows'          => true,
             'ignore_sticky_posts'    => true,
@@ -86,6 +92,7 @@ function bitacora_get_section_items(
             'orderby'                => 'date',
             'order'                  => 'DESC',
             'tax_query'              => $tax_query,
+            's'                      => $search_query,
             'suppress_filters'       => false,
             'no_found_rows'          => true,
             'ignore_sticky_posts'    => true,
@@ -360,9 +367,20 @@ function bitacora_render_section_list_shortcode(
         return '<p>La sección no está activa.</p>';
     }
 
+    $search_query = isset( $_GET['q'] )
+        ? sanitize_text_field(
+            wp_unslash( $_GET['q'] )
+        )
+        : '';
+
+    $search_query = trim(
+        $search_query
+    );
+
     $items = bitacora_get_section_items(
         $section,
-        50
+        50,
+        $search_query
     );
 
     if ( is_wp_error( $items ) ) {
@@ -404,6 +422,12 @@ function bitacora_render_section_list_shortcode(
         $section
     );
 
+    $current_url = get_permalink();
+
+    if ( ! $current_url ) {
+        $current_url = home_url( '/' );
+    }
+
     ob_start();
     ?>
     <div class="obras-lista">
@@ -420,6 +444,51 @@ function bitacora_render_section_list_shortcode(
             $new_label
         );
         ?>
+
+        <form
+            method="get"
+            action="<?php echo esc_url( $current_url ); ?>"
+            style="margin:0 0 25px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center;"
+        >
+            <label
+                for="bitacora-section-search-<?php echo esc_attr( $section->term_id ); ?>"
+                class="screen-reader-text"
+            >
+                Buscar en <?php echo esc_html( $plural ); ?>
+            </label>
+
+            <input
+                type="search"
+                id="bitacora-section-search-<?php echo esc_attr( $section->term_id ); ?>"
+                name="q"
+                value="<?php echo esc_attr( $search_query ); ?>"
+                placeholder="Buscar en <?php echo esc_attr( $plural ); ?>"
+                style="min-width:280px; max-width:100%; padding:12px 14px; border:1px solid #d0d7de; border-radius:8px; box-sizing:border-box;"
+            />
+
+            <button
+                type="submit"
+                style="padding:12px 18px; background:#2271b1; color:#fff; border:none; border-radius:8px; font-weight:600; cursor:pointer;"
+            >
+                Buscar
+            </button>
+
+            <?php if ( '' !== $search_query ) : ?>
+                <a
+                    href="<?php echo esc_url( $current_url ); ?>"
+                    style="display:inline-block; padding:12px 18px; background:#6c757d; color:#fff; text-decoration:none; border-radius:8px; font-weight:600;"
+                >
+                    Limpiar búsqueda
+                </a>
+            <?php endif; ?>
+        </form>
+
+        <?php if ( '' !== $search_query ) : ?>
+            <p style="margin:0 0 20px; color:#666; text-align:center;">
+                Resultados para:
+                <strong><?php echo esc_html( $search_query ); ?></strong>
+            </p>
+        <?php endif; ?>
 
         <?php if ( ! empty( $items ) ) : ?>
 
@@ -498,7 +567,13 @@ function bitacora_render_section_list_shortcode(
         <?php else : ?>
 
             <p class="empty">
-                Aún no hay contenidos en esta sección.
+                <?php if ( '' !== $search_query ) : ?>
+                    No se encontraron
+                    <?php echo esc_html( strtolower( (string) $plural ) ); ?>
+                    con ese texto.
+                <?php else : ?>
+                    Aún no hay contenidos en esta sección.
+                <?php endif; ?>
             </p>
 
         <?php endif; ?>
