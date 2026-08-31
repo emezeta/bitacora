@@ -4,3 +4,8 @@ Description: Tema autónomo para la aplicación Bitácora.
 Version: 0.2.0-dev
 Text Domain: bitacora-de-obra
 */
+
+/* Separación del enlace para cancelar una respuesta a comentario. */
+#cancel-comment-reply-link {
+    margin-left: 0.35em;
+}
