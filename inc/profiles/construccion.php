@@ -116,72 +116,72 @@ return array(
         /*
          * Notas.
          */
-        'notes-observacion' => array(
+        'notas-observacion' => array(
             'name'     => 'Observación',
-            'slug'     => 'notes-observacion',
+            'slug'     => 'notas-observacion',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 10,
             'state'    => 'active',
         ),
 
-        'notes-novedad' => array(
+        'notas-novedad' => array(
             'name'     => 'Novedad',
-            'slug'     => 'notes-novedad',
+            'slug'     => 'notas-novedad',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 20,
             'state'    => 'active',
         ),
 
-        'notes-explicacion' => array(
+        'notas-explicacion' => array(
             'name'     => 'Explicación',
-            'slug'     => 'notes-explicacion',
+            'slug'     => 'notas-explicacion',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 30,
             'state'    => 'active',
         ),
 
-        'notes-referencia' => array(
+        'notas-referencia' => array(
             'name'     => 'Referencia',
-            'slug'     => 'notes-referencia',
+            'slug'     => 'notas-referencia',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 40,
             'state'    => 'active',
         ),
 
-        'notes-dato-tecnico' => array(
+        'notas-dato-tecnico' => array(
             'name'     => 'Dato técnico',
-            'slug'     => 'notes-dato-tecnico',
+            'slug'     => 'notas-dato-tecnico',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 50,
             'state'    => 'active',
         ),
 
-        'notes-audio' => array(
+        'notas-audio' => array(
             'name'     => 'Audio',
-            'slug'     => 'notes-audio',
+            'slug'     => 'notas-audio',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 60,
             'state'    => 'active',
         ),
 
-        'notes-video' => array(
+        'notas-video' => array(
             'name'     => 'Video',
-            'slug'     => 'notes-video',
+            'slug'     => 'notas-video',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 70,
             'state'    => 'active',
         ),
 
-        'notes-foto-imagen' => array(
-            'name'     => 'Foto Imágen',
-            'slug'     => 'notes-foto-imagen',
+        'notas-foto-imagen' => array(
+            'name'     => 'Foto Imagen',
+            'slug'     => 'notas-foto-imagen',
             'scope'    => 'section',
             'scope_id' => 'notas',
             'order'    => 80,
