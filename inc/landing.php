@@ -17,19 +17,19 @@ function obras_render_landing_page() {
         return do_shortcode( '[obras_dashboard]' );
     }
 
-    $logo = get_theme_file_uri( '/images/login_obras.png' );
+    $logo = get_theme_file_uri( '/images/bitacora-logo.png' );
     ob_start();
     ?>
     <div class="obras-landing">
         <div class="obras-landing-logo">
-            <img src="<?php echo esc_url( $logo ); ?>" alt="Obras Angirü">
+            <img src="<?php echo esc_url( $logo ); ?>" alt="Bitácora">
         </div>
 
         <h1>Bitácora</h1>
 
         <p class="subtitle">
-            Gestión simplificada de proyectos en construcción.<br>
-            Documentación, materiales y seguimiento en un solo lugar.
+            Registro y seguimiento de proyectos y procesos.<br>
+            Avances, apuntes, ideas y referencias en un solo lugar.
         </p>
 
         <div class="obras-landing-buttons">
@@ -41,42 +41,42 @@ function obras_render_landing_page() {
             <div class="obras-feature obras-feature-locked" tabindex="0" role="button" aria-label="Notas">
                 <span class="icon">✍️</span>
                 <h3>Notas rápidas</h3>
-                <p>Registra actividades y novedades de obra en minutos</p>
+                <p>Registrá avances, apuntes y novedades.</p>
             </div>
 
             <div class="obras-feature obras-feature-locked" tabindex="0" role="button" aria-label="Documentos">
                 <span class="icon">📄</span>
                 <h3>Documentos</h3>
-                <p>Accedé a normas, descripciones, instructivos, permisos cuando los necesites</p>
+                <p>Consultá documentos, instructivos e informes.</p>
             </div>
 
             <div class="obras-feature obras-feature-locked" tabindex="0" role="button" aria-label="Materiales">
                 <span class="icon">🧰</span>
                 <h3>Materiales</h3>
-                <p>Seguimiento de recursos y ubicación en la obra</p>
+                <p>Registrá materiales y dónde se encuentran.</p>
             </div>
 
             <div class="obras-feature obras-feature-locked" tabindex="0" role="button" aria-label="Catálogos">
                 <span class="icon">📚</span>
                 <h3>Catálogos</h3>
-                <p>Consultá catálogos de productos y materiales</p>
+                <p>Consultá catálogos y referencias técnicas.</p>
             </div>
 
             <div class="obras-feature obras-feature-locked" tabindex="0" role="button" aria-label="Planos">
                 <span class="icon">📐</span>
                 <h3>Planos</h3>
-                <p>Visualizá planos en PDF e imágenes de la obra</p>
+                <p>Consultá bocetos, detalles e imágenes de referencia.</p>
             </div>
 
             <div class="obras-feature obras-feature-alien obras-feature-locked" tabindex="0" role="button" aria-label="Acceso restringido">
                 <span class="icon">🛸</span>
                 <h3>Más secciones</h3>
-                <p>Tareas, ideas y otros espacios complementarios</p>
+                <p>Ideas y otros espacios complementarios.</p>
             </div>
         </div>
 
         <div class="obras-landing-footer">
-            <p>🏗️ Obras Angirü - Gestión de proyectos en construcción</p>
+            <p>Bitácora</p>
             <p style="margin-top:10px; font-size:1em;">Acceso exclusivo para miembros del proyecto</p>
         </div>
     </div>

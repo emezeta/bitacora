@@ -51,7 +51,7 @@ function obras_login_header_text() {
  */
 add_action( 'login_footer', 'obras_login_footer_branding' );
 function obras_login_footer_branding() {
-    echo '<div style="text-align:center; margin-top:30px; color:#666; font-size:12px;"><p>Bitácora - Obras Angirü</p></div>';
+    echo '<div style="text-align:center; margin-top:30px; color:#666; font-size:12px;"><p>Bitácora</p></div>';
 }
 
 /**
@@ -59,5 +59,5 @@ function obras_login_footer_branding() {
  */
 add_filter( 'admin_footer_text', 'obras_admin_footer_text' );
 function obras_admin_footer_text() {
-    return 'Gracias por usar <strong>Bitácora - Angirü</strong> | <a href="' . esc_url( admin_url( 'profile.php' ) ) . '">Mi Perfil</a>';
+    return 'Gracias por usar <strong>Bitácora</strong> | <a href="' . esc_url( admin_url( 'profile.php' ) ) . '">Mi Perfil</a>';
 }
