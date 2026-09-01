@@ -1,5 +1,5 @@
-# bitacora-de-obra
-A WordPress theme. It includes a mini-app widget for taking notes and keeping detailed records of different tasks.
+# Bitácora
+Bitácora is a WordPress theme for recording and tracking projects and processes through profiles, sections, and chronologically organized content.
 
 ## Installation profiles
 

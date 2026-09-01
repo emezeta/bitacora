@@ -22,7 +22,7 @@ if ( post_password_required() ) {
                         '%s respuesta',
                         '%s respuestas',
                         $comment_count,
-                        'bitacora-de-obra'
+                        'bitacora'
                     )
                 ),
                 esc_html( number_format_i18n( $comment_count ) )
