@@ -172,3 +172,179 @@ function bitacora_get_stored_profile_definition( $profile_id ) {
 
         return $definition;
 }
+
+
+/**
+ * Indica si un UUID ya identifica algún perfil, incluido o persistente.
+ */
+function bitacora_profile_identity_exists( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        $bundled_file = get_stylesheet_directory()
+                . '/inc/profiles/'
+                . $profile_id
+                . '.php';
+
+        return is_file( $bundled_file )
+                || bitacora_stored_profile_identity_exists( $profile_id );
+}
+
+
+/**
+ * Genera una identidad técnica nueva para un perfil.
+ *
+ * El UUID no contiene información sobre nombre, origen ni comportamiento.
+ */
+function bitacora_generate_profile_id() {
+
+        do {
+                $profile_id = strtolower( wp_generate_uuid4() );
+        } while ( bitacora_profile_identity_exists( $profile_id ) );
+
+        return $profile_id;
+}
+
+
+/**
+ * Crea un perfil persistente en preparación.
+ *
+ * La identidad técnica se genera internamente y no puede ser elegida
+ * por el operador.
+ *
+ * La disponibilidad del perfil no depende del post_status.
+ * "draft" se utiliza únicamente como estado técnico interno del registro.
+ *
+ * Devuelve post_id + profile_id o WP_Error.
+ */
+function bitacora_create_stored_profile( $label, $definition = null ) {
+
+        $label = sanitize_text_field( (string) $label );
+        $label = trim( $label );
+
+        if ( '' === $label ) {
+                return new WP_Error(
+                        'bitacora_profile_label_required',
+                        'El perfil necesita un nombre.'
+                );
+        }
+
+        if ( null === $definition ) {
+                $definition = array();
+        }
+
+        if ( ! is_array( $definition ) ) {
+                return new WP_Error(
+                        'bitacora_profile_definition_invalid',
+                        'La definición del perfil debe ser un array.'
+                );
+        }
+
+        /*
+         * id y label nunca pertenecen a definition.
+         * Sus fuentes canónicas son el UUID persistido y post_title.
+         */
+        unset(
+                $definition['id'],
+                $definition['label']
+        );
+
+        foreach ( array( 'core', 'sections', 'classes' ) as $key ) {
+
+                if ( ! isset( $definition[ $key ] ) ) {
+                        $definition[ $key ] = array();
+                        continue;
+                }
+
+                if ( ! is_array( $definition[ $key ] ) ) {
+                        return new WP_Error(
+                                'bitacora_profile_definition_invalid',
+                                sprintf(
+                                        'La clave "%s" de la definición debe ser un array.',
+                                        $key
+                                )
+                        );
+                }
+        }
+
+        $profile_id = bitacora_generate_profile_id();
+
+        $post_data = array(
+                'post_type'   => 'bitacora_profile',
+                'post_status' => 'draft',
+                'post_title'  => $label,
+        );
+
+        $current_user_id = get_current_user_id();
+
+        if ( $current_user_id > 0 ) {
+                $post_data['post_author'] = $current_user_id;
+        }
+
+        $post_id = wp_insert_post(
+                $post_data,
+                true
+        );
+
+        if ( is_wp_error( $post_id ) ) {
+                return $post_id;
+        }
+
+        $identity_saved = add_post_meta(
+                $post_id,
+                '_bitacora_profile_id',
+                $profile_id,
+                true
+        );
+
+        if ( false === $identity_saved ) {
+                wp_delete_post( $post_id, true );
+
+                return new WP_Error(
+                        'bitacora_profile_identity_not_saved',
+                        'No se pudo guardar la identidad del perfil.'
+                );
+        }
+
+        $definition_saved = add_post_meta(
+                $post_id,
+                '_bitacora_profile_definition',
+                $definition,
+                true
+        );
+
+        if ( false === $definition_saved ) {
+                wp_delete_post( $post_id, true );
+
+                return new WP_Error(
+                        'bitacora_profile_definition_not_saved',
+                        'No se pudo guardar la definición del perfil.'
+                );
+        }
+
+        /*
+         * El registro recién creado debe poder resolverse inmediatamente
+         * mediante la misma API utilizada para cualquier perfil.
+         */
+        if ( ! bitacora_load_profile( $profile_id ) ) {
+                wp_delete_post( $post_id, true );
+
+                return new WP_Error(
+                        'bitacora_profile_not_resolvable',
+                        'El perfil fue creado pero no pudo resolverse correctamente.'
+                );
+        }
+
+        return array(
+                'post_id'    => (int) $post_id,
+                'profile_id' => $profile_id,
+        );
+}
