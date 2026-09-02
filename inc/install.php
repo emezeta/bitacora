@@ -14,12 +14,37 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Perfil inicial de esta distribución.
+ * Devuelve el identificador del perfil actualmente en uso.
  *
- * El sistema de perfiles no posee un perfil universal por defecto.
+ * Una opción ausente o vacía representa una Bitácora sin configurar.
  */
-function obras_theme_get_install_profile_id() {
-        return 'construccion';
+function bitacora_get_configured_profile_id() {
+
+        $profile_id = get_option( 'bitacora_configured_profile', '' );
+
+        if ( ! is_string( $profile_id ) ) {
+                return '';
+        }
+
+        return sanitize_key( $profile_id );
+}
+
+
+/**
+ * Indica si Bitácora tiene una configuración vigente.
+ */
+function bitacora_is_configured() {
+        return '' !== bitacora_get_configured_profile_id();
+}
+
+
+/**
+ * Devuelve el estado básico de configuración.
+ */
+function bitacora_get_configuration_state() {
+        return bitacora_is_configured()
+                ? 'configured'
+                : 'unconfigured';
 }
 
 
@@ -304,14 +329,52 @@ function bitacora_seed_content_roles() {
 
 
 /**
- * Instalación estructural.
+ * Configura Bitácora a partir de un perfil.
+ *
+ * Sólo puede ejecutarse cuando Bitácora está sin configurar.
+ * El perfil queda en uso únicamente después de completar
+ * satisfactoriamente toda la configuración.
  */
-function bitacora_theme_install() {
+function bitacora_configure_profile( $profile_id ) {
 
-        /*
-         * Configuración inicial de esta distribución.
-         */
-        $profile_id = obras_theme_get_install_profile_id();
+        $profile_id = sanitize_key( (string) $profile_id );
+
+        if ( '' === $profile_id ) {
+                return new WP_Error(
+                        'bitacora_profile_required',
+                        'Debe indicarse un perfil para configurar Bitácora.'
+                );
+        }
+
+        if ( bitacora_is_configured() ) {
+                return new WP_Error(
+                        'bitacora_already_configured',
+                        sprintf(
+                                'Bitácora ya está configurada con el perfil "%s".',
+                                bitacora_get_configured_profile_id()
+                        )
+                );
+        }
+
+        if ( ! bitacora_load_profile( $profile_id ) ) {
+                return new WP_Error(
+                        'bitacora_profile_not_found',
+                        sprintf(
+                                'No se pudo cargar el perfil "%s".',
+                                $profile_id
+                        )
+                );
+        }
+
+        $dependency_problems = obras_theme_check_dependencies();
+
+        if ( ! empty( $dependency_problems ) ) {
+                return new WP_Error(
+                        'bitacora_dependencies_not_ready',
+                        'No se puede configurar Bitácora hasta resolver sus dependencias.',
+                        $dependency_problems
+                );
+        }
 
         $section_report = bitacora_seed_profile_sections(
                 $profile_id
@@ -439,7 +502,8 @@ function bitacora_theme_install() {
             );
     }
 
-    $page_ids = array();
+    $page_ids    = array();
+        $page_errors = array();
 	$changed = ! empty( $role_report['changed'] );
 	foreach ( $pages as $slug => $data ) {
 
@@ -479,7 +543,13 @@ function bitacora_theme_install() {
 		                                )
 		                        );
 
-		                        continue;
+		                        $page_errors[] = sprintf(
+                                                'No se pudo actualizar la página "%s": %s',
+                                                $slug,
+                                                $updated_id->get_error_message()
+                                        );
+
+                                        continue;
 		                }
 
 		                $changed = true;
@@ -507,14 +577,29 @@ function bitacora_theme_install() {
 					$post_id->get_error_message()
 				)
 			);
-			continue;
+			$page_errors[] = sprintf(
+                                'No se pudo crear la página "%s": %s',
+                                $slug,
+                                $post_id->get_error_message()
+                        );
+
+                        continue;
 		}
 
 		$page_ids[ $slug ] = (int) $post_id;
 		$changed           = true;
 	}
 
-	/*
+	if ( ! empty( $page_errors ) ) {
+                return new WP_Error(
+                        'bitacora_install_page_errors',
+                        implode( ' ', $page_errors ),
+                        $page_errors
+                );
+        }
+
+
+        /*
 	 * Portada: sólo sustituir la configuración inicial de WordPress.
 	 */
 	if (
@@ -552,15 +637,24 @@ function bitacora_theme_install() {
 	}
 
 	/*
-	 * Registrar estado actual de las dependencias.
-	 */
-	obras_theme_check_dependencies();
+         * La configuración sólo se considera vigente cuando toda
+         * la estructura alcanzó un estado consistente.
+         */
+        update_option( 'obras_theme_install_schema', '5' );
 
-	update_option( 'obras_theme_install_schema', '4' );
+        update_option(
+                'bitacora_configured_profile',
+                $profile_id
+        );
 
-	if ( $changed ) {
-		flush_rewrite_rules( false );
-	}
+        if ( $profile_id !== bitacora_get_configured_profile_id() ) {
+                return new WP_Error(
+                        'bitacora_configuration_state_not_saved',
+                        'No se pudo registrar la configuración de Bitácora.'
+                );
+        }
+
+        $changed = true;
 
         return array(
                 'profile'  => $profile_id,
@@ -569,9 +663,10 @@ function bitacora_theme_install() {
                 'roles'   => $role_report,
                 'pages'    => $page_ids,
                 'changed'  => $changed,
-                'schema'   => 4,
+                'schema'   => 5,
+                'state'    => bitacora_get_configuration_state(),
         );
 
 }
 
-add_action( 'after_switch_theme', 'bitacora_theme_install', 10, 0 );
+/* La configuración de perfiles es explícita y no ocurre al activar el theme. */
