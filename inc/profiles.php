@@ -60,11 +60,21 @@ function bitacora_load_profile( $profile_id ) {
         . $profile_id
         . '.php';
 
-    if ( ! is_file( $file ) ) {
-        return false;
-    }
+    if ( is_file( $file ) ) {
 
-    $profile = require $file;
+        /*
+         * Un UUID identifica exactamente un perfil.
+         * Un registro persistente con la misma identidad que un perfil
+         * incluido constituye una colisión y no puede resolverse.
+         */
+        if ( bitacora_stored_profile_identity_exists( $profile_id ) ) {
+            return false;
+        }
+
+        $profile = require $file;
+    } else {
+        $profile = bitacora_get_stored_profile_definition( $profile_id );
+    }
 
     if ( ! is_array( $profile ) ) {
         return false;

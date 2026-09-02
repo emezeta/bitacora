@@ -73,3 +73,102 @@ function bitacora_register_profile_cpt() {
 }
 
 add_action( 'init', 'bitacora_register_profile_cpt' );
+
+
+function bitacora_stored_profile_identity_exists( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        $post_ids = get_posts(
+                array(
+                        'post_type'      => 'bitacora_profile',
+                        'post_status'    => 'any',
+                        'posts_per_page' => 1,
+                        'fields'         => 'ids',
+                        'meta_key'       => '_bitacora_profile_id',
+                        'meta_value'     => $profile_id,
+                )
+        );
+
+        return ! empty( $post_ids );
+}
+
+
+/**
+ * Obtiene la definición cruda de un perfil persistente por UUID.
+ *
+ * La identidad y la denominación tienen una única fuente de verdad:
+ * - _bitacora_profile_id aporta la identidad técnica;
+ * - post_title aporta la denominación humana;
+ * - _bitacora_profile_definition aporta core, sections y classes.
+ *
+ * Devuelve false si el perfil no existe, la identidad no es válida,
+ * hay más de un registro con la misma identidad o la definición
+ * almacenada no es un array.
+ */
+function bitacora_get_stored_profile_definition( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        $post_ids = get_posts(
+                array(
+                        'post_type'      => 'bitacora_profile',
+                        'post_status'    => 'any',
+                        'posts_per_page' => 2,
+                        'fields'         => 'ids',
+                        'meta_key'       => '_bitacora_profile_id',
+                        'meta_value'     => $profile_id,
+                        'orderby'        => 'ID',
+                        'order'          => 'ASC',
+                )
+        );
+
+        /*
+         * Una identidad técnica debe resolver exactamente un perfil.
+         * Cero coincidencias significa inexistente; más de una significa
+         * una colisión de identidad y se rechaza de forma segura.
+         */
+        if ( 1 !== count( $post_ids ) ) {
+                return false;
+        }
+
+        $post_id    = (int) $post_ids[0];
+        $definition = get_post_meta(
+                $post_id,
+                '_bitacora_profile_definition',
+                true
+        );
+
+        if ( ! is_array( $definition ) ) {
+                return false;
+        }
+
+        /*
+         * Aunque definition contuviera accidentalmente id o label,
+         * las fuentes canónicas prevalecen siempre.
+         */
+        $definition['id'] = $profile_id;
+        $definition['label'] = (string) get_post_field(
+                'post_title',
+                $post_id,
+                'raw'
+        );
+
+        return $definition;
+}
