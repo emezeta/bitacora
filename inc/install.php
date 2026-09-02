@@ -47,8 +47,6 @@ function bitacora_get_configuration_state() {
                 : 'unconfigured';
 }
 
-
-
 /**
  * Comprueba las dependencias funcionales del theme.
  *
@@ -174,6 +172,15 @@ function bitacora_get_managed_content_capabilities() {
         );
 }
 
+/**
+ * Capabilities gestionadas por Bitácora para administrar perfiles.
+ */
+function bitacora_get_managed_profile_capabilities() {
+        return array(
+                'manage_bitacora_profiles',
+                'use_bitacora_profiles',
+        );
+}
 
 /**
  * Crea y sincroniza los roles propios de Bitácora.
@@ -186,7 +193,7 @@ function bitacora_get_managed_content_capabilities() {
  * - posee las capacidades del Autor;
  * - además puede gestionar contenido ajeno y leer privados ajenos.
  *
- * Administrator recibe todas las capabilities de contenido Bitácora,
+ * Administrator recibe todas las capabilities gestionadas por Bitácora,
  * sin alterar sus capacidades administrativas de WordPress.
  */
 function bitacora_seed_content_roles() {
@@ -209,6 +216,8 @@ function bitacora_seed_content_roles() {
                         'edit_others_bitacora_contents',
                         'delete_others_bitacora_contents',
                         'read_private_bitacora_contents',
+                        'manage_bitacora_profiles',
+                        'use_bitacora_profiles',
                 )
         );
 
@@ -223,7 +232,10 @@ function bitacora_seed_content_roles() {
                 ),
         );
 
-        $managed_caps = bitacora_get_managed_content_capabilities();
+        $managed_caps = array_merge(
+                bitacora_get_managed_content_capabilities(),
+                bitacora_get_managed_profile_capabilities()
+        );
 
         $report = array(
                 'created'      => array(),
@@ -300,7 +312,7 @@ function bitacora_seed_content_roles() {
 
         /*
          * El Administrator conserva su rol WordPress normal,
-         * pero recibe toda la familia de contenido Bitácora.
+         * pero recibe todas las capabilities gestionadas por Bitácora.
          */
         $administrator = get_role( 'administrator' );
 
@@ -479,8 +491,6 @@ function bitacora_configure_profile( $profile_id ) {
                     'title'   => 'Inicio',
                     'content' => '[obras_dashboard]',
             ),
-
-
 
             'auxiliar' => array(
                     'title'   => 'Más secciones',
