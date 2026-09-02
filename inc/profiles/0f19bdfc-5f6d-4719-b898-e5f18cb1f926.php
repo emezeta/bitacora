@@ -15,7 +15,7 @@ defined( 'ABSPATH' ) || exit;
 
 return array(
 
-    'id'    => 'construccion',
+    'id'    => '0f19bdfc-5f6d-4719-b898-e5f18cb1f926',
     'label' => 'Construcción',
 
     /*

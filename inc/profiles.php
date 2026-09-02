@@ -12,8 +12,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Carga explícitamente un perfil por su identificador.
  *
- * Ejemplo:
- *     bitacora_load_profile( 'construccion' );
+ * El identificador técnico de todo perfil es un UUID v4 estable.
  *
  * Devuelve el array del perfil o false si no existe o no es válido.
  */
@@ -50,7 +49,11 @@ function bitacora_load_profile( $profile_id ) {
         return false;
     }
 
-    $profile_id = sanitize_key( $profile_id );
+    $profile_id = strtolower( trim( $profile_id ) );
+
+    if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+        return false;
+    }
 
     $file = get_stylesheet_directory()
         . '/inc/profiles/'
