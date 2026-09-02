@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once get_stylesheet_directory() . '/inc/enqueue.php';
 require_once get_stylesheet_directory() . '/inc/content-model.php';
+require_once get_stylesheet_directory() . '/inc/profile-model.php';
 require_once get_stylesheet_directory() . '/inc/profiles.php';
 require_once get_stylesheet_directory() . '/inc/item-editor.php';
 require_once get_stylesheet_directory() . '/inc/kiosk.php';
