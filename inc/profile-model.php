@@ -215,6 +215,51 @@ function bitacora_generate_profile_id() {
 
 
 /**
+ * Prepara la estructura persistente de una definición de perfil.
+ *
+ * La definición contiene exclusivamente core, sections y classes.
+ * id y label tienen fuentes canónicas independientes.
+ */
+function bitacora_prepare_stored_profile_definition( $definition = null ) {
+
+        if ( null === $definition ) {
+                $definition = array();
+        }
+
+        if ( ! is_array( $definition ) ) {
+                return new WP_Error(
+                        'bitacora_profile_definition_invalid',
+                        'La definición del perfil debe ser un array.'
+                );
+        }
+
+        $prepared = array();
+
+        foreach ( array( 'core', 'sections', 'classes' ) as $key ) {
+
+                if ( ! isset( $definition[ $key ] ) ) {
+                        $prepared[ $key ] = array();
+                        continue;
+                }
+
+                if ( ! is_array( $definition[ $key ] ) ) {
+                        return new WP_Error(
+                                'bitacora_profile_definition_invalid',
+                                sprintf(
+                                        'La clave "%s" de la definición debe ser un array.',
+                                        $key
+                                )
+                        );
+                }
+
+                $prepared[ $key ] = $definition[ $key ];
+        }
+
+        return $prepared;
+}
+
+
+/**
  * Crea un perfil persistente en preparación.
  *
  * La identidad técnica se genera internamente y no puede ser elegida
@@ -237,42 +282,12 @@ function bitacora_create_stored_profile( $label, $definition = null ) {
                 );
         }
 
-        if ( null === $definition ) {
-                $definition = array();
-        }
-
-        if ( ! is_array( $definition ) ) {
-                return new WP_Error(
-                        'bitacora_profile_definition_invalid',
-                        'La definición del perfil debe ser un array.'
-                );
-        }
-
-        /*
-         * id y label nunca pertenecen a definition.
-         * Sus fuentes canónicas son el UUID persistido y post_title.
-         */
-        unset(
-                $definition['id'],
-                $definition['label']
+        $definition = bitacora_prepare_stored_profile_definition(
+                $definition
         );
 
-        foreach ( array( 'core', 'sections', 'classes' ) as $key ) {
-
-                if ( ! isset( $definition[ $key ] ) ) {
-                        $definition[ $key ] = array();
-                        continue;
-                }
-
-                if ( ! is_array( $definition[ $key ] ) ) {
-                        return new WP_Error(
-                                'bitacora_profile_definition_invalid',
-                                sprintf(
-                                        'La clave "%s" de la definición debe ser un array.',
-                                        $key
-                                )
-                        );
-                }
+        if ( is_wp_error( $definition ) ) {
+                return $definition;
         }
 
         $profile_id = bitacora_generate_profile_id();
@@ -346,5 +361,162 @@ function bitacora_create_stored_profile( $label, $definition = null ) {
         return array(
                 'post_id'    => (int) $post_id,
                 'profile_id' => $profile_id,
+        );
+}
+
+
+/**
+ * Actualiza la definición de un perfil persistente.
+ *
+ * El guardado reemplaza atómicamente el documento completo de definición.
+ * La identidad técnica y la denominación no forman parte de esta operación.
+ *
+ * Un perfil actualmente en uso no puede modificarse.
+ *
+ * Devuelve el resultado del guardado junto con su validación actual,
+ * o WP_Error.
+ */
+function bitacora_update_stored_profile_definition(
+        $profile_id,
+        $definition
+) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return new WP_Error(
+                        'bitacora_profile_id_invalid',
+                        'La identidad del perfil no es válida.'
+                );
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return new WP_Error(
+                        'bitacora_profile_id_invalid',
+                        'La identidad del perfil no es válida.'
+                );
+        }
+
+        /*
+         * Esta API administra exclusivamente perfiles persistentes.
+         * Un perfil incluido con Bitácora no puede editarse por esta vía.
+         */
+        $bundled_file = get_stylesheet_directory()
+                . '/inc/profiles/'
+                . $profile_id
+                . '.php';
+
+        if ( is_file( $bundled_file ) ) {
+                return new WP_Error(
+                        'bitacora_profile_not_stored',
+                        'El perfil no es un perfil persistente editable.'
+                );
+        }
+
+        $post_ids = get_posts(
+                array(
+                        'post_type'      => 'bitacora_profile',
+                        'post_status'    => 'any',
+                        'posts_per_page' => 2,
+                        'fields'         => 'ids',
+                        'meta_key'       => '_bitacora_profile_id',
+                        'meta_value'     => $profile_id,
+                        'orderby'        => 'ID',
+                        'order'          => 'ASC',
+                )
+        );
+
+        if ( 1 !== count( $post_ids ) ) {
+                return new WP_Error(
+                        'bitacora_profile_not_resolvable',
+                        'No se pudo resolver un único perfil persistente con esa identidad.'
+                );
+        }
+
+        if ( $profile_id === bitacora_get_configured_profile_id() ) {
+                return new WP_Error(
+                        'bitacora_profile_in_use',
+                        'No se puede modificar la definición del perfil que está en uso.'
+                );
+        }
+
+        $definition = bitacora_prepare_stored_profile_definition(
+                $definition
+        );
+
+        if ( is_wp_error( $definition ) ) {
+                return $definition;
+        }
+
+        $post_id = (int) $post_ids[0];
+
+        $current_definition = get_post_meta(
+                $post_id,
+                '_bitacora_profile_definition',
+                true
+        );
+
+        if ( ! is_array( $current_definition ) ) {
+                return new WP_Error(
+                        'bitacora_profile_definition_invalid',
+                        'La definición persistida del perfil no es válida.'
+                );
+        }
+
+        /*
+         * update_post_meta() devuelve false también cuando el valor nuevo
+         * es idéntico. Se distingue explícitamente para conservar
+         * idempotencia sin interpretar un no-cambio como error.
+         */
+        if ( $current_definition === $definition ) {
+
+                return array(
+                        'post_id'    => $post_id,
+                        'profile_id' => $profile_id,
+                        'changed'    => false,
+                        'validation' => bitacora_validate_profile(
+                                $profile_id
+                        ),
+                );
+        }
+
+        $saved = update_post_meta(
+                $post_id,
+                '_bitacora_profile_definition',
+                $definition
+        );
+
+        if ( false === $saved ) {
+                return new WP_Error(
+                        'bitacora_profile_definition_not_saved',
+                        'No se pudo guardar la definición del perfil.'
+                );
+        }
+
+        /*
+         * El perfil debe continuar siendo resoluble después del guardado,
+         * aunque todavía pueda estar EN PREPARACIÓN.
+         */
+        if ( ! bitacora_load_profile( $profile_id ) ) {
+
+                update_post_meta(
+                        $post_id,
+                        '_bitacora_profile_definition',
+                        $current_definition
+                );
+
+                return new WP_Error(
+                        'bitacora_profile_not_resolvable',
+                        'La definición fue rechazada porque el perfil dejó de ser resoluble.'
+                );
+        }
+
+        return array(
+                'post_id'    => $post_id,
+                'profile_id' => $profile_id,
+                'changed'    => true,
+                'validation' => bitacora_validate_profile(
+                        $profile_id
+                ),
         );
 }
