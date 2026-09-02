@@ -366,6 +366,19 @@ function bitacora_configure_profile( $profile_id ) {
                 );
         }
 
+        $profile_validation = bitacora_validate_profile( $profile_id );
+
+        if ( ! $profile_validation['available'] ) {
+                return new WP_Error(
+                        'bitacora_profile_not_available',
+                        sprintf(
+                                'El perfil "%s" todavía no está disponible para usar.',
+                                $profile_id
+                        ),
+                        $profile_validation
+                );
+        }
+
         $dependency_problems = obras_theme_check_dependencies();
 
         if ( ! empty( $dependency_problems ) ) {

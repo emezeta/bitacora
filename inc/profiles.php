@@ -131,6 +131,163 @@ function bitacora_load_profile( $profile_id ) {
 
 
 /**
+ * Valida si un perfil está completo y puede ponerse en uso.
+ *
+ * No modifica ni siembra configuración.
+ */
+function bitacora_validate_profile( $profile_id ) {
+
+    $profile = bitacora_load_profile( $profile_id );
+
+    $report = array(
+        'profile'   => sanitize_key( (string) $profile_id ),
+        'available' => false,
+        'errors'    => array(),
+    );
+
+    if ( ! $profile ) {
+        $report['errors'][] = 'No se pudo cargar el perfil.';
+        return $report;
+    }
+
+    $report['profile'] = $profile['id'];
+
+    /*
+     * Secciones válidas a las que podrán referirse las clases.
+     * El core forma parte de este conjunto.
+     */
+    $section_slugs = array();
+
+    $sections = array(
+        'core' => $profile['core'],
+    );
+
+    foreach ( $profile['sections'] as $section_id => $section ) {
+        $sections[ $section_id ] = $section;
+    }
+
+    foreach ( $sections as $section_id => $section ) {
+
+        if ( ! is_array( $section ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": definición inválida.',
+                $section_id
+            );
+            continue;
+        }
+
+        if ( empty( $section['name'] ) || empty( $section['slug'] ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": faltan name o slug.',
+                $section_id
+            );
+            continue;
+        }
+
+        $slug = sanitize_title( $section['slug'] );
+
+        if ( '' === $slug ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": slug inválido.',
+                $section_id
+            );
+            continue;
+        }
+
+        if ( isset( $section_slugs[ $slug ] ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": slug duplicado "%s".',
+                $section_id,
+                $slug
+            );
+            continue;
+        }
+
+        $section_slugs[ $slug ] = true;
+    }
+
+    /*
+     * Un perfil operativo necesita al menos una clase.
+     */
+    if (
+        empty( $profile['classes'] )
+        || ! is_array( $profile['classes'] )
+    ) {
+        $report['errors'][] = 'El perfil no contiene clases.';
+        return $report;
+    }
+
+    $class_slugs = array();
+
+    foreach ( $profile['classes'] as $class_id => $class ) {
+
+        if ( ! is_array( $class ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": definición inválida.',
+                $class_id
+            );
+            continue;
+        }
+
+        if ( empty( $class['name'] ) || empty( $class['slug'] ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": faltan name o slug.',
+                $class_id
+            );
+            continue;
+        }
+
+        $slug = sanitize_title( $class['slug'] );
+
+        if ( '' === $slug ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": slug inválido.',
+                $class_id
+            );
+            continue;
+        }
+
+        if ( isset( $class_slugs[ $slug ] ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": slug duplicado "%s".',
+                $class_id,
+                $slug
+            );
+        } else {
+            $class_slugs[ $slug ] = true;
+        }
+
+        if ( 'section' !== ( $class['scope'] ?? '' ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": scope debe ser "section".',
+                $class_id
+            );
+            continue;
+        }
+
+        $scope_id = sanitize_title(
+            (string) ( $class['scope_id'] ?? '' )
+        );
+
+        if (
+            '' === $scope_id
+            || ! isset( $section_slugs[ $scope_id ] )
+        ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": scope_id "%s" no corresponde a una sección del perfil.',
+                $class_id,
+                $scope_id ?: '(vacío)'
+            );
+        }
+    }
+
+    $report['available'] = empty( $report['errors'] );
+
+    return $report;
+}
+
+
+/**
  * Convierte la configuración de una sección de perfil
  * en los termmeta utilizados por bitacora_section.
  *
