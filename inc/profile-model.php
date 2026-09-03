@@ -371,7 +371,7 @@ function bitacora_create_stored_profile( $label, $definition = null ) {
  * El guardado reemplaza atómicamente el documento completo de definición.
  * La identidad técnica y la denominación no forman parte de esta operación.
  *
- * Un perfil actualmente en uso no puede modificarse.
+ * Un perfil que está o estuvo en uso no puede modificarse.
  *
  * Devuelve el resultado del guardado junto con su validación actual,
  * o WP_Error.
@@ -437,6 +437,18 @@ function bitacora_update_stored_profile_definition(
                 return new WP_Error(
                         'bitacora_profile_in_use',
                         'No se puede modificar la definición del perfil que está en uso.'
+                );
+        }
+
+        /*
+         * Desde su primer uso, un UUID representa una definición histórica.
+         * Modificarla posteriormente haría que la misma identidad técnica
+         * pasara a describir configuraciones diferentes.
+         */
+        if ( bitacora_profile_was_used( $profile_id ) ) {
+                return new WP_Error(
+                        'bitacora_profile_already_used',
+                        'No se puede modificar la definición de un perfil que ya fue usado.'
                 );
         }
 
