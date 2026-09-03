@@ -591,6 +591,7 @@ function bitacora_get_bundled_profile_ids() {
  * - in_use
  * - was_used
  * - editable
+ * - deletable
  * - errors
  *
  * "collision" es un estado diagnóstico excepcional: una misma identidad
@@ -768,6 +769,20 @@ function bitacora_get_profile_catalog() {
                         && ! $was_used
                 );
 
+                /*
+                 * Eliminable es una propiedad separada aunque hoy comparta
+                 * las mismas condiciones que editable.
+                 *
+                 * Mantener ambas semánticas explícitas permite que las reglas
+                 * diverjan en el futuro sin trasladar decisiones a la UI.
+                 */
+                $deletable = (
+                        'stored' === $source
+                        && $resolvable
+                        && ! $in_use
+                        && ! $was_used
+                );
+
                 $catalog[] = array(
                         'id'         => $profile_id,
                         'label'      => $label,
@@ -777,6 +792,7 @@ function bitacora_get_profile_catalog() {
                         'in_use'     => $in_use,
                         'was_used'   => $was_used,
                         'editable'   => $editable,
+                        'deletable'  => $deletable,
                         'errors'     => $errors,
                 );
         }
@@ -806,4 +822,124 @@ function bitacora_get_profile_catalog() {
         );
 
         return $catalog;
+}
+
+
+/**
+ * Elimina definitivamente un perfil persistente que nunca estuvo en uso.
+ *
+ * Los perfiles incluidos, actualmente en uso, previamente usados o con una
+ * identidad ambigua no pueden eliminarse mediante esta API.
+ *
+ * Devuelve post_id + profile_id o WP_Error.
+ */
+function bitacora_delete_stored_profile( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return new WP_Error(
+                        'bitacora_profile_id_invalid',
+                        'La identidad del perfil no es válida.'
+                );
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return new WP_Error(
+                        'bitacora_profile_id_invalid',
+                        'La identidad del perfil no es válida.'
+                );
+        }
+
+        /*
+         * Un perfil incluido forma parte del producto y no puede
+         * eliminarse mediante la administración de perfiles persistentes.
+         */
+        $bundled_file = get_stylesheet_directory()
+                . '/inc/profiles/'
+                . $profile_id
+                . '.php';
+
+        if ( is_file( $bundled_file ) ) {
+                return new WP_Error(
+                        'bitacora_profile_not_stored',
+                        'El perfil no es un perfil persistente eliminable.'
+                );
+        }
+
+        /*
+         * Resolver exactamente un registro persistente.
+         *
+         * Cero coincidencias significa inexistente y más de una constituye
+         * una colisión que debe resolverse fuera de la operación normal.
+         */
+        $post_ids = get_posts(
+                array(
+                        'post_type'      => 'bitacora_profile',
+                        'post_status'    => 'any',
+                        'posts_per_page' => 2,
+                        'fields'         => 'ids',
+                        'meta_key'       => '_bitacora_profile_id',
+                        'meta_value'     => $profile_id,
+                        'orderby'        => 'ID',
+                        'order'          => 'ASC',
+                )
+        );
+
+        if ( 1 !== count( $post_ids ) ) {
+                return new WP_Error(
+                        'bitacora_profile_not_resolvable',
+                        'No se pudo resolver un único perfil persistente con esa identidad.'
+                );
+        }
+
+        if ( $profile_id === bitacora_get_configured_profile_id() ) {
+                return new WP_Error(
+                        'bitacora_profile_in_use',
+                        'No se puede eliminar el perfil que está en uso.'
+                );
+        }
+
+        /*
+         * Desde su primer uso, el UUID adquiere significado histórico.
+         * El registro debe conservarse aunque el perfil ya no esté en uso.
+         */
+        if ( bitacora_profile_was_used( $profile_id ) ) {
+                return new WP_Error(
+                        'bitacora_profile_already_used',
+                        'No se puede eliminar un perfil que ya fue usado.'
+                );
+        }
+
+        $post_id = (int) $post_ids[0];
+
+        /*
+         * Eliminación definitiva deliberada:
+         * un perfil nunca usado es una configuración de trabajo sin
+         * significado histórico que justifique conservarla en Papelera.
+         */
+        $deleted = wp_delete_post(
+                $post_id,
+                true
+        );
+
+        if ( ! $deleted ) {
+                return new WP_Error(
+                        'bitacora_profile_not_deleted',
+                        'No se pudo eliminar el perfil.'
+                );
+        }
+
+        if ( bitacora_stored_profile_identity_exists( $profile_id ) ) {
+                return new WP_Error(
+                        'bitacora_profile_delete_not_confirmed',
+                        'La eliminación del perfil no pudo confirmarse.'
+                );
+        }
+
+        return array(
+                'post_id'    => $post_id,
+                'profile_id' => $profile_id,
+                'deleted'    => true,
+        );
 }
