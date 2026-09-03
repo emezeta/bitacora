@@ -852,6 +852,208 @@ function bitacora_handle_update_profile_sections() {
 
 
 /**
+ * Devuelve las features editables de una sección de perfil.
+ */
+function bitacora_get_profile_admin_feature_fields() {
+
+	return array(
+		'feature_file'      => 'Archivo',
+		'feature_thumbnail' => 'Imagen destacada',
+		'feature_location'  => 'Ubicación',
+		'feature_comments'  => 'Comentarios',
+	);
+}
+
+
+/**
+ * Guarda las features de core o de una sección complementaria.
+ */
+add_action(
+	'admin_post_bitacora_update_profile_features',
+	'bitacora_handle_update_profile_features'
+);
+
+function bitacora_handle_update_profile_features() {
+
+	if ( ! current_user_can( 'manage_bitacora_profiles' ) ) {
+		wp_die(
+			esc_html__(
+				'No tenés permisos para administrar perfiles.',
+				'bitacora'
+			)
+		);
+	}
+
+	$profile_id = isset( $_POST['profile_id'] )
+		? sanitize_key(
+			wp_unslash( $_POST['profile_id'] )
+		)
+		: '';
+
+	$target = isset( $_POST['feature_target'] )
+		? sanitize_key(
+			wp_unslash( $_POST['feature_target'] )
+		)
+		: '';
+
+	$section_id = isset( $_POST['section_id'] )
+		? sanitize_key(
+			wp_unslash( $_POST['section_id'] )
+		)
+		: '';
+
+	$nonce_scope = 'core' === $target
+		? 'core'
+		: 'section_' . $section_id;
+
+	check_admin_referer(
+		'bitacora_update_profile_features_'
+			. $profile_id
+			. '_'
+			. $nonce_scope,
+		'bitacora_update_profile_features_nonce'
+	);
+
+	$catalog_entry = bitacora_get_profile_admin_catalog_entry(
+		$profile_id
+	);
+
+	$definition = bitacora_get_stored_profile_definition(
+		$profile_id
+	);
+
+	$result = null;
+
+	if (
+		! $catalog_entry
+		|| empty( $catalog_entry['editable'] )
+		|| ! is_array( $definition )
+	) {
+		$result = new WP_Error(
+			'bitacora_profile_not_editable',
+			'Este perfil no puede editarse.'
+		);
+	}
+
+	$feature_values = array();
+
+	if ( ! is_wp_error( $result ) ) {
+
+		foreach (
+			bitacora_get_profile_admin_feature_fields()
+			as $feature_key => $feature_label
+		) {
+			$feature_values[ $feature_key ] = isset(
+				$_POST[ $feature_key ]
+			);
+		}
+	}
+
+	if (
+		! is_wp_error( $result )
+		&& 'core' === $target
+	) {
+
+		$core = isset( $definition['core'] )
+			&& is_array( $definition['core'] )
+				? $definition['core']
+				: array();
+
+		$defaults = bitacora_get_default_core_section_definition();
+
+		foreach ( $feature_values as $feature_key => $enabled ) {
+
+			$default_enabled = ! empty(
+				$defaults[ $feature_key ]
+			);
+
+			if ( $enabled === $default_enabled ) {
+				unset( $core[ $feature_key ] );
+			} else {
+				$core[ $feature_key ] = $enabled;
+			}
+		}
+
+		/*
+		 * El core persiste sólo overrides respecto de los defaults
+		 * pertenecientes al sistema.
+		 */
+		$definition['core'] = $core;
+
+	} elseif (
+		! is_wp_error( $result )
+		&& 'section' === $target
+	) {
+
+		if (
+			'' === $section_id
+			|| empty( $definition['sections'] )
+			|| ! is_array( $definition['sections'] )
+			|| ! isset( $definition['sections'][ $section_id ] )
+			|| ! is_array( $definition['sections'][ $section_id ] )
+		) {
+			$result = new WP_Error(
+				'bitacora_profile_section_not_editable',
+				'La sección indicada no puede editarse.'
+			);
+		}
+
+		if ( ! is_wp_error( $result ) ) {
+
+			foreach (
+				$feature_values
+				as $feature_key => $enabled
+			) {
+				$definition['sections'][ $section_id ][
+					$feature_key
+				] = $enabled;
+			}
+		}
+
+	} elseif ( ! is_wp_error( $result ) ) {
+
+		$result = new WP_Error(
+			'bitacora_profile_definition_invalid',
+			'La definición persistida del perfil no es válida.'
+		);
+	}
+
+	if ( ! is_wp_error( $result ) ) {
+		$result = bitacora_update_stored_profile_definition(
+			$profile_id,
+			$definition
+		);
+	}
+
+	if ( is_wp_error( $result ) ) {
+
+		$redirect = add_query_arg(
+			array(
+				'bitacora_profile_notice' => 'save_error',
+				'bitacora_profile_error'  => $result->get_error_code(),
+			),
+			bitacora_get_profile_edit_admin_url(
+				$profile_id
+			)
+		);
+
+	} else {
+
+		$redirect = add_query_arg(
+			'bitacora_profile_notice',
+			'saved',
+			bitacora_get_profile_edit_admin_url(
+				$profile_id
+			)
+		);
+	}
+
+	wp_safe_redirect( $redirect );
+	exit;
+}
+
+
+/**
  * Devuelve un mensaje administrativo seguro para un código de error.
  *
  * Los handlers transportan solamente códigos por la URL. La traducción
@@ -1313,6 +1515,171 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 				?>
 			</p>
 		</form>
+
+		<hr>
+
+		<hr>
+
+		<h2>Funciones por sección</h2>
+
+		<p>
+			Activá las funciones que correspondan a cada sección.
+		</p>
+
+		<?php
+		$feature_targets = array(
+			array(
+				'target'     => 'core',
+				'section_id' => '',
+				'label'      => trim(
+					(string) (
+						$profile['core']['name']
+						?? 'Notas'
+					)
+				),
+				'section'    => $profile['core'],
+			),
+		);
+
+		foreach ( $profile_sections as $section_id => $section ) {
+
+			$effective_section = isset(
+				$profile['sections'][ $section_id ]
+			) && is_array(
+				$profile['sections'][ $section_id ]
+			)
+				? $profile['sections'][ $section_id ]
+				: $section;
+
+			$feature_targets[] = array(
+				'target'     => 'section',
+				'section_id' => $section_id,
+				'label'      => trim(
+					(string) (
+						$effective_section['name']
+						?? $section_id
+					)
+				),
+				'section'    => $effective_section,
+			);
+		}
+		?>
+
+		<?php foreach ( $feature_targets as $feature_target ) : ?>
+
+			<?php
+			$nonce_scope = 'core' === $feature_target['target']
+				? 'core'
+				: 'section_' . sanitize_key(
+					$feature_target['section_id']
+				);
+			?>
+
+			<h3>
+				<?php echo esc_html(
+					$feature_target['label']
+				); ?>
+			</h3>
+
+			<form
+				method="post"
+				action="<?php echo esc_url(
+					admin_url( 'admin-post.php' )
+				); ?>"
+			>
+				<input
+					type="hidden"
+					name="action"
+					value="bitacora_update_profile_features"
+				>
+
+				<input
+					type="hidden"
+					name="profile_id"
+					value="<?php echo esc_attr(
+						$catalog_entry['id']
+					); ?>"
+				>
+
+				<input
+					type="hidden"
+					name="feature_target"
+					value="<?php echo esc_attr(
+						$feature_target['target']
+					); ?>"
+				>
+
+				<input
+					type="hidden"
+					name="section_id"
+					value="<?php echo esc_attr(
+						$feature_target['section_id']
+					); ?>"
+				>
+
+				<?php
+				wp_nonce_field(
+					'bitacora_update_profile_features_'
+						. $catalog_entry['id']
+						. '_'
+						. $nonce_scope,
+					'bitacora_update_profile_features_nonce'
+				);
+				?>
+
+				<fieldset>
+
+					<?php
+					foreach (
+						bitacora_get_profile_admin_feature_fields()
+						as $feature_key => $feature_label
+					) :
+					?>
+
+						<p>
+							<label>
+								<input
+									type="checkbox"
+									name="<?php echo esc_attr(
+										$feature_key
+									); ?>"
+									value="1"
+									<?php
+									checked(
+										! empty(
+											$feature_target[
+												'section'
+											][
+												$feature_key
+											]
+										)
+									);
+									?>
+								>
+								<?php echo esc_html(
+									$feature_label
+								); ?>
+							</label>
+						</p>
+
+					<?php endforeach; ?>
+
+				</fieldset>
+
+				<p>
+					<?php
+					submit_button(
+						'Guardar funciones de '
+							. $feature_target['label'],
+						'secondary',
+						'submit',
+						false
+					);
+					?>
+				</p>
+			</form>
+
+		<?php endforeach; ?>
 
 		<hr>
 
