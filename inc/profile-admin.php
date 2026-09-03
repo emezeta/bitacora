@@ -90,9 +90,60 @@ function bitacora_get_profile_admin_status( $profile ) {
 
 
 /**
- * Render de la pantalla inicial de perfiles.
- *
- * Esta primera iteración es deliberadamente sólo lectura.
+ * Crea un nuevo perfil persistente desde la pantalla de administración.
+ */
+add_action(
+        'admin_post_bitacora_create_profile',
+        'bitacora_handle_create_profile'
+);
+
+function bitacora_handle_create_profile() {
+
+        if ( ! current_user_can( 'manage_bitacora_profiles' ) ) {
+                wp_die(
+                        esc_html__(
+                                'No tenés permisos para administrar perfiles.',
+                                'bitacora'
+                        )
+                );
+        }
+
+        check_admin_referer(
+                'bitacora_create_profile',
+                'bitacora_create_profile_nonce'
+        );
+
+        $label = isset( $_POST['profile_label'] )
+                ? sanitize_text_field(
+                        wp_unslash( $_POST['profile_label'] )
+                )
+                : '';
+
+        $result = bitacora_create_stored_profile( $label );
+
+        if ( is_wp_error( $result ) ) {
+                $redirect = add_query_arg(
+                        array(
+                                'bitacora_profile_notice' => 'create_error',
+                                'bitacora_profile_error'  => $result->get_error_code(),
+                        ),
+                        bitacora_get_profiles_admin_url()
+                );
+        } else {
+                $redirect = add_query_arg(
+                        'bitacora_profile_notice',
+                        'created',
+                        bitacora_get_profiles_admin_url()
+                );
+        }
+
+        wp_safe_redirect( $redirect );
+        exit;
+}
+
+
+/**
+ * Render de la pantalla de perfiles.
  */
 function bitacora_render_profiles_admin_page() {
 
@@ -106,6 +157,18 @@ function bitacora_render_profiles_admin_page() {
         }
 
         $catalog = bitacora_get_profile_catalog();
+
+        $notice = isset( $_GET['bitacora_profile_notice'] )
+                ? sanitize_key(
+                        wp_unslash( $_GET['bitacora_profile_notice'] )
+                )
+                : '';
+
+        $error_code = isset( $_GET['bitacora_profile_error'] )
+                ? sanitize_key(
+                        wp_unslash( $_GET['bitacora_profile_error'] )
+                )
+                : '';
 
         ?>
         <div class="wrap bitacora-profiles-admin">
@@ -123,6 +186,84 @@ function bitacora_render_profiles_admin_page() {
                 <p>
                         Los perfiles definen la estructura inicial de una Bitácora.
                 </p>
+
+                <?php if ( 'created' === $notice ) : ?>
+
+                        <div class="notice notice-success inline">
+                                <p>Perfil creado. Ahora está EN PREPARACIÓN.</p>
+                        </div>
+
+                <?php elseif ( 'create_error' === $notice ) : ?>
+
+                        <div class="notice notice-error inline">
+                                <p>
+                                        <?php
+                                        if (
+                                                'bitacora_profile_label_required'
+                                                === $error_code
+                                        ) {
+                                                echo esc_html(
+                                                        'El perfil necesita un nombre.'
+                                                );
+                                        } else {
+                                                echo esc_html(
+                                                        'No se pudo crear el perfil.'
+                                                );
+                                        }
+                                        ?>
+                                </p>
+                        </div>
+
+                <?php endif; ?>
+
+                <h2>Crear perfil</h2>
+
+                <form
+                        method="post"
+                        action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+                >
+                        <input
+                                type="hidden"
+                                name="action"
+                                value="bitacora_create_profile"
+                        >
+
+                        <?php
+                        wp_nonce_field(
+                                'bitacora_create_profile',
+                                'bitacora_create_profile_nonce'
+                        );
+                        ?>
+
+                        <p>
+                                <label for="bitacora-profile-label">
+                                        <strong>Nombre del perfil</strong>
+                                </label>
+                        </p>
+
+                        <p>
+                                <input
+                                        type="text"
+                                        id="bitacora-profile-label"
+                                        name="profile_label"
+                                        class="regular-text"
+                                        required
+                                >
+                        </p>
+
+                        <p>
+                                <?php
+                                submit_button(
+                                        'Crear perfil',
+                                        'primary',
+                                        'submit',
+                                        false
+                                );
+                                ?>
+                        </p>
+                </form>
+
+                <hr>
 
                 <?php if ( empty( $catalog ) ) : ?>
 
