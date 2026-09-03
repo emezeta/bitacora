@@ -356,6 +356,177 @@ function bitacora_handle_update_profile_core_types() {
 
 
 /**
+ * Guarda las secciones complementarias de un perfil editable.
+ */
+add_action(
+	'admin_post_bitacora_update_profile_sections',
+	'bitacora_handle_update_profile_sections'
+);
+
+function bitacora_handle_update_profile_sections() {
+
+	if ( ! current_user_can( 'manage_bitacora_profiles' ) ) {
+		wp_die(
+			esc_html__(
+				'No tenés permisos para administrar perfiles.',
+				'bitacora'
+			)
+		);
+	}
+
+	$profile_id = isset( $_POST['profile_id'] )
+		? sanitize_key(
+			wp_unslash( $_POST['profile_id'] )
+		)
+		: '';
+
+	check_admin_referer(
+		'bitacora_update_profile_sections_' . $profile_id,
+		'bitacora_update_profile_sections_nonce'
+	);
+
+	$catalog_entry = bitacora_get_profile_admin_catalog_entry(
+		$profile_id
+	);
+
+	$definition = bitacora_get_stored_profile_definition(
+		$profile_id
+	);
+
+	$profile = bitacora_load_profile(
+		$profile_id
+	);
+
+	$result = null;
+
+	if (
+		! $catalog_entry
+		|| empty( $catalog_entry['editable'] )
+		|| ! is_array( $definition )
+		|| ! is_array( $profile )
+		|| empty( $profile['core']['slug'] )
+	) {
+		$result = new WP_Error(
+			'bitacora_profile_not_editable',
+			'Este perfil no puede editarse.'
+		);
+	}
+
+	if ( ! is_wp_error( $result ) ) {
+
+		$core_slug = sanitize_title(
+			(string) $profile['core']['slug']
+		);
+
+		$raw_sections = isset( $_POST['profile_sections'] )
+			? wp_unslash( $_POST['profile_sections'] )
+			: '';
+
+		$section_names = preg_split(
+			'/\R/u',
+			(string) $raw_sections
+		);
+
+		if ( false === $section_names ) {
+			$section_names = array();
+		}
+
+		$sections = array();
+		$order    = 10;
+
+		foreach ( $section_names as $section_name ) {
+
+			$section_name = trim(
+				sanitize_text_field( $section_name )
+			);
+
+			if ( '' === $section_name ) {
+				continue;
+			}
+
+			$section_slug = sanitize_title(
+				$section_name
+			);
+
+			if ( '' === $section_slug ) {
+				$result = new WP_Error(
+					'bitacora_profile_section_name_invalid',
+					'Una de las secciones no tiene un nombre válido.'
+				);
+				break;
+			}
+
+			if ( $core_slug === $section_slug ) {
+				$result = new WP_Error(
+					'bitacora_profile_section_core_collision',
+					'Una sección entra en conflicto con el core.'
+				);
+				break;
+			}
+
+			if ( isset( $sections[ $section_slug ] ) ) {
+				$result = new WP_Error(
+					'bitacora_profile_section_duplicate',
+					'Hay secciones repetidas.'
+				);
+				break;
+			}
+
+			$sections[ $section_slug ] = array(
+				'name'  => $section_name,
+				'slug'  => $section_slug,
+				'order' => $order,
+				'area'  => 'main',
+				'state' => 'active',
+			);
+
+			$order += 10;
+		}
+	}
+
+	if ( ! is_wp_error( $result ) ) {
+
+		/*
+		 * Esta pantalla controla únicamente "sections".
+		 * Core y clases permanecen intactos.
+		 */
+		$definition['sections'] = $sections;
+
+		$result = bitacora_update_stored_profile_definition(
+			$profile_id,
+			$definition
+		);
+	}
+
+	if ( is_wp_error( $result ) ) {
+
+		$redirect = add_query_arg(
+			array(
+				'bitacora_profile_notice' => 'save_error',
+				'bitacora_profile_error'  => $result->get_error_code(),
+			),
+			bitacora_get_profile_edit_admin_url(
+				$profile_id
+			)
+		);
+
+	} else {
+
+		$redirect = add_query_arg(
+			'bitacora_profile_notice',
+			'saved',
+			bitacora_get_profile_edit_admin_url(
+				$profile_id
+			)
+		);
+	}
+
+	wp_safe_redirect( $redirect );
+	exit;
+}
+
+
+/**
  * Busca una entrada del catálogo por identidad.
  */
 function bitacora_get_profile_admin_catalog_entry( $profile_id ) {
@@ -488,6 +659,38 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 		$core_type_names
 	);
 
+	$profile_sections = isset( $definition['sections'] )
+		&& is_array( $definition['sections'] )
+			? $definition['sections']
+			: array();
+
+	uasort(
+		$profile_sections,
+		static function ( $a, $b ) {
+
+			return (int) ( $a['order'] ?? 0 )
+				<=> (int) ( $b['order'] ?? 0 );
+		}
+	);
+
+	$section_names = array();
+
+	foreach ( $profile_sections as $section ) {
+
+		$name = trim(
+			(string) ( $section['name'] ?? '' )
+		);
+
+		if ( '' !== $name ) {
+			$section_names[] = $name;
+		}
+	}
+
+	$sections_text = implode(
+		"\n",
+		$section_names
+	);
+
 	?>
 	<div class="wrap bitacora-profiles-admin">
 
@@ -608,6 +811,68 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 				?>
 			</p>
 		</form>
+
+		<hr>
+
+		<h2>Secciones complementarias</h2>
+
+		<form
+			method="post"
+			action="<?php echo esc_url(
+				admin_url( 'admin-post.php' )
+			); ?>"
+		>
+			<input
+				type="hidden"
+				name="action"
+				value="bitacora_update_profile_sections"
+			>
+
+			<input
+				type="hidden"
+				name="profile_id"
+				value="<?php echo esc_attr(
+					$catalog_entry['id']
+				); ?>"
+			>
+
+			<?php
+			wp_nonce_field(
+				'bitacora_update_profile_sections_'
+					. $catalog_entry['id'],
+				'bitacora_update_profile_sections_nonce'
+			);
+			?>
+
+			<p>
+				Escribí una sección por línea.
+				Por ejemplo: <strong>Documentos</strong>.
+			</p>
+
+			<p>
+				<textarea
+					id="bitacora-profile-sections"
+					name="profile_sections"
+					rows="8"
+					cols="50"
+					class="large-text"
+				><?php echo esc_textarea(
+					$sections_text
+				); ?></textarea>
+			</p>
+
+			<p>
+				<?php
+				submit_button(
+					'Guardar secciones',
+					'primary',
+					'submit',
+					false
+				);
+				?>
+			</p>
+		</form>
+
 
 	</div>
 	<?php
