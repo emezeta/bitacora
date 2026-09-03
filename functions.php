@@ -52,3 +52,4 @@ add_filter( 'classic_editor_enabled_editors', function( $editors ) {
 } );
 
 require_once get_stylesheet_directory() . '/inc/install.php';
+require_once get_stylesheet_directory() . '/inc/profile-admin.php';
