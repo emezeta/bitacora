@@ -111,6 +111,15 @@ function bitacora_render_profiles_admin_page() {
         <div class="wrap bitacora-profiles-admin">
                 <h1>Perfiles disponibles</h1>
 
+                <?php if ( ! current_user_can( 'manage_options' ) ) : ?>
+                        <p>
+                                <a
+                                        href="<?php echo esc_url( home_url( '/' ) ); ?>"
+                                        class="button button-secondary"
+                                >← Volver al Inicio</a>
+                        </p>
+                <?php endif; ?>
+
                 <p>
                         Los perfiles definen la estructura inicial de una Bitácora.
                 </p>

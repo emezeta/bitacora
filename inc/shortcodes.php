@@ -368,6 +368,10 @@ function obras_render_dashboard_frontend() {
 
     <div class="obras-dashboard-more">
     <a href="<?php echo esc_url( home_url( '/auxiliar/' ) ); ?>" class="obras-dashboard-more-link">Más secciones…</a>
+
+    <?php if ( current_user_can( 'manage_bitacora_profiles' ) ) : ?>
+    <a href="<?php echo esc_url( bitacora_get_profiles_admin_url() ); ?>" class="obras-dashboard-more-link">Perfiles disponibles</a>
+    <?php endif; ?>
     </div>
     </div>
     <?php
