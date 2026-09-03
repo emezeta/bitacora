@@ -347,6 +347,163 @@ function bitacora_seed_content_roles() {
  * El perfil queda en uso únicamente después de completar
  * satisfactoriamente toda la configuración.
  */
+/**
+ * Devuelve las identidades de los perfiles usados alguna vez.
+ *
+ * El perfil actualmente configurado se incorpora siempre aunque provenga
+ * de una instalación anterior a la existencia de este registro histórico.
+ *
+ * El resultado representa un conjunto de UUID, no un historial cronológico.
+ */
+function bitacora_get_used_profile_ids() {
+
+        $stored_ids = get_option(
+                'bitacora_used_profiles',
+                array()
+        );
+
+        if ( ! is_array( $stored_ids ) ) {
+                $stored_ids = array();
+        }
+
+        $used_ids = array();
+
+        foreach ( $stored_ids as $profile_id ) {
+
+                if ( ! is_string( $profile_id ) ) {
+                        continue;
+                }
+
+                $profile_id = strtolower( trim( $profile_id ) );
+
+                if ( wp_is_uuid( $profile_id, 4 ) ) {
+                        $used_ids[ $profile_id ] = true;
+                }
+        }
+
+        /*
+         * Compatibilidad hacia atrás:
+         * una Bitácora ya configurada demuestra por sí misma que ese
+         * perfil estuvo en uso, aunque el registro histórico aún no exista.
+         */
+        $configured_profile_id = bitacora_get_configured_profile_id();
+
+        if (
+                '' !== $configured_profile_id
+                && wp_is_uuid( $configured_profile_id, 4 )
+        ) {
+                $used_ids[ $configured_profile_id ] = true;
+        }
+
+        return array_keys( $used_ids );
+}
+
+
+/**
+ * Indica si un perfil estuvo en uso alguna vez.
+ */
+function bitacora_profile_was_used( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        return in_array(
+                $profile_id,
+                bitacora_get_used_profile_ids(),
+                true
+        );
+}
+
+
+/**
+ * Registra de forma permanente que un perfil estuvo en uso.
+ *
+ * Es idempotente y sólo persiste identidades UUID válidas.
+ */
+function bitacora_register_profile_use( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        $stored_ids = get_option(
+                'bitacora_used_profiles',
+                array()
+        );
+
+        if ( ! is_array( $stored_ids ) ) {
+                $stored_ids = array();
+        }
+
+        $normalized = array();
+
+        foreach ( $stored_ids as $stored_id ) {
+
+                if ( ! is_string( $stored_id ) ) {
+                        continue;
+                }
+
+                $stored_id = strtolower( trim( $stored_id ) );
+
+                if ( wp_is_uuid( $stored_id, 4 ) ) {
+                        $normalized[ $stored_id ] = true;
+                }
+        }
+
+        if ( isset( $normalized[ $profile_id ] ) ) {
+                return true;
+        }
+
+        $normalized[ $profile_id ] = true;
+
+        update_option(
+                'bitacora_used_profiles',
+                array_keys( $normalized ),
+                false
+        );
+
+        /*
+         * Verificar la persistencia leyendo la opción cruda.
+         * No se usa bitacora_get_used_profile_ids() porque ese getter
+         * incorpora también, deliberadamente, el perfil configurado.
+         */
+        $saved_ids = get_option(
+                'bitacora_used_profiles',
+                array()
+        );
+
+        if ( ! is_array( $saved_ids ) ) {
+                return false;
+        }
+
+        foreach ( $saved_ids as $saved_id ) {
+
+                if ( ! is_string( $saved_id ) ) {
+                        continue;
+                }
+
+                if ( $profile_id === strtolower( trim( $saved_id ) ) ) {
+                        return true;
+                }
+        }
+
+        return false;
+}
+
+
 function bitacora_configure_profile( $profile_id ) {
 
         $profile_id = sanitize_key( (string) $profile_id );
@@ -674,6 +831,23 @@ function bitacora_configure_profile( $profile_id ) {
                 return new WP_Error(
                         'bitacora_configuration_state_not_saved',
                         'No se pudo registrar la configuración de Bitácora.'
+                );
+        }
+
+        /*
+         * La configuración ya es vigente y verificable.
+         *
+         * Si el registro histórico fallara, el perfil actual sigue siendo
+         * reconocido como usado por bitacora_get_used_profile_ids().
+         * Una futura operación de cambio deberá exigir la persistencia
+         * del perfil saliente antes de sustituirlo.
+         */
+        if ( ! bitacora_register_profile_use( $profile_id ) ) {
+                error_log(
+                        sprintf(
+                                'Bitácora: no se pudo persistir el historial de uso del perfil "%s".',
+                                $profile_id
+                        )
                 );
         }
 
