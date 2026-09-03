@@ -654,6 +654,29 @@ function bitacora_handle_update_profile_sections() {
 			$section_names = array();
 		}
 
+		$existing_sections = isset( $definition['sections'] )
+			&& is_array( $definition['sections'] )
+				? $definition['sections']
+				: array();
+
+		$existing_sections_by_slug = array();
+
+		foreach ( $existing_sections as $existing_section ) {
+
+			if ( ! is_array( $existing_section ) ) {
+				continue;
+			}
+
+			$existing_slug = sanitize_title(
+				(string) ( $existing_section['slug'] ?? '' )
+			);
+
+			if ( '' !== $existing_slug ) {
+				$existing_sections_by_slug[ $existing_slug ]
+					= $existing_section;
+			}
+		}
+
 		$sections = array();
 		$order    = 10;
 
@@ -695,13 +718,36 @@ function bitacora_handle_update_profile_sections() {
 				break;
 			}
 
-			$sections[ $section_slug ] = array(
-				'name'  => $section_name,
-				'slug'  => $section_slug,
-				'order' => $order,
-				'area'  => 'main',
-				'state' => 'active',
-			);
+			if (
+				isset(
+					$existing_sections_by_slug[ $section_slug ]
+				)
+			) {
+
+				$section = $existing_sections_by_slug[
+					$section_slug
+				];
+
+				/*
+				 * Esta pantalla controla identidad visible y orden.
+				 * El resto de la definición de la sección se conserva.
+				 */
+				$section['name']  = $section_name;
+				$section['slug']  = $section_slug;
+				$section['order'] = $order;
+
+			} else {
+
+				$section = array(
+					'name'  => $section_name,
+					'slug'  => $section_slug,
+					'order' => $order,
+					'area'  => 'main',
+					'state' => 'active',
+				);
+			}
+
+			$sections[ $section_slug ] = $section;
 
 			$order += 10;
 		}
@@ -721,11 +767,6 @@ function bitacora_handle_update_profile_sections() {
 				$next_section_slugs[ $slug ] = true;
 			}
 		}
-
-		$existing_sections = isset( $definition['sections'] )
-			&& is_array( $definition['sections'] )
-				? $definition['sections']
-				: array();
 
 		$existing_classes = isset( $definition['classes'] )
 			&& is_array( $definition['classes'] )
