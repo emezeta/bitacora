@@ -532,3 +532,278 @@ function bitacora_update_stored_profile_definition(
                 ),
         );
 }
+
+
+/**
+ * Devuelve las identidades de los perfiles incluidos con Bitácora.
+ *
+ * La identidad física del archivo es también la identidad técnica:
+ * inc/profiles/<uuid>.php
+ */
+function bitacora_get_bundled_profile_ids() {
+
+        $directory = get_stylesheet_directory() . '/inc/profiles';
+
+        if ( ! is_dir( $directory ) ) {
+                return array();
+        }
+
+        $files = glob( $directory . '/*.php' );
+
+        if ( false === $files ) {
+                return array();
+        }
+
+        $profile_ids = array();
+
+        foreach ( $files as $file ) {
+
+                $profile_id = strtolower(
+                        pathinfo( $file, PATHINFO_FILENAME )
+                );
+
+                if ( wp_is_uuid( $profile_id, 4 ) ) {
+                        $profile_ids[ $profile_id ] = true;
+                }
+        }
+
+        $profile_ids = array_keys( $profile_ids );
+
+        sort(
+                $profile_ids,
+                SORT_STRING
+        );
+
+        return $profile_ids;
+}
+
+
+/**
+ * Devuelve un catálogo uniforme de perfiles conocidos por Bitácora.
+ *
+ * Cada entrada expone estado de dominio, no estado de interfaz:
+ *
+ * - id
+ * - label
+ * - source: bundled | stored | collision
+ * - resolvable
+ * - available
+ * - in_use
+ * - was_used
+ * - editable
+ * - errors
+ *
+ * "collision" es un estado diagnóstico excepcional: una misma identidad
+ * aparece en más de una fuente y por lo tanto no representa un perfil
+ * resoluble.
+ */
+function bitacora_get_profile_catalog() {
+
+        $configured_profile_id = bitacora_get_configured_profile_id();
+
+        $identities = array();
+
+        /*
+         * Perfiles incluidos.
+         */
+        foreach ( bitacora_get_bundled_profile_ids() as $profile_id ) {
+
+                $identities[ $profile_id ] = array(
+                        'bundled'     => true,
+                        'stored_ids'  => array(),
+                );
+        }
+
+        /*
+         * Perfiles persistentes.
+         *
+         * Se conservan todas las coincidencias para detectar identidades
+         * duplicadas en lugar de dejar que una gane silenciosamente.
+         */
+        $stored_posts = get_posts(
+                array(
+                        'post_type'      => 'bitacora_profile',
+                        'post_status'    => 'any',
+                        'posts_per_page' => -1,
+                        'fields'         => 'ids',
+                        'orderby'        => 'ID',
+                        'order'          => 'ASC',
+                )
+        );
+
+        foreach ( $stored_posts as $post_id ) {
+
+                $profile_id = get_post_meta(
+                        $post_id,
+                        '_bitacora_profile_id',
+                        true
+                );
+
+                if ( ! is_string( $profile_id ) ) {
+                        continue;
+                }
+
+                $profile_id = strtolower( trim( $profile_id ) );
+
+                if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                        continue;
+                }
+
+                if ( ! isset( $identities[ $profile_id ] ) ) {
+                        $identities[ $profile_id ] = array(
+                                'bundled'    => false,
+                                'stored_ids' => array(),
+                        );
+                }
+
+                $identities[ $profile_id ]['stored_ids'][] = (int) $post_id;
+        }
+
+        $catalog = array();
+
+        foreach ( $identities as $profile_id => $identity ) {
+
+                $has_bundled = ! empty( $identity['bundled'] );
+                $stored_ids  = $identity['stored_ids'];
+                $stored_count = count( $stored_ids );
+
+                $collision = (
+                        $has_bundled
+                        && $stored_count > 0
+                ) || $stored_count > 1;
+
+                if ( $collision ) {
+                        $source = 'collision';
+                } elseif ( $has_bundled ) {
+                        $source = 'bundled';
+                } else {
+                        $source = 'stored';
+                }
+
+                $profile    = false;
+                $resolvable = false;
+                $available  = false;
+                $errors     = array();
+
+                if ( ! $collision ) {
+
+                        $profile = bitacora_load_profile(
+                                $profile_id
+                        );
+
+                        $resolvable = is_array( $profile );
+
+                        if ( $resolvable ) {
+
+                                $validation = bitacora_validate_profile(
+                                        $profile_id
+                                );
+
+                                $available = ! empty(
+                                        $validation['available']
+                                );
+
+                                $errors = isset( $validation['errors'] )
+                                        && is_array( $validation['errors'] )
+                                                ? $validation['errors']
+                                                : array();
+                        } else {
+                                $errors[] = 'No se pudo resolver el perfil.';
+                        }
+                } elseif ( $has_bundled && $stored_count > 0 ) {
+
+                        $errors[] = 'La identidad técnica está duplicada entre un perfil incluido y uno persistente.';
+                } else {
+
+                        $errors[] = 'La identidad técnica está duplicada entre perfiles persistentes.';
+                }
+
+                /*
+                 * Para perfiles resolubles, el nombre procede del loader.
+                 * Ante una colisión stored se usa sólo como diagnóstico el
+                 * primer título encontrado, sin considerar esa fuente válida.
+                 */
+                if (
+                        $resolvable
+                        && isset( $profile['label'] )
+                        && '' !== trim( (string) $profile['label'] )
+                ) {
+                        $label = trim( (string) $profile['label'] );
+                } elseif ( ! empty( $stored_ids ) ) {
+
+                        $label = trim(
+                                (string) get_post_field(
+                                        'post_title',
+                                        $stored_ids[0],
+                                        'raw'
+                                )
+                        );
+
+                        if ( '' === $label ) {
+                                $label = $profile_id;
+                        }
+                } else {
+                        $label = $profile_id;
+                }
+
+                $in_use = (
+                        '' !== $configured_profile_id
+                        && $profile_id === $configured_profile_id
+                );
+
+                $was_used = bitacora_profile_was_used(
+                        $profile_id
+                );
+
+                /*
+                 * Editable no es una decisión de UI.
+                 *
+                 * Sólo un perfil persistente, resoluble y nunca usado puede
+                 * cambiar su definición.
+                 */
+                $editable = (
+                        'stored' === $source
+                        && $resolvable
+                        && ! $in_use
+                        && ! $was_used
+                );
+
+                $catalog[] = array(
+                        'id'         => $profile_id,
+                        'label'      => $label,
+                        'source'     => $source,
+                        'resolvable' => $resolvable,
+                        'available'  => $available,
+                        'in_use'     => $in_use,
+                        'was_used'   => $was_used,
+                        'editable'   => $editable,
+                        'errors'     => $errors,
+                );
+        }
+
+        /*
+         * Orden estable y humano.
+         * La identidad técnica resuelve empates de denominación.
+         */
+        usort(
+                $catalog,
+                static function ( $a, $b ) {
+
+                        $label_compare = strcasecmp(
+                                $a['label'],
+                                $b['label']
+                        );
+
+                        if ( 0 !== $label_compare ) {
+                                return $label_compare;
+                        }
+
+                        return strcmp(
+                                $a['id'],
+                                $b['id']
+                        );
+                }
+        );
+
+        return $catalog;
+}
