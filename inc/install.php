@@ -504,6 +504,98 @@ function bitacora_register_profile_use( $profile_id ) {
 }
 
 
+/**
+ * Devuelve el historial cronológico de activaciones de perfiles.
+ *
+ * Devuelve false si el almacenamiento existente no es un array.
+ *
+ * Cada entrada conserva la definición efectiva resuelta en el momento
+ * en que el perfil pasó a estar en uso.
+ *
+ * Las instalaciones anteriores a este historial pueden tener perfiles
+ * usados sin una entrada correspondiente. No se fabrican snapshots
+ * retrospectivos.
+ */
+function bitacora_get_profile_usage_history() {
+
+        $history = get_option(
+                'bitacora_profile_usage_history',
+                array()
+        );
+
+        return is_array( $history )
+                ? array_values( $history )
+                : false;
+}
+
+
+/**
+ * Registra una activación de perfil con su definición efectiva.
+ *
+ * A diferencia de bitacora_register_profile_use(), este registro no es
+ * un conjunto de UUID: cada activación añade un nuevo evento cronológico.
+ */
+function bitacora_register_profile_activation( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        $definition = bitacora_load_profile( $profile_id );
+
+        if (
+                ! is_array( $definition )
+                || empty( $definition['id'] )
+                || $profile_id !== $definition['id']
+        ) {
+                return false;
+        }
+
+        $history = get_option(
+                'bitacora_profile_usage_history',
+                array()
+        );
+
+        if ( ! is_array( $history ) ) {
+                return false;
+        }
+
+        $event = array(
+                'schema'       => 1,
+                'profile_id'   => $profile_id,
+                'activated_at' => gmdate( 'c' ),
+                'definition'   => $definition,
+        );
+
+        $history[] = $event;
+
+        update_option(
+                'bitacora_profile_usage_history',
+                array_values( $history ),
+                false
+        );
+
+        $saved = get_option(
+                'bitacora_profile_usage_history',
+                array()
+        );
+
+        if ( ! is_array( $saved ) || empty( $saved ) ) {
+                return false;
+        }
+
+        $last = end( $saved );
+
+        return is_array( $last ) && $event === $last;
+}
+
+
 function bitacora_configure_profile( $profile_id ) {
 
         $profile_id = sanitize_key( (string) $profile_id );
@@ -842,6 +934,15 @@ function bitacora_configure_profile( $profile_id ) {
          * Una futura operación de cambio deberá exigir la persistencia
          * del perfil saliente antes de sustituirlo.
          */
+        if ( ! bitacora_register_profile_activation( $profile_id ) ) {
+                error_log(
+                        sprintf(
+                                'Bitácora: no se pudo persistir el snapshot de activación del perfil "%s".',
+                                $profile_id
+                        )
+                );
+        }
+
         if ( ! bitacora_register_profile_use( $profile_id ) ) {
                 error_log(
                         sprintf(
