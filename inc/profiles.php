@@ -154,7 +154,9 @@ function bitacora_validate_profile( $profile_id ) {
 
     $report = array(
         'profile'   => sanitize_key( (string) $profile_id ),
-        'available' => false,
+        'valid'     => false,
+        'complete'  => false,
+        'enabled'   => false,
         'errors'    => array(),
     );
 
@@ -164,6 +166,8 @@ function bitacora_validate_profile( $profile_id ) {
     }
 
     $report['profile'] = $profile['id'];
+
+    $complete = true;
 
     /*
      * Secciones válidas a las que podrán referirse las clases.
@@ -217,17 +221,55 @@ function bitacora_validate_profile( $profile_id ) {
         }
 
         $section_slugs[ $slug ] = true;
+
+        /*
+         * Notas/core pertenece siempre a main.
+         *
+         * Una sección complementaria sin "area" es válida durante la
+         * construcción del perfil, pero mantiene el perfil incompleto.
+         */
+        if ( 'core' === $section_id ) {
+
+            if (
+                ! array_key_exists( 'area', $section )
+                || 'main' !== $section['area']
+            ) {
+                $report['errors'][] =
+                    'Sección "core": area debe ser "main".';
+            }
+
+        } elseif ( ! array_key_exists( 'area', $section ) ) {
+
+            $complete = false;
+
+        } elseif (
+            ! in_array(
+                $section['area'],
+                array( 'main', 'more' ),
+                true
+            )
+        ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": area debe ser "main" o "more".',
+                $section_id
+            );
+        }
     }
 
     /*
-     * Un perfil operativo necesita al menos una clase.
+     * La colección de clases debe ser estructuralmente válida.
+     * Un array vacío es válido, pero deja el perfil incompleto.
      */
     if (
-        empty( $profile['classes'] )
+        ! isset( $profile['classes'] )
         || ! is_array( $profile['classes'] )
     ) {
-        $report['errors'][] = 'El perfil no contiene clases.';
+        $report['errors'][] = 'La definición de clases no es válida.';
         return $report;
+    }
+
+    if ( empty( $profile['classes'] ) ) {
+        $complete = false;
     }
 
     $class_slugs = array();
@@ -294,7 +336,10 @@ function bitacora_validate_profile( $profile_id ) {
         }
     }
 
-    $report['available'] = empty( $report['errors'] );
+    $report['valid'] = empty( $report['errors'] );
+
+    $report['complete'] = $report['valid'] && $complete;
+    $report['enabled'] = $report['valid'] && $report['complete'];
 
     return $report;
 }

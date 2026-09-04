@@ -260,7 +260,7 @@ function bitacora_prepare_stored_profile_definition( $definition = null ) {
 
 
 /**
- * Crea un perfil persistente en preparación.
+ * Crea un perfil persistente inicialmente incompleto.
  *
  * La identidad técnica se genera internamente y no puede ser elegida
  * por el operador.
@@ -507,7 +507,7 @@ function bitacora_update_stored_profile_definition(
 
         /*
          * El perfil debe continuar siendo resoluble después del guardado,
-         * aunque todavía pueda estar EN PREPARACIÓN.
+         * aunque todavía pueda estar INCOMPLETO.
          */
         if ( ! bitacora_load_profile( $profile_id ) ) {
 
@@ -683,6 +683,9 @@ function bitacora_get_profile_catalog() {
 
                 $profile    = false;
                 $resolvable = false;
+                $valid      = false;
+                $complete   = false;
+                $enabled    = false;
                 $available  = false;
                 $errors     = array();
 
@@ -700,9 +703,25 @@ function bitacora_get_profile_catalog() {
                                         $profile_id
                                 );
 
-                                $available = ! empty(
-                                        $validation['available']
+                                $valid = ! empty(
+                                        $validation['valid']
                                 );
+
+                                $complete = ! empty(
+                                        $validation['complete']
+                                );
+
+                                $enabled = ! empty(
+                                        $validation['enabled']
+                                );
+
+                                /*
+                                 * Disponibilidad es una condición operativa
+                                 * del catálogo, no un alias de "sin errores".
+                                 * Por ahora, para un perfil resoluble, coincide
+                                 * con estar habilitado.
+                                 */
+                                $available = $enabled;
 
                                 $errors = isset( $validation['errors'] )
                                         && is_array( $validation['errors'] )
@@ -788,6 +807,9 @@ function bitacora_get_profile_catalog() {
                         'label'      => $label,
                         'source'     => $source,
                         'resolvable' => $resolvable,
+                        'valid'      => $valid,
+                        'complete'   => $complete,
+                        'enabled'    => $enabled,
                         'available'  => $available,
                         'in_use'     => $in_use,
                         'was_used'   => $was_used,

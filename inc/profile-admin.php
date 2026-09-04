@@ -64,6 +64,7 @@ function bitacora_get_profile_admin_status( $profile ) {
         if (
                 'collision' === $profile['source']
                 || ! $profile['resolvable']
+                || empty( $profile['valid'] )
         ) {
                 return array(
                         'key'   => 'error',
@@ -78,26 +79,23 @@ function bitacora_get_profile_admin_status( $profile ) {
                 );
         }
 
-        if (
-                'stored' === $profile['source']
-                && ! $profile['available']
-        ) {
+        if ( empty( $profile['complete'] ) ) {
                 return array(
-                        'key'   => 'preparing',
-                        'label' => 'EN PREPARACIÓN',
+                        'key'   => 'incomplete',
+                        'label' => 'INCOMPLETO',
                 );
         }
 
-        if ( $profile['available'] ) {
+        if ( ! empty( $profile['enabled'] ) ) {
                 return array(
-                        'key'   => 'available',
-                        'label' => 'DISPONIBLE',
+                        'key'   => 'enabled',
+                        'label' => 'HABILITADO',
                 );
         }
 
         return array(
-                'key'   => 'unavailable',
-                'label' => 'NO DISPONIBLE',
+                'key'   => 'error',
+                'label' => 'ERROR',
         );
 }
 
@@ -742,7 +740,6 @@ function bitacora_handle_update_profile_sections() {
 					'name'  => $section_name,
 					'slug'  => $section_slug,
 					'order' => $order,
-					'area'  => 'main',
 					'state' => 'active',
 				);
 			}
@@ -1848,7 +1845,7 @@ function bitacora_render_profiles_admin_page() {
                 <?php if ( 'created' === $notice ) : ?>
 
                         <div class="notice notice-success inline">
-                                <p>Perfil creado. Ahora está EN PREPARACIÓN.</p>
+                                <p>Perfil creado. Ahora está INCOMPLETO.</p>
                         </div>
 
                 <?php elseif ( 'create_error' === $notice ) : ?>
@@ -2000,7 +1997,7 @@ function bitacora_render_profiles_admin_page() {
 
                                                                 <?php
                                                                 if (
-                                                                        'preparing'
+                                                                        'incomplete'
                                                                         === $status['key']
                                                                 ) :
                                                                         ?>
