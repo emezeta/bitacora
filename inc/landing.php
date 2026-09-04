@@ -25,8 +25,6 @@ function obras_render_landing_page() {
             <img src="<?php echo esc_url( $logo ); ?>" alt="Bitácora">
         </div>
 
-        <h1>Bitácora</h1>
-
         <p class="subtitle">
             Registro y seguimiento de proyectos y procesos.<br>
             Avances, apuntes, ideas y referencias en un solo lugar.
