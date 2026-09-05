@@ -20,7 +20,7 @@ return array(
 
     /*
      * El contenedor principal usa los defaults del sistema:
-     * Notas / Nota / Nueva nota.
+     * Bitácora / Entrada / Nueva entrada.
      *
      * Construcción añade comentarios al core.
      */

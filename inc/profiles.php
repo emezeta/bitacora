@@ -25,12 +25,12 @@ defined( 'ABSPATH' ) || exit;
 function bitacora_get_default_core_section_definition() {
 
     return array(
-        'name'      => 'Notas',
+        'name'      => 'Bitácora',
         'slug'      => 'notas',
-        'singular'  => 'Nota',
-        'plural'    => 'Notas',
+        'singular'  => 'Entrada',
+        'plural'    => 'Bitácora',
         'subtitle'  => '',
-        'new_label' => 'Nueva nota',
+        'new_label' => 'Nueva entrada',
         'order'     => 0,
         'area'      => 'main',
         'state'     => 'active',
@@ -99,7 +99,7 @@ function bitacora_load_profile( $profile_id ) {
      * El core pertenece al sistema, no a la lista de secciones
      * opcionales del perfil.
      *
-     * Si el perfil no lo configura, se usa Notas.
+     * Si el perfil no lo configura, se usa Bitácora.
      */
     $core_overrides = isset( $profile['core'] )
         ? $profile['core']
@@ -223,7 +223,7 @@ function bitacora_validate_profile( $profile_id ) {
         $section_slugs[ $slug ] = true;
 
         /*
-         * Notas/core pertenece siempre a main.
+         * Bitácora/core pertenece siempre a main.
          *
          * Una sección complementaria sin "area" es válida durante la
          * construcción del perfil, pero mantiene el perfil incompleto.

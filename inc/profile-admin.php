@@ -1209,7 +1209,7 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 
 	$core_name = ! empty( $profile['core']['name'] )
 		? (string) $profile['core']['name']
-		: 'Notas';
+		: 'Bitácora';
 
 	$core_classes = array();
 
@@ -1531,7 +1531,7 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 				'label'      => trim(
 					(string) (
 						$profile['core']['name']
-						?? 'Notas'
+						?? 'Bitácora'
 					)
 				),
 				'section'    => $profile['core'],
