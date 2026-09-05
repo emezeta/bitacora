@@ -82,14 +82,14 @@ function bitacora_get_profile_admin_status( $profile ) {
         if ( empty( $profile['complete'] ) ) {
                 return array(
                         'key'   => 'incomplete',
-                        'label' => 'INCOMPLETO',
+                        'label' => 'EN CONSTRUCCIÓN',
                 );
         }
 
         if ( ! empty( $profile['enabled'] ) ) {
                 return array(
                         'key'   => 'enabled',
-                        'label' => 'HABILITADO',
+                        'label' => 'DISPONIBLE',
                 );
         }
 
@@ -1845,7 +1845,7 @@ function bitacora_render_profiles_admin_page() {
                 <?php if ( 'created' === $notice ) : ?>
 
                         <div class="notice notice-success inline">
-                                <p>Perfil creado. Ahora está INCOMPLETO.</p>
+                                <p>Perfil creado. Ahora está EN CONSTRUCCIÓN.</p>
                         </div>
 
                 <?php elseif ( 'create_error' === $notice ) : ?>
