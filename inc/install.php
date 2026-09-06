@@ -1089,4 +1089,126 @@ function bitacora_configure_profile( $profile_id ) {
 
 }
 
+/**
+ * Pone un perfil disponible en uso.
+ *
+ * Si existe una Bitácora materializada, primero valida completamente
+ * el perfil de destino y luego desmonta la actual.
+ *
+ * No existe rollback de la Bitácora saliente: si la posterior
+ * materialización del destino falla, la instalación queda sin
+ * perfil en uso y puede reintentarse la configuración.
+ */
+function bitacora_change_profile( $profile_id ) {
+
+    $profile_id = sanitize_key( (string) $profile_id );
+
+    if ( '' === $profile_id ) {
+        return new WP_Error(
+            'bitacora_profile_required',
+            'Debe indicarse un perfil para poner en uso.'
+        );
+    }
+
+    $current_profile_id = bitacora_get_configured_profile_id();
+
+    if ( $profile_id === $current_profile_id ) {
+        return new WP_Error(
+            'bitacora_profile_already_in_use',
+            'El perfil indicado ya está EN USO.'
+        );
+    }
+
+    /*
+     * Validar completamente el destino antes de tocar la
+     * Bitácora actualmente materializada.
+     */
+    if ( ! bitacora_load_profile( $profile_id ) ) {
+        return new WP_Error(
+            'bitacora_profile_not_found',
+            sprintf(
+                'No se pudo cargar el perfil "%s".',
+                $profile_id
+            )
+        );
+    }
+
+    $validation = bitacora_validate_profile( $profile_id );
+
+    if ( empty( $validation['enabled'] ) ) {
+        return new WP_Error(
+            'bitacora_profile_not_available',
+            sprintf(
+                'El perfil "%s" no está DISPONIBLE para usar.',
+                $profile_id
+            ),
+            $validation
+        );
+    }
+
+    $dependency_problems = obras_theme_check_dependencies();
+
+    if ( ! empty( $dependency_problems ) ) {
+        return new WP_Error(
+            'bitacora_dependencies_not_ready',
+            'No se puede cambiar de perfil hasta resolver las dependencias de Bitácora.',
+            $dependency_problems
+        );
+    }
+
+    $report = array(
+        'from'      => $current_profile_id,
+        'to'        => $profile_id,
+        'teardown'  => null,
+        'configure' => null,
+    );
+
+    /*
+     * Si existe una Bitácora en uso, terminarla completamente.
+     */
+    if ( '' !== $current_profile_id ) {
+
+        $teardown = bitacora_remove_configured_profile();
+
+        if ( is_wp_error( $teardown ) ) {
+            return $teardown;
+        }
+
+        $report['teardown'] = $teardown;
+
+        if (
+            ! empty( $teardown['errors'] )
+            || ! empty( $teardown['configured'] )
+        ) {
+            return new WP_Error(
+                'bitacora_profile_teardown_failed',
+                'No se pudo desmontar completamente la Bitácora en uso.',
+                $report
+            );
+        }
+    }
+
+    /*
+     * La instalación está ahora limpia y sin perfil en uso.
+     * Reutilizar la configuración normal ya probada.
+     */
+    $configured = bitacora_configure_profile( $profile_id );
+
+    if ( is_wp_error( $configured ) ) {
+        return new WP_Error(
+            'bitacora_profile_configuration_failed',
+            $configured->get_error_message(),
+            array(
+                'change' => $report,
+                'cause'  => $configured,
+            )
+        );
+    }
+
+    $report['configure'] = $configured;
+
+    return $report;
+}
+
+
 /* La configuración de perfiles es explícita y no ocurre al activar el theme. */
