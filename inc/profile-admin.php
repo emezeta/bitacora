@@ -1451,7 +1451,15 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 
 		<hr class="bitacora-profile-separator">
 
-		<h2 class="bitacora-profile-group-title"><?php echo esc_html( 'Tipos de contenido de ' . $core_name ); ?></h2>
+		<h2 class="bitacora-profile-group-title"><?php echo esc_html( 'Tipos de contenido de ' . $core_name . ' (opcional)' ); ?></h2>
+
+		<p>
+		        Los tipos permiten distinguir distintas clases de entradas
+		        dentro de una sección. En Bitácora suele ser útil definir
+		        varios, por ejemplo: <strong>Observación</strong>,
+		        <strong>Novedad</strong> o <strong>Referencia</strong>.
+		</p>
+
 
 		<form
 			method="post"
@@ -1780,7 +1788,13 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 
 		<hr class="bitacora-profile-separator">
 
-		<h2 class="bitacora-profile-group-title">Tipos de contenido por sección</h2>
+		<h2 class="bitacora-profile-group-title">Tipos de contenido por sección (opcional)</h2>
+
+		<p>
+		        Usalos cuando necesites clasificar las entradas de una sección.
+		        Una sección puede funcionar sin tipos de contenido.
+		</p>
+
 
 		<?php if ( empty( $profile_sections ) ) : ?>
 
@@ -1941,7 +1955,7 @@ function bitacora_render_profiles_admin_page() {
                 <?php if ( 'created' === $notice ) : ?>
 
                         <div class="notice notice-success inline">
-                                <p>Perfil creado. Ahora está EN CONSTRUCCIÓN.</p>
+                                <p>Perfil creado.</p>
                         </div>
 
                 <?php elseif ( 'create_error' === $notice ) : ?>

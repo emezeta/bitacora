@@ -258,7 +258,7 @@ function bitacora_validate_profile( $profile_id ) {
 
     /*
      * La colección de clases debe ser estructuralmente válida.
-     * Un array vacío es válido, pero deja el perfil incompleto.
+     * Un array vacío es válido: los tipos de contenido son opcionales.
      */
     if (
         ! isset( $profile['classes'] )
@@ -266,10 +266,6 @@ function bitacora_validate_profile( $profile_id ) {
     ) {
         $report['errors'][] = 'La definición de clases no es válida.';
         return $report;
-    }
-
-    if ( empty( $profile['classes'] ) ) {
-        $complete = false;
     }
 
     $class_slugs = array();
