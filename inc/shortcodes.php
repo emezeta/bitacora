@@ -327,6 +327,18 @@ function obras_render_dashboard_frontend() {
         'Nuevo contenido'
     );
 
+    $main_sections = bitacora_get_sections(
+        array(
+            'area'  => 'main',
+            'state' => 'active',
+            'role'  => 'section',
+        )
+    );
+
+    if ( is_wp_error( $main_sections ) ) {
+        return '<p>No fue posible cargar las secciones.</p>';
+    }
+
     ob_start();
     ?>
     <div class="obras-dashboard">
@@ -345,25 +357,28 @@ function obras_render_dashboard_frontend() {
     <?php echo esc_html( $core_plural ); ?>
     </a>
 
-    <a href="<?php echo esc_url( home_url( '/documentos/' ) ); ?>" class="obras-button secondary">
-    <span class="icon">📄</span>
-    Documentos
+    <?php foreach ( $main_sections as $section ) : ?>
+
+    <?php
+    $page = get_page_by_path(
+        $section->slug,
+        OBJECT,
+        'page'
+    );
+
+    $url = $page
+        ? get_permalink( $page )
+        : home_url(
+            '/' . $section->slug . '/'
+        );
+    ?>
+
+    <a href="<?php echo esc_url( $url ); ?>" class="obras-button secondary">
+    <span class="icon">🧩</span>
+    <?php echo esc_html( $section->name ); ?>
     </a>
 
-    <a href="<?php echo esc_url( home_url( '/materiales/' ) ); ?>" class="obras-button secondary">
-    <span class="icon">🧰</span>
-    Materiales
-    </a>
-
-    <a href="<?php echo esc_url( home_url( '/catalogos/' ) ); ?>" class="obras-button secondary">
-    <span class="icon">📚</span>
-    Catálogos
-    </a>
-
-    <a href="<?php echo esc_url( home_url( '/planos/' ) ); ?>" class="obras-button secondary">
-    <span class="icon">📐</span>
-    Planos
-    </a>
+    <?php endforeach; ?>
     </div>
 
     <div class="obras-dashboard-more">
