@@ -504,6 +504,229 @@ function bitacora_register_profile_use( $profile_id ) {
 }
 
 
+/**
+ * Desmonta por completo la Bitácora actualmente en uso.
+ *
+ * El perfil persiste como definición reutilizable, pero se eliminan
+ * todos los datos y toda la estructura materializada de su uso actual.
+ *
+ * La infraestructura general de WordPress y de Bitácora permanece:
+ * usuarios, roles, perfiles almacenados, Inicio y Más secciones.
+ */
+function bitacora_remove_configured_profile() {
+
+    $profile_id = bitacora_get_configured_profile_id();
+
+    if ( '' === $profile_id ) {
+        return new WP_Error(
+            'bitacora_profile_not_configured',
+            'Bitácora no tiene un perfil en uso para desafectar.'
+        );
+    }
+
+    $report = array(
+        'profile'             => $profile_id,
+        'items_deleted'       => 0,
+        'attachments_deleted' => 0,
+        'pages_deleted'       => 0,
+        'classes_deleted'     => 0,
+        'sections_deleted'    => 0,
+        'errors'              => array(),
+        'configured'          => true,
+    );
+
+    $all_post_statuses = array_values(
+        get_post_stati( array(), 'names' )
+    );
+
+    /*
+     * 1. Contenido producido por la Bitácora en uso.
+     *
+     * wp_delete_post( ..., true ) elimina también postmeta,
+     * relaciones de taxonomía y comentarios asociados.
+     */
+    $item_ids = get_posts(
+        array(
+            'post_type'      => 'bitacora_item',
+            'post_status'    => $all_post_statuses,
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+        )
+    );
+
+    foreach ( $item_ids as $item_id ) {
+
+        if ( ! wp_delete_post( $item_id, true ) ) {
+            $report['errors'][] = sprintf(
+                'No se pudo eliminar el bitacora_item %d.',
+                $item_id
+            );
+            continue;
+        }
+
+        $report['items_deleted']++;
+    }
+
+    /*
+     * 2. Biblioteca de medios.
+     *
+     * Una instalación de Bitácora mantiene una sola Bitácora
+     * materializada. Al desafectarla no quedan medios de ese uso.
+     */
+    $attachment_ids = get_posts(
+        array(
+            'post_type'      => 'attachment',
+            'post_status'    => $all_post_statuses,
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+        )
+    );
+
+    foreach ( $attachment_ids as $attachment_id ) {
+
+        if ( ! wp_delete_attachment( $attachment_id, true ) ) {
+            $report['errors'][] = sprintf(
+                'No se pudo eliminar el attachment %d.',
+                $attachment_id
+            );
+            continue;
+        }
+
+        $report['attachments_deleted']++;
+    }
+
+    /*
+     * 3. Páginas pertenecientes a secciones materializadas.
+     *
+     * Inicio y Más secciones son infraestructura general y por eso
+     * no contienen el shortcode bitacora_section.
+     */
+    $pages = get_posts(
+        array(
+            'post_type'      => 'page',
+            'post_status'    => $all_post_statuses,
+            'posts_per_page' => -1,
+        )
+    );
+
+    foreach ( $pages as $page ) {
+
+        if (
+            ! preg_match(
+                '/\[bitacora_section(?:\s|\])/i',
+                (string) $page->post_content
+            )
+        ) {
+            continue;
+        }
+
+        if ( ! wp_delete_post( $page->ID, true ) ) {
+            $report['errors'][] = sprintf(
+                'No se pudo eliminar la página de sección %d.',
+                $page->ID
+            );
+            continue;
+        }
+
+        $report['pages_deleted']++;
+    }
+
+    /*
+     * 4. Tipos materializados.
+     */
+    $class_ids = get_terms(
+        array(
+            'taxonomy'   => 'bitacora_class',
+            'hide_empty' => false,
+            'fields'     => 'ids',
+        )
+    );
+
+    if ( is_wp_error( $class_ids ) ) {
+
+        $report['errors'][] = $class_ids->get_error_message();
+
+    } else {
+
+        foreach ( $class_ids as $class_id ) {
+
+            $deleted = wp_delete_term(
+                $class_id,
+                'bitacora_class'
+            );
+
+            if ( is_wp_error( $deleted ) || false === $deleted ) {
+                $report['errors'][] = sprintf(
+                    'No se pudo eliminar el tipo %d.',
+                    $class_id
+                );
+                continue;
+            }
+
+            $report['classes_deleted']++;
+        }
+    }
+
+    /*
+     * 5. Secciones materializadas.
+     */
+    $section_ids = get_terms(
+        array(
+            'taxonomy'   => 'bitacora_section',
+            'hide_empty' => false,
+            'fields'     => 'ids',
+        )
+    );
+
+    if ( is_wp_error( $section_ids ) ) {
+
+        $report['errors'][] = $section_ids->get_error_message();
+
+    } else {
+
+        foreach ( $section_ids as $section_id ) {
+
+            $deleted = wp_delete_term(
+                $section_id,
+                'bitacora_section'
+            );
+
+            if ( is_wp_error( $deleted ) || false === $deleted ) {
+                $report['errors'][] = sprintf(
+                    'No se pudo eliminar la sección %d.',
+                    $section_id
+                );
+                continue;
+            }
+
+            $report['sections_deleted']++;
+        }
+    }
+
+    /*
+     * Sólo liberar el estado EN USO cuando el desmontaje terminó
+     * completamente. Si hubo errores, conservarlo permite corregir
+     * el problema y volver a ejecutar esta operación.
+     */
+    if ( empty( $report['errors'] ) ) {
+        delete_option( 'bitacora_configured_profile' );
+    }
+
+    $report['configured'] =
+        '' !== bitacora_get_configured_profile_id();
+
+    if (
+        empty( $report['errors'] )
+        && $report['configured']
+    ) {
+        $report['errors'][] =
+            'No se pudo eliminar el estado de perfil EN USO.';
+    }
+
+    return $report;
+}
+
+
 function bitacora_configure_profile( $profile_id ) {
 
         $profile_id = sanitize_key( (string) $profile_id );
