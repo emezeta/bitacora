@@ -371,7 +371,7 @@ function bitacora_create_stored_profile( $label, $definition = null ) {
  * El guardado reemplaza atómicamente el documento completo de definición.
  * La identidad técnica y la denominación no forman parte de esta operación.
  *
- * Un perfil que está o estuvo en uso no puede modificarse.
+ * Un perfil actualmente en uso no puede modificarse.
  *
  * Devuelve el resultado del guardado junto con su validación actual,
  * o WP_Error.
@@ -437,18 +437,6 @@ function bitacora_update_stored_profile_definition(
                 return new WP_Error(
                         'bitacora_profile_in_use',
                         'No se puede modificar la definición del perfil que está en uso.'
-                );
-        }
-
-        /*
-         * Desde su primer uso, un UUID representa una definición histórica.
-         * Modificarla posteriormente haría que la misma identidad técnica
-         * pasara a describir configuraciones diferentes.
-         */
-        if ( bitacora_profile_was_used( $profile_id ) ) {
-                return new WP_Error(
-                        'bitacora_profile_already_used',
-                        'No se puede modificar la definición de un perfil que ya fue usado.'
                 );
         }
 
@@ -589,7 +577,6 @@ function bitacora_get_bundled_profile_ids() {
  * - resolvable
  * - available
  * - in_use
- * - was_used
  * - editable
  * - deletable
  * - errors
@@ -771,21 +758,16 @@ function bitacora_get_profile_catalog() {
                         && $profile_id === $configured_profile_id
                 );
 
-                $was_used = bitacora_profile_was_used(
-                        $profile_id
-                );
-
                 /*
                  * Editable no es una decisión de UI.
                  *
-                 * Sólo un perfil persistente, resoluble y nunca usado puede
-                 * cambiar su definición.
+                 * Sólo un perfil persistente y resoluble que no esté en uso
+                 * puede cambiar su definición.
                  */
                 $editable = (
                         'stored' === $source
                         && $resolvable
                         && ! $in_use
-                        && ! $was_used
                 );
 
                 /*
@@ -799,7 +781,6 @@ function bitacora_get_profile_catalog() {
                         'stored' === $source
                         && $resolvable
                         && ! $in_use
-                        && ! $was_used
                 );
 
                 $catalog[] = array(
@@ -812,7 +793,6 @@ function bitacora_get_profile_catalog() {
                         'enabled'    => $enabled,
                         'available'  => $available,
                         'in_use'     => $in_use,
-                        'was_used'   => $was_used,
                         'editable'   => $editable,
                         'deletable'  => $deletable,
                         'errors'     => $errors,
@@ -848,10 +828,10 @@ function bitacora_get_profile_catalog() {
 
 
 /**
- * Elimina definitivamente un perfil persistente que nunca estuvo en uso.
+ * Elimina definitivamente un perfil persistente que no está en uso.
  *
- * Los perfiles incluidos, actualmente en uso, previamente usados o con una
- * identidad ambigua no pueden eliminarse mediante esta API.
+ * Los perfiles incluidos, actualmente en uso o con una identidad ambigua
+ * no pueden eliminarse mediante esta API.
  *
  * Devuelve post_id + profile_id o WP_Error.
  */
@@ -922,23 +902,12 @@ function bitacora_delete_stored_profile( $profile_id ) {
                 );
         }
 
-        /*
-         * Desde su primer uso, el UUID adquiere significado histórico.
-         * El registro debe conservarse aunque el perfil ya no esté en uso.
-         */
-        if ( bitacora_profile_was_used( $profile_id ) ) {
-                return new WP_Error(
-                        'bitacora_profile_already_used',
-                        'No se puede eliminar un perfil que ya fue usado.'
-                );
-        }
-
         $post_id = (int) $post_ids[0];
 
         /*
          * Eliminación definitiva deliberada:
-         * un perfil nunca usado es una configuración de trabajo sin
-         * significado histórico que justifique conservarla en Papelera.
+         * un perfil persistente fuera de uso es sólo un esqueleto de
+         * configuración y puede eliminarse definitivamente.
          */
         $deleted = wp_delete_post(
                 $post_id,

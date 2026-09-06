@@ -1199,8 +1199,6 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 		'bitacora_profile_in_use' =>
 			'No se puede modificar un perfil que está en uso.',
 
-		'bitacora_profile_already_used' =>
-			'No se puede modificar un perfil que ya fue usado.',
 
 		'bitacora_profile_definition_invalid' =>
 			'La definición persistida del perfil no es válida.',
