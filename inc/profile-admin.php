@@ -657,6 +657,14 @@ function bitacora_handle_update_profile_sections() {
 				? $definition['sections']
 				: array();
 
+                $raw_areas = isset( $_POST['profile_section_areas'] )
+                        && is_array( $_POST['profile_section_areas'] )
+                                ? wp_unslash(
+                                        $_POST['profile_section_areas']
+                                )
+                                : array();
+
+
 		$existing_sections_by_slug = array();
 
 		foreach ( $existing_sections as $existing_section ) {
@@ -743,6 +751,37 @@ function bitacora_handle_update_profile_sections() {
 					'state' => 'active',
 				);
 			}
+
+
+                        if ( array_key_exists( $section_slug, $raw_areas ) ) {
+
+                                $area = sanitize_key(
+                                        (string) $raw_areas[ $section_slug ]
+                                );
+
+                                if ( '' === $area ) {
+
+                                        unset( $section['area'] );
+
+                                } elseif (
+                                        in_array(
+                                                $area,
+                                                array( 'main', 'more' ),
+                                                true
+                                        )
+                                ) {
+
+                                        $section['area'] = $area;
+
+                                } else {
+
+                                        $result = new WP_Error(
+                                                'bitacora_profile_definition_invalid',
+                                                'La organización de una sección no es válida.'
+                                        );
+                                        break;
+                                }
+                        }
 
 			$sections[ $section_slug ] = $section;
 
@@ -1348,6 +1387,28 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 	?>
 	<div class="wrap bitacora-profiles-admin">
 
+                <style>
+                        .bitacora-profiles-admin .bitacora-profile-separator {
+                                border: 0;
+                                border-top: 2px solid #a7aaad;
+                                margin: 28px 0 18px;
+                        }
+
+                        .bitacora-profiles-admin .bitacora-profile-group-title {
+                                font-size: 20px;
+                                font-weight: 600;
+                                line-height: 1.3;
+                        }
+
+                        .bitacora-profiles-admin .bitacora-profile-item-title {
+                                font-size: 16px;
+                                font-weight: 600;
+                                line-height: 1.4;
+                                margin: 24px 0 8px;
+                        }
+                </style>
+
+
 		<h1>Editar perfil</h1>
 
 		<p>
@@ -1388,12 +1449,9 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 			<?php echo esc_html( $status['label'] ); ?>
 		</p>
 
-		<hr>
+		<hr class="bitacora-profile-separator">
 
-		<h2>
-			Tipos de contenido de
-			<?php echo esc_html( $core_name ); ?>
-		</h2>
+		<h2 class="bitacora-profile-group-title"><?php echo esc_html( 'Tipos de contenido de ' . $core_name ); ?></h2>
 
 		<form
 			method="post"
@@ -1452,9 +1510,9 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 			</p>
 		</form>
 
-		<hr>
+		<hr class="bitacora-profile-separator">
 
-		<h2>Secciones complementarias</h2>
+		<h2 class="bitacora-profile-group-title">Secciones complementarias</h2>
 
 		<form
 			method="post"
@@ -1501,6 +1559,50 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 				); ?></textarea>
 			</p>
 
+
+                        <?php if ( ! empty( $profile['sections'] ) ) : ?>
+
+                                <hr class="bitacora-profile-separator">
+
+                                <h2 class="bitacora-profile-group-title">Ubicación de las secciones</h2>
+
+                                <p>
+                                        Elegí dónde aparecerá cada sección en la interfaz.
+                                        Podés dejarla sin asignar mientras construís el perfil.
+                                </p>
+
+                                <?php foreach ( $profile['sections'] as $section_id => $section ) : ?>
+                                        <?php
+                                        $section_name = (string) (
+                                                $section['name'] ?? $section_id
+                                        );
+
+                                        $section_slug = sanitize_title(
+                                                (string) (
+                                                        $section['slug'] ?? $section_id
+                                                )
+                                        );
+
+                                        $area = array_key_exists( 'area', $section )
+                                                ? (string) $section['area']
+                                                : '';
+                                        ?>
+
+                                        <p>
+                                                <label>
+                                                        <strong><?php echo esc_html( $section_name ); ?></strong>
+                                                        <select name="profile_section_areas[<?php echo esc_attr( $section_slug ); ?>]">
+                                                                <option value="" <?php selected( '', $area ); ?>>Sin asignar</option>
+                                                                <option value="main" <?php selected( 'main', $area ); ?>>Principal</option>
+                                                                <option value="more" <?php selected( 'more', $area ); ?>>Más secciones</option>
+                                                        </select>
+                                                </label>
+                                        </p>
+
+                                <?php endforeach; ?>
+
+                        <?php endif; ?>
+
 			<p>
 				<?php
 				submit_button(
@@ -1513,11 +1615,9 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 			</p>
 		</form>
 
-		<hr>
+		<hr class="bitacora-profile-separator">
 
-		<hr>
-
-		<h2>Funciones por sección</h2>
+		<h2 class="bitacora-profile-group-title">Funciones por sección</h2>
 
 		<p>
 			Activá las funciones que correspondan a cada sección.
@@ -1678,9 +1778,9 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 
 		<?php endforeach; ?>
 
-		<hr>
+		<hr class="bitacora-profile-separator">
 
-		<h2>Tipos de contenido por sección</h2>
+		<h2 class="bitacora-profile-group-title">Tipos de contenido por sección</h2>
 
 		<?php if ( empty( $profile_sections ) ) : ?>
 
@@ -1699,11 +1799,7 @@ function bitacora_render_profile_edit_admin_page( $profile_id ) {
 				);
 				?>
 
-				<h3>
-					<?php echo esc_html(
-						'Tipos de contenido de ' . $section_name
-					); ?>
-				</h3>
+				<h3 class="bitacora-profile-item-title"><?php echo esc_html( $section_name ); ?></h3>
 
 				<form
 					method="post"
