@@ -644,14 +644,11 @@ function bitacora_seed_profile_classes( $profile_id ) {
         );
     }
 
-    if (
-        empty( $profile['classes'] )
-        || ! is_array( $profile['classes'] )
-    ) {
+    if ( ! isset( $profile['classes'] ) || ! is_array( $profile['classes'] ) ) {
         return new WP_Error(
             'bitacora_profile_classes_not_found',
             sprintf(
-                'El perfil "%s" no contiene clases.',
+                'La definición de clases del perfil "%s" no es válida.',
                 $profile['id']
             )
         );
