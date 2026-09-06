@@ -157,6 +157,80 @@ function bitacora_handle_create_profile() {
  * Guarda los tipos de contenido del core de un perfil editable.
  */
 /**
+ * Pone un perfil disponible en uso desde la administración.
+ */
+add_action(
+    'admin_post_bitacora_use_profile',
+    'bitacora_handle_use_profile'
+);
+
+function bitacora_handle_use_profile() {
+
+    if ( ! current_user_can( 'manage_bitacora_profiles' ) ) {
+        wp_die(
+            esc_html__(
+                'No tenés permisos para administrar perfiles.',
+                'bitacora'
+            )
+        );
+    }
+
+    check_admin_referer(
+        'bitacora_use_profile',
+        'bitacora_use_profile_nonce'
+    );
+
+    $profile_id = isset( $_POST['profile_id'] )
+        ? sanitize_key(
+            wp_unslash( $_POST['profile_id'] )
+        )
+        : '';
+
+    $expected_profile_id = isset( $_POST['current_profile_id'] )
+        ? sanitize_key(
+            wp_unslash( $_POST['current_profile_id'] )
+        )
+        : '';
+
+    $current_profile_id = bitacora_get_configured_profile_id();
+
+    if ( $expected_profile_id !== $current_profile_id ) {
+
+        $result = new WP_Error(
+            'bitacora_profile_state_changed',
+            'El perfil en uso cambió desde que se presentó esta acción.'
+        );
+
+    } else {
+
+        $result = bitacora_change_profile( $profile_id );
+    }
+
+    if ( is_wp_error( $result ) ) {
+
+        $redirect = add_query_arg(
+            array(
+                'bitacora_profile_notice' => 'use_error',
+                'bitacora_profile_error'  => $result->get_error_code(),
+            ),
+            bitacora_get_profiles_admin_url()
+        );
+
+    } else {
+
+        $redirect = add_query_arg(
+            'bitacora_profile_notice',
+            'used',
+            bitacora_get_profiles_admin_url()
+        );
+    }
+
+    wp_safe_redirect( $redirect );
+    exit;
+}
+
+
+/**
  * Construye las clases de una sección desde una lista de nombres.
  *
  * El operador define solamente los nombres. La identidad técnica,
@@ -1923,6 +1997,42 @@ function bitacora_render_profiles_admin_page() {
 
         $catalog = bitacora_get_profile_catalog();
 
+        $current_profile_id = bitacora_get_configured_profile_id();
+
+        $confirm_profile_id = isset( $_GET['confirm_profile'] )
+            ? sanitize_key(
+                wp_unslash( $_GET['confirm_profile'] )
+            )
+            : '';
+
+        $current_profile_label = '';
+        $confirm_profile       = false;
+
+        foreach ( $catalog as $catalog_profile ) {
+
+            if (
+                $current_profile_id === $catalog_profile['id']
+            ) {
+                $current_profile_label =
+                    (string) $catalog_profile['label'];
+            }
+
+            if (
+                '' !== $current_profile_id
+                && $confirm_profile_id === $catalog_profile['id']
+            ) {
+                $confirm_status =
+                    bitacora_get_profile_admin_status(
+                        $catalog_profile
+                    );
+
+                if ( 'enabled' === $confirm_status['key'] ) {
+                    $confirm_profile = $catalog_profile;
+                }
+            }
+        }
+
+
         $notice = isset( $_GET['bitacora_profile_notice'] )
                 ? sanitize_key(
                         wp_unslash( $_GET['bitacora_profile_notice'] )
@@ -1977,6 +2087,125 @@ function bitacora_render_profiles_admin_page() {
                                         }
                                         ?>
                                 </p>
+                        </div>
+
+                <?php endif; ?>
+
+                <?php if ( 'used' === $notice ) : ?>
+
+                        <div class="notice notice-success inline">
+                                <p>Perfil puesto en uso.</p>
+                        </div>
+
+                <?php elseif ( 'use_error' === $notice ) : ?>
+
+                        <div class="notice notice-error inline">
+                                <p>
+                                        <?php
+                                        if (
+                                            'bitacora_profile_state_changed'
+                                            === $error_code
+                                        ) {
+                                            echo esc_html(
+                                                'El perfil en uso cambió. Revisá el estado actual antes de continuar.'
+                                            );
+                                        } else {
+                                            echo esc_html(
+                                                'No se pudo poner el perfil en uso.'
+                                            );
+                                        }
+                                        ?>
+                                </p>
+                        </div>
+
+                <?php endif; ?>
+
+                <?php if ( $confirm_profile ) : ?>
+
+                        <div class="notice notice-warning inline">
+
+                                <h2>Confirmar cambio de perfil</h2>
+
+                                <p>
+                                        Vas a cambiar de
+                                        <strong><?php
+                                        echo esc_html(
+                                            $current_profile_label
+                                                ?: 'la Bitácora actual'
+                                        );
+                                        ?></strong>
+                                        a
+                                        <strong><?php
+                                        echo esc_html(
+                                            $confirm_profile['label']
+                                        );
+                                        ?></strong>.
+                                </p>
+
+                                <p>
+                                        <strong>
+                                                Se eliminarán definitivamente
+                                                todas las entradas, comentarios,
+                                                archivos y secciones de la
+                                                Bitácora actualmente en uso.
+                                                Esta operación no se puede deshacer.
+                                        </strong>
+                                </p>
+
+                                <form
+                                        method="post"
+                                        action="<?php echo esc_url(
+                                            admin_url( 'admin-post.php' )
+                                        ); ?>"
+                                >
+                                        <input
+                                                type="hidden"
+                                                name="action"
+                                                value="bitacora_use_profile"
+                                        >
+
+                                        <input
+                                                type="hidden"
+                                                name="profile_id"
+                                                value="<?php echo esc_attr(
+                                                    $confirm_profile['id']
+                                                ); ?>"
+                                        >
+
+                                        <input
+                                                type="hidden"
+                                                name="current_profile_id"
+                                                value="<?php echo esc_attr(
+                                                    $current_profile_id
+                                                ); ?>"
+                                        >
+
+                                        <?php
+                                        wp_nonce_field(
+                                            'bitacora_use_profile',
+                                            'bitacora_use_profile_nonce'
+                                        );
+                                        ?>
+
+                                        <p>
+                                                <?php
+                                                submit_button(
+                                                    'Confirmar cambio',
+                                                    'primary',
+                                                    'submit',
+                                                    false
+                                                );
+                                                ?>
+
+                                                <a
+                                                        href="<?php echo esc_url(
+                                                            bitacora_get_profiles_admin_url()
+                                                        ); ?>"
+                                                        class="button button-secondary"
+                                                >Cancelar</a>
+                                        </p>
+                                </form>
+
                         </div>
 
                 <?php endif; ?>
@@ -2043,6 +2272,7 @@ function bitacora_render_profiles_admin_page() {
                                         <tr>
                                                 <th scope="col">Perfil</th>
                                                 <th scope="col">Estado</th>
+                                                <th scope="col">Acción</th>
                                         </tr>
                                 </thead>
 
@@ -2115,6 +2345,99 @@ function bitacora_render_profiles_admin_page() {
                                                                                 Todavía necesita completar su definición.
                                                                         </div>
                                                                 <?php endif; ?>
+                                                        </td>
+
+                                                        <td>
+
+                                                                <?php
+                                                                if (
+                                                                    'in_use'
+                                                                    === $status['key']
+                                                                ) :
+                                                                    ?>
+
+                                                                        <strong>Perfil actual</strong>
+
+                                                                <?php
+                                                                elseif (
+                                                                    'enabled'
+                                                                    === $status['key']
+                                                                ) :
+                                                                    ?>
+
+                                                                        <?php
+                                                                        if (
+                                                                            ''
+                                                                            === $current_profile_id
+                                                                        ) :
+                                                                            ?>
+
+                                                                                <form
+                                                                                        method="post"
+                                                                                        action="<?php echo esc_url(
+                                                                                            admin_url(
+                                                                                                'admin-post.php'
+                                                                                            )
+                                                                                        ); ?>"
+                                                                                >
+                                                                                        <input
+                                                                                                type="hidden"
+                                                                                                name="action"
+                                                                                                value="bitacora_use_profile"
+                                                                                        >
+
+                                                                                        <input
+                                                                                                type="hidden"
+                                                                                                name="profile_id"
+                                                                                                value="<?php echo esc_attr(
+                                                                                                    $profile['id']
+                                                                                                ); ?>"
+                                                                                        >
+
+                                                                                        <input
+                                                                                                type="hidden"
+                                                                                                name="current_profile_id"
+                                                                                                value="<?php echo esc_attr(
+                                                                                                    $current_profile_id
+                                                                                                ); ?>"
+                                                                                        >
+
+                                                                                        <?php
+                                                                                        wp_nonce_field(
+                                                                                            'bitacora_use_profile',
+                                                                                            'bitacora_use_profile_nonce'
+                                                                                        );
+
+                                                                                        submit_button(
+                                                                                            'Usar este perfil',
+                                                                                            'secondary',
+                                                                                            'submit',
+                                                                                            false
+                                                                                        );
+                                                                                        ?>
+                                                                                </form>
+
+                                                                        <?php else : ?>
+
+                                                                                <a
+                                                                                        href="<?php echo esc_url(
+                                                                                            add_query_arg(
+                                                                                                'confirm_profile',
+                                                                                                $profile['id'],
+                                                                                                bitacora_get_profiles_admin_url()
+                                                                                            )
+                                                                                        ); ?>"
+                                                                                        class="button button-secondary"
+                                                                                >Usar este perfil</a>
+
+                                                                        <?php endif; ?>
+
+                                                                <?php else : ?>
+
+                                                                        &mdash;
+
+                                                                <?php endif; ?>
+
                                                         </td>
                                                 </tr>
 
