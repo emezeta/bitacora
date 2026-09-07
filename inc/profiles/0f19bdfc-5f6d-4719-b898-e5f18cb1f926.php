@@ -42,7 +42,6 @@ return array(
             'state'     => 'active',
 
             'feature_file'      => true,
-            'feature_thumbnail' => false,
             'feature_location'  => false,
         ),
 
@@ -58,7 +57,6 @@ return array(
             'state'     => 'active',
 
             'feature_file'      => true,
-            'feature_thumbnail' => true,
             'feature_location'  => true,
         ),
 
@@ -74,7 +72,6 @@ return array(
             'state'     => 'active',
 
             'feature_file'      => true,
-            'feature_thumbnail' => false,
             'feature_location'  => false,
         ),
 
@@ -90,7 +87,6 @@ return array(
             'state'     => 'active',
 
             'feature_file'      => true,
-            'feature_thumbnail' => false,
             'feature_location'  => false,
         ),
 
@@ -106,7 +102,6 @@ return array(
             'state'     => 'active',
 
             'feature_file'      => true,
-            'feature_thumbnail' => false,
             'feature_location'  => false,
         ),
     ),

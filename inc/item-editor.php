@@ -653,40 +653,6 @@ function bitacora_prepare_item_location_field( $field ) {
 }
 
 
-/**
- * La imagen destacada es soporte físico del CPT, pero sólo debe
- * aparecer cuando la sección tenga feature=thumbnail.
- */
-add_action(
-    'add_meta_boxes_bitacora_item',
-    'bitacora_configure_item_thumbnail_metabox',
-    30
-);
-
-function bitacora_configure_item_thumbnail_metabox( $post ) {
-
-    $section = bitacora_get_item_editor_section(
-        $post instanceof WP_Post ? $post->ID : 0
-    );
-
-    if (
-        $section
-        && bitacora_section_has_feature(
-            $section,
-            'thumbnail'
-        )
-    ) {
-        return;
-    }
-
-    remove_meta_box(
-        'postimagediv',
-        'bitacora_item',
-        'side'
-    );
-}
-
-
 // ============================================================================
 // === ETIQUETAS CONTEXTUALES DEL EDITOR ======================================
 // ============================================================================

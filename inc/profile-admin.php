@@ -968,7 +968,6 @@ function bitacora_get_profile_admin_feature_fields() {
 
 	return array(
 		'feature_file'      => 'Archivo',
-		'feature_thumbnail' => 'Imagen destacada',
 		'feature_location'  => 'Ubicación',
 		'feature_comments'  => 'Comentarios',
 	);

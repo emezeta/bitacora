@@ -43,15 +43,10 @@ function bitacora_register_item_cpt() {
              */
             'rewrite'       => false,
 
-            /*
-             * thumbnail queda disponible a nivel físico.
-             * Cada sección decidirá posteriormente si lo utiliza.
-             */
             'supports'      => array(
                 'title',
                 'editor',
                 'author',
-                'thumbnail',
             ),
 
             'capability_type' => array(
@@ -321,7 +316,6 @@ function bitacora_get_section_meta( $section, $key, $default = '' ) {
  *
  * Features soportadas:
  * - file
- * - thumbnail
  * - location
  * - comments
  *
@@ -331,7 +325,6 @@ function bitacora_section_has_feature( $section, $feature ) {
 
     $meta_keys = array(
         'file'      => 'bitacora_section_feature_file',
-        'thumbnail' => 'bitacora_section_feature_thumbnail',
         'location'  => 'bitacora_section_feature_location',
         'comments'  => 'bitacora_section_feature_comments',
     );

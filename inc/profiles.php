@@ -36,7 +36,6 @@ function bitacora_get_default_core_section_definition() {
         'state'     => 'active',
 
         'feature_file'      => true,
-        'feature_thumbnail' => false,
         'feature_location'  => false,
         'feature_comments'  => false,
     );
@@ -366,14 +365,12 @@ function bitacora_profile_section_to_term_meta( $section ) {
         'role'              => 'bitacora_section_role',
 
         'feature_file'      => 'bitacora_section_feature_file',
-        'feature_thumbnail' => 'bitacora_section_feature_thumbnail',
         'feature_location'  => 'bitacora_section_feature_location',
         'feature_comments'  => 'bitacora_section_feature_comments',
     );
 
     $boolean_keys = array(
         'feature_file',
-        'feature_thumbnail',
         'feature_location',
         'feature_comments',
     );

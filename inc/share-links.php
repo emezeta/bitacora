@@ -550,11 +550,6 @@ function bitacora_render_shared_post( $post ) {
 
     $title = (string) $post->post_title;
 
-    $thumbnail = get_the_post_thumbnail(
-        $post->ID,
-        'large'
-    );
-
     $features = bitacora_get_shared_feature_html(
         $post->ID
     );
@@ -592,10 +587,6 @@ function bitacora_render_shared_post( $post ) {
                 height: auto;
             }
 
-            .bitacora-shared-thumbnail {
-                margin: 0 0 24px;
-            }
-
             .bitacora-shared-features {
                 margin-top: 24px;
             }
@@ -605,12 +596,6 @@ function bitacora_render_shared_post( $post ) {
         <main class="bitacora-shared-document">
             <article>
                 <h1><?php echo esc_html( $title ); ?></h1>
-
-                <?php if ( $thumbnail ) : ?>
-                    <div class="bitacora-shared-thumbnail">
-                        <?php echo $thumbnail; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-                    </div>
-                <?php endif; ?>
 
                 <div class="bitacora-shared-content">
                     <?php echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
