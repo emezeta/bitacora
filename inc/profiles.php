@@ -37,7 +37,7 @@ function bitacora_get_default_core_section_definition() {
 
         'feature_file'      => true,
         'feature_location'  => false,
-        'feature_comments'  => false,
+        'feature_comments'  => true,
     );
 }
 
