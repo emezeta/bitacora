@@ -154,8 +154,63 @@ function bitacora_handle_create_profile() {
 
 
 /**
- * Guarda los tipos de contenido del core de un perfil editable.
+ * Elimina un perfil persistente eliminable desde la administración.
  */
+add_action(
+    'admin_post_bitacora_delete_profile',
+    'bitacora_handle_delete_profile'
+);
+
+function bitacora_handle_delete_profile() {
+
+    if ( ! current_user_can( 'manage_bitacora_profiles' ) ) {
+        wp_die(
+            esc_html__(
+                'No tenés permisos para administrar perfiles.',
+                'bitacora'
+            )
+        );
+    }
+
+    $profile_id = isset( $_POST['profile_id'] )
+        ? sanitize_key(
+            wp_unslash( $_POST['profile_id'] )
+        )
+        : '';
+
+    check_admin_referer(
+        'bitacora_delete_profile_' . $profile_id,
+        'bitacora_delete_profile_nonce'
+    );
+
+    $result = bitacora_delete_stored_profile(
+        $profile_id
+    );
+
+    if ( is_wp_error( $result ) ) {
+
+        $redirect = add_query_arg(
+            array(
+                'bitacora_profile_notice' => 'delete_error',
+                'bitacora_profile_error'  => $result->get_error_code(),
+            ),
+            bitacora_get_profiles_admin_url()
+        );
+
+    } else {
+
+        $redirect = add_query_arg(
+            'bitacora_profile_notice',
+            'deleted',
+            bitacora_get_profiles_admin_url()
+        );
+    }
+
+    wp_safe_redirect( $redirect );
+    exit;
+}
+
+
 /**
  * Pone un perfil disponible en uso desde la administración.
  */
@@ -166,10 +221,10 @@ add_action(
 
 function bitacora_handle_use_profile() {
 
-    if ( ! current_user_can( 'manage_bitacora_profiles' ) ) {
+    if ( ! current_user_can( 'use_bitacora_profiles' ) ) {
         wp_die(
             esc_html__(
-                'No tenés permisos para administrar perfiles.',
+                'No tenés permisos para poner perfiles en uso.',
                 'bitacora'
             )
         );
@@ -384,6 +439,9 @@ function bitacora_replace_profile_section_classes(
 }
 
 
+/**
+ * Guarda los tipos de contenido del core de un perfil editable.
+ */
 add_action(
 	'admin_post_bitacora_update_profile_core_types',
 	'bitacora_handle_update_profile_core_types'
@@ -1199,6 +1257,12 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 			'No se puede modificar un perfil que está en uso.',
 
 
+		'bitacora_profile_not_deleted' =>
+			'No se pudo eliminar el perfil.',
+
+		'bitacora_profile_delete_not_confirmed' =>
+			'La eliminación del perfil no pudo confirmarse.',
+
 		'bitacora_profile_definition_invalid' =>
 			'La definición persistida del perfil no es válida.',
 
@@ -1251,9 +1315,7 @@ function bitacora_get_profile_admin_catalog_entry( $profile_id ) {
 
 
 /**
- * Primera pantalla de edición progresiva.
- *
- * Esta etapa es sólo lectura.
+ * Pantalla de edición progresiva de un perfil persistente.
  */
 function bitacora_render_profile_edit_admin_page( $profile_id ) {
 
@@ -2002,8 +2064,17 @@ function bitacora_render_profiles_admin_page() {
             )
             : '';
 
-        $current_profile_label = '';
-        $confirm_profile       = false;
+        $confirm_delete_profile_id = isset(
+            $_GET['confirm_delete_profile']
+        )
+            ? sanitize_key(
+                wp_unslash( $_GET['confirm_delete_profile'] )
+            )
+            : '';
+
+        $current_profile_label  = '';
+        $confirm_profile        = false;
+        $confirm_delete_profile = false;
 
         foreach ( $catalog as $catalog_profile ) {
 
@@ -2026,6 +2097,13 @@ function bitacora_render_profiles_admin_page() {
                 if ( 'enabled' === $confirm_status['key'] ) {
                     $confirm_profile = $catalog_profile;
                 }
+            }
+
+            if (
+                $confirm_delete_profile_id === $catalog_profile['id']
+                && ! empty( $catalog_profile['deletable'] )
+            ) {
+                $confirm_delete_profile = $catalog_profile;
             }
         }
 
@@ -2111,6 +2189,28 @@ function bitacora_render_profiles_admin_page() {
                                                 'No se pudo poner el perfil en uso.'
                                             );
                                         }
+                                        ?>
+                                </p>
+                        </div>
+
+                <?php endif; ?>
+
+                <?php if ( 'deleted' === $notice ) : ?>
+
+                        <div class="notice notice-success inline">
+                                <p>Perfil eliminado.</p>
+                        </div>
+
+                <?php elseif ( 'delete_error' === $notice ) : ?>
+
+                        <div class="notice notice-error inline">
+                                <p>
+                                        <?php
+                                        echo esc_html(
+                                            bitacora_get_profile_admin_error_message(
+                                                $error_code
+                                            )
+                                        );
                                         ?>
                                 </p>
                         </div>
@@ -2203,6 +2303,80 @@ function bitacora_render_profiles_admin_page() {
                                         </p>
                                 </form>
 
+                        </div>
+
+                <?php endif; ?>
+
+                <?php if ( $confirm_delete_profile ) : ?>
+
+                        <div class="notice notice-warning inline">
+
+                                <h2>Confirmar eliminación de perfil</h2>
+
+                                <p>
+                                        Vas a eliminar el perfil
+                                        <strong><?php
+                                        echo esc_html(
+                                            $confirm_delete_profile['label']
+                                        );
+                                        ?></strong>.
+                                </p>
+
+                                <p>
+                                        <strong>
+                                                Se eliminará únicamente su
+                                                definición editable.
+                                                Esta operación no se puede
+                                                deshacer.
+                                        </strong>
+                                </p>
+
+                                <form
+                                        method="post"
+                                        action="<?php echo esc_url(
+                                            admin_url( 'admin-post.php' )
+                                        ); ?>"
+                                >
+                                        <input
+                                                type="hidden"
+                                                name="action"
+                                                value="bitacora_delete_profile"
+                                        >
+
+                                        <input
+                                                type="hidden"
+                                                name="profile_id"
+                                                value="<?php echo esc_attr(
+                                                    $confirm_delete_profile['id']
+                                                ); ?>"
+                                        >
+
+                                        <?php
+                                        wp_nonce_field(
+                                            'bitacora_delete_profile_'
+                                                . $confirm_delete_profile['id'],
+                                            'bitacora_delete_profile_nonce'
+                                        );
+                                        ?>
+
+                                        <p>
+                                                <?php
+                                                submit_button(
+                                                    'Eliminar perfil',
+                                                    'secondary',
+                                                    'submit',
+                                                    false
+                                                );
+                                                ?>
+
+                                                <a
+                                                        href="<?php echo esc_url(
+                                                            bitacora_get_profiles_admin_url()
+                                                        ); ?>"
+                                                        class="button button-secondary"
+                                                >Cancelar</a>
+                                        </p>
+                                </form>
                         </div>
 
                 <?php endif; ?>
@@ -2303,6 +2477,19 @@ function bitacora_render_profiles_admin_page() {
 										>Editar</a>
 									</div>
 								<?php endif; ?>
+								<?php if ( ! empty( $profile['deletable'] ) ) : ?>
+									<div>
+										<a
+											href="<?php echo esc_url(
+												add_query_arg(
+													'confirm_delete_profile',
+													$profile['id'],
+													bitacora_get_profiles_admin_url()
+												)
+											); ?>"
+										>Eliminar</a>
+									</div>
+								<?php endif; ?>
 
                                                                 <?php
                                                                 if (
@@ -2359,6 +2546,9 @@ function bitacora_render_profiles_admin_page() {
                                                                 elseif (
                                                                     'enabled'
                                                                     === $status['key']
+                                                                    && current_user_can(
+                                                                        'use_bitacora_profiles'
+                                                                    )
                                                                 ) :
                                                                     ?>
 
