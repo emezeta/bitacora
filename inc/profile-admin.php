@@ -212,6 +212,56 @@ function bitacora_handle_delete_profile() {
 
 
 /**
+ * Devuelve el impacto de desmontar la Bitácora actualmente en uso.
+ *
+ * Estos conteos se usan tanto para informar al operador como para
+ * detectar cambios de contenido entre la confirmación y el envío.
+ */
+function bitacora_get_profile_change_impact() {
+
+    $all_post_statuses = array_values(
+        get_post_stati( array(), 'names' )
+    );
+
+    $item_ids = get_posts(
+        array(
+            'post_type'      => 'bitacora_item',
+            'post_status'    => $all_post_statuses,
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+        )
+    );
+
+    $attachment_ids = get_posts(
+        array(
+            'post_type'      => 'attachment',
+            'post_status'    => $all_post_statuses,
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+        )
+    );
+
+    $comments = 0;
+
+    if ( ! empty( $item_ids ) ) {
+        $comments = (int) get_comments(
+            array(
+                'post__in' => array_map( 'intval', $item_ids ),
+                'status'   => 'all',
+                'count'    => true,
+            )
+        );
+    }
+
+    return array(
+        'items'       => count( $item_ids ),
+        'comments'    => $comments,
+        'attachments' => count( $attachment_ids ),
+    );
+}
+
+
+/**
  * Pone un perfil disponible en uso desde la administración.
  */
 add_action(
@@ -249,12 +299,40 @@ function bitacora_handle_use_profile() {
 
     $current_profile_id = bitacora_get_configured_profile_id();
 
+    $expected_impact = array(
+        'items' => isset( $_POST['expected_items'] )
+            ? absint( $_POST['expected_items'] )
+            : 0,
+        'comments' => isset( $_POST['expected_comments'] )
+            ? absint( $_POST['expected_comments'] )
+            : 0,
+        'attachments' => isset( $_POST['expected_attachments'] )
+            ? absint( $_POST['expected_attachments'] )
+            : 0,
+    );
+
     if ( $expected_profile_id !== $current_profile_id ) {
 
         $result = new WP_Error(
             'bitacora_profile_state_changed',
             'El perfil en uso cambió desde que se presentó esta acción.'
         );
+
+    } elseif ( '' !== $current_profile_id ) {
+
+        $current_impact = bitacora_get_profile_change_impact();
+
+        if ( $expected_impact !== $current_impact ) {
+
+            $result = new WP_Error(
+                'bitacora_profile_content_changed',
+                'El contenido de la Bitácora cambió desde que se presentó esta acción.'
+            );
+
+        } else {
+
+            $result = bitacora_change_profile( $profile_id );
+        }
 
     } else {
 
@@ -2058,6 +2136,8 @@ function bitacora_render_profiles_admin_page() {
 
         $current_profile_id = bitacora_get_configured_profile_id();
 
+        $change_impact = bitacora_get_profile_change_impact();
+
         $confirm_profile_id = isset( $_GET['confirm_profile'] )
             ? sanitize_key(
                 wp_unslash( $_GET['confirm_profile'] )
@@ -2184,6 +2264,13 @@ function bitacora_render_profiles_admin_page() {
                                             echo esc_html(
                                                 'El perfil en uso cambió. Revisá el estado actual antes de continuar.'
                                             );
+                                        } elseif (
+                                            'bitacora_profile_content_changed'
+                                            === $error_code
+                                        ) {
+                                            echo esc_html(
+                                                'El contenido de la Bitácora cambió desde la confirmación. Revisá los nuevos conteos antes de continuar.'
+                                            );
                                         } else {
                                             echo esc_html(
                                                 'No se pudo poner el perfil en uso.'
@@ -2240,12 +2327,56 @@ function bitacora_render_profiles_admin_page() {
                                 </p>
 
                                 <p>
+                                        Al continuar se eliminarán definitivamente:
+                                </p>
+
+                                <ul>
+                                        <li>
+                                                <strong><?php
+                                                echo esc_html(
+                                                    number_format_i18n(
+                                                        $change_impact['items']
+                                                    )
+                                                );
+                                                ?></strong>
+                                                entradas
+                                        </li>
+
+                                        <li>
+                                                <strong><?php
+                                                echo esc_html(
+                                                    number_format_i18n(
+                                                        $change_impact['comments']
+                                                    )
+                                                );
+                                                ?></strong>
+                                                comentarios
+                                        </li>
+
+                                        <li>
+                                                <strong><?php
+                                                echo esc_html(
+                                                    number_format_i18n(
+                                                        $change_impact['attachments']
+                                                    )
+                                                );
+                                                ?></strong>
+                                                archivos adjuntos
+                                        </li>
+                                </ul>
+
+                                <p>
+                                        También se eliminarán las secciones,
+                                        tipos y páginas materializadas del perfil
+                                        actual.
+                                </p>
+
+                                <p>
                                         <strong>
-                                                Se eliminarán definitivamente
-                                                todas las entradas, comentarios,
-                                                archivos y secciones de la
-                                                Bitácora actualmente en uso.
-                                                Esta operación no se puede deshacer.
+                                                Los archivos adjuntos se borrarán
+                                                también físicamente del servidor.
+                                                Esta operación no se puede deshacer
+                                                desde Bitácora.
                                         </strong>
                                 </p>
 
@@ -2277,6 +2408,30 @@ function bitacora_render_profiles_admin_page() {
                                                 ); ?>"
                                         >
 
+                                        <input
+                                                type="hidden"
+                                                name="expected_items"
+                                                value="<?php echo esc_attr(
+                                                    $change_impact['items']
+                                                ); ?>"
+                                        >
+
+                                        <input
+                                                type="hidden"
+                                                name="expected_comments"
+                                                value="<?php echo esc_attr(
+                                                    $change_impact['comments']
+                                                ); ?>"
+                                        >
+
+                                        <input
+                                                type="hidden"
+                                                name="expected_attachments"
+                                                value="<?php echo esc_attr(
+                                                    $change_impact['attachments']
+                                                ); ?>"
+                                        >
+
                                         <?php
                                         wp_nonce_field(
                                             'bitacora_use_profile',
@@ -2287,8 +2442,8 @@ function bitacora_render_profiles_admin_page() {
                                         <p>
                                                 <?php
                                                 submit_button(
-                                                    'Confirmar cambio',
-                                                    'primary',
+                                                    'Eliminar contenido y usar este perfil',
+                                                    'delete',
                                                     'submit',
                                                     false
                                                 );
