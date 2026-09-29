@@ -269,6 +269,242 @@ function bitacora_prepare_stored_profile_definition( $definition = null ) {
 
 
 /**
+ * Adopta autoritativamente un candidato y, si todo resulta válido,
+ * crea un Perfil aceptado en la biblioteca.
+ *
+ * El candidato no puede imponer identidad técnica ni estado persistente.
+ * Un rechazo no deja Perfil observable ni modifica la instancia runtime.
+ */
+function bitacora_adopt_profile_candidate( $candidate ) {
+
+        $reject = static function ( $errors ) {
+
+                if ( ! is_array( $errors ) ) {
+                        $errors = array( (string) $errors );
+                }
+
+                return array(
+                        'accepted' => false,
+                        'errors'   => array_values( $errors ),
+                );
+        };
+
+        $validation = bitacora_validate_profile_candidate( $candidate );
+
+        if ( empty( $validation['valid'] ) ) {
+
+                return $reject(
+                        isset( $validation['errors'] )
+                        && is_array( $validation['errors'] )
+                                ? $validation['errors']
+                                : array( 'El candidato no es válido.' )
+                );
+        }
+
+        $duplicate = bitacora_check_profile_candidate_duplicate(
+                $candidate
+        );
+
+        if ( ! empty( $duplicate['errors'] ) ) {
+                return $reject( $duplicate['errors'] );
+        }
+
+        if ( ! empty( $duplicate['duplicate'] ) ) {
+
+                return $reject(
+                        array(
+                                array(
+                                        'code'    => 'bitacora_profile_duplicate',
+                                        'matches' => $duplicate['matches'],
+                                ),
+                        )
+                );
+        }
+
+        $label = trim(
+                sanitize_text_field(
+                        (string) $candidate['label']
+                )
+        );
+
+        $definition = bitacora_prepare_profile_definition(
+                $candidate['definition']
+        );
+
+        if ( is_wp_error( $definition ) ) {
+                return $reject(
+                        array(
+                                array(
+                                        'code'    => $definition->get_error_code(),
+                                        'message' => $definition->get_error_message(),
+                                ),
+                        )
+                );
+        }
+
+        $profile_id = bitacora_generate_profile_id();
+
+        $post_data = array(
+                'post_type'   => 'bitacora_profile',
+                'post_status' => 'draft',
+                'post_title'  => $label,
+        );
+
+        $current_user_id = get_current_user_id();
+
+        if ( $current_user_id > 0 ) {
+                $post_data['post_author'] = $current_user_id;
+        }
+
+        $post_id = wp_insert_post(
+                $post_data,
+                true
+        );
+
+        if ( is_wp_error( $post_id ) ) {
+
+                return $reject(
+                        array(
+                                array(
+                                        'code'    => $post_id->get_error_code(),
+                                        'message' => $post_id->get_error_message(),
+                                ),
+                        )
+                );
+        }
+
+        $rollback = static function ( $post_id, $error ) use ( $reject ) {
+
+                wp_delete_post(
+                        (int) $post_id,
+                        true
+                );
+
+                return $reject(
+                        array(
+                                $error,
+                        )
+                );
+        };
+
+        $identity_saved = add_post_meta(
+                $post_id,
+                '_bitacora_profile_id',
+                $profile_id,
+                true
+        );
+
+        if ( false === $identity_saved ) {
+
+                return $rollback(
+                        $post_id,
+                        array(
+                                'code'    => 'bitacora_profile_identity_not_saved',
+                                'message' => 'No se pudo guardar la identidad del perfil.',
+                        )
+                );
+        }
+
+        $definition_saved = add_post_meta(
+                $post_id,
+                '_bitacora_profile_definition',
+                $definition,
+                true
+        );
+
+        if ( false === $definition_saved ) {
+
+                return $rollback(
+                        $post_id,
+                        array(
+                                'code'    => 'bitacora_profile_definition_not_saved',
+                                'message' => 'No se pudo guardar la definición del perfil.',
+                        )
+                );
+        }
+
+        /*
+         * El registro transitorio debe resolver correctamente antes de
+         * convertirse en un Perfil aceptado.
+         */
+        $resolved = bitacora_load_profile( $profile_id );
+
+        if ( ! is_array( $resolved ) ) {
+
+                return $rollback(
+                        $post_id,
+                        array(
+                                'code'    => 'bitacora_profile_not_resolvable',
+                                'message' => 'El candidato persistido no pudo resolverse correctamente.',
+                        )
+                );
+        }
+
+        $published = wp_update_post(
+                array(
+                        'ID'          => (int) $post_id,
+                        'post_status' => 'publish',
+                ),
+                true
+        );
+
+        if ( is_wp_error( $published ) ) {
+
+                return $rollback(
+                        $post_id,
+                        array(
+                                'code'    => $published->get_error_code(),
+                                'message' => $published->get_error_message(),
+                        )
+                );
+        }
+
+        if ( (int) $published !== (int) $post_id ) {
+
+                return $rollback(
+                        $post_id,
+                        array(
+                                'code'    => 'bitacora_profile_not_accepted',
+                                'message' => 'No se pudo aceptar el perfil.',
+                        )
+                );
+        }
+
+        /*
+         * Verificación final desde la biblioteca aceptada.
+         */
+        $accepted_profile = false;
+
+        foreach ( bitacora_get_profile_library() as $profile ) {
+
+                if ( $profile_id === $profile['id'] ) {
+                        $accepted_profile = $profile;
+                        break;
+                }
+        }
+
+        if ( ! is_array( $accepted_profile ) ) {
+
+                return $rollback(
+                        $post_id,
+                        array(
+                                'code'    => 'bitacora_profile_not_in_library',
+                                'message' => 'El perfil aceptado no pudo resolverse desde la biblioteca.',
+                        )
+                );
+        }
+
+        return array(
+                'accepted' => true,
+                'profile'  => array(
+                        'id'    => $profile_id,
+                        'label' => $label,
+                ),
+        );
+}
+
+
+/**
  * Crea un perfil persistente inicialmente incompleto.
  *
  * La identidad técnica se genera internamente y no puede ser elegida
