@@ -269,6 +269,18 @@ function bitacora_prepare_stored_profile_definition( $definition = null ) {
 
 
 /**
+ * Promueve un candidato presentado por un productor externo.
+ *
+ * PROMOCIÓN sólo define el origen de la operación. La decisión autoritativa
+ * de ACCEPT / REJECT pertenece exclusivamente al Engine.
+ */
+function bitacora_promote_profile_candidate( $candidate ) {
+
+        return bitacora_adopt_profile_candidate( $candidate );
+}
+
+
+/**
  * Adopta autoritativamente un candidato y, si todo resulta válido,
  * crea un Perfil aceptado en la biblioteca.
  *
