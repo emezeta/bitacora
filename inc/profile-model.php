@@ -215,12 +215,12 @@ function bitacora_generate_profile_id() {
 
 
 /**
- * Prepara la estructura persistente de una definición de perfil.
+ * Prepara la estructura de una definición de perfil.
  *
  * La definición contiene exclusivamente core, sections y classes.
  * id y label tienen fuentes canónicas independientes.
  */
-function bitacora_prepare_stored_profile_definition( $definition = null ) {
+function bitacora_prepare_profile_definition( $definition = null ) {
 
         if ( null === $definition ) {
                 $definition = array();
@@ -256,6 +256,15 @@ function bitacora_prepare_stored_profile_definition( $definition = null ) {
         }
 
         return $prepared;
+}
+
+
+/**
+ * Compatibilidad temporal con el modelo stored/editor actual.
+ */
+function bitacora_prepare_stored_profile_definition( $definition = null ) {
+
+        return bitacora_prepare_profile_definition( $definition );
 }
 
 

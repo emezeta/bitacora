@@ -143,8 +143,256 @@ function bitacora_load_profile( $profile_id ) {
 
 
 /**
+ * Valida estructuralmente una definición candidata de Perfil.
+ *
+ * No conoce profile_id, persistencia, disponibilidad ni estado de instancia.
+ * Una definición es válida o contiene errores; no existe estado incompleto.
+ */
+function bitacora_validate_profile_definition( $definition ) {
+
+    $report = array(
+        'valid'  => false,
+        'errors' => array(),
+    );
+
+    if ( ! is_array( $definition ) ) {
+        $report['errors'][] = 'La definición del perfil debe ser un array.';
+        return $report;
+    }
+
+    $core = isset( $definition['core'] )
+        ? $definition['core']
+        : array();
+
+    $sections = isset( $definition['sections'] )
+        ? $definition['sections']
+        : array();
+
+    $classes = isset( $definition['classes'] )
+        ? $definition['classes']
+        : array();
+
+    if ( ! is_array( $core ) ) {
+        $report['errors'][] = 'La definición de core no es válida.';
+        return $report;
+    }
+
+    if ( ! is_array( $sections ) ) {
+        $report['errors'][] = 'La definición de secciones no es válida.';
+        return $report;
+    }
+
+    if ( ! is_array( $classes ) ) {
+        $report['errors'][] = 'La definición de clases no es válida.';
+        return $report;
+    }
+
+    /*
+     * El candidato sólo puede sobrescribir atributos permitidos del core.
+     * Identidad y estructura pertenecen al Engine.
+     */
+    $allowed_core_keys = array(
+        'name',
+        'singular',
+        'plural',
+        'subtitle',
+        'new_label',
+        'feature_file',
+        'feature_location',
+        'feature_comments',
+    );
+
+    foreach ( array_keys( $core ) as $key ) {
+        if ( ! in_array( $key, $allowed_core_keys, true ) ) {
+            $report['errors'][] = sprintf(
+                'Core: atributo no permitido "%s".',
+                $key
+            );
+        }
+    }
+
+    $core_section = array_replace(
+        bitacora_get_default_core_section_definition(),
+        $core
+    );
+
+    $section_slugs = array(
+        'notas' => true,
+    );
+
+    /*
+     * Validar explícitamente también los defaults + overrides del core.
+     */
+    if (
+        empty( $core_section['name'] )
+        || 'notas' !== $core_section['slug']
+        || 'main' !== $core_section['area']
+    ) {
+        $report['errors'][] =
+            'Core: la definición resultante viola invariantes reservadas.';
+    }
+
+    foreach ( $sections as $section_id => $section ) {
+
+        if ( ! is_array( $section ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": definición inválida.',
+                $section_id
+            );
+            continue;
+        }
+
+        if ( empty( $section['name'] ) || empty( $section['slug'] ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": faltan name o slug.',
+                $section_id
+            );
+            continue;
+        }
+
+        $slug = sanitize_title( $section['slug'] );
+
+        if ( '' === $slug ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": slug inválido.',
+                $section_id
+            );
+            continue;
+        }
+
+        if ( 'notas' === $slug ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": el slug "notas" está reservado.',
+                $section_id
+            );
+            continue;
+        }
+
+        if ( isset( $section_slugs[ $slug ] ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": slug duplicado "%s".',
+                $section_id,
+                $slug
+            );
+            continue;
+        }
+
+        $section_slugs[ $slug ] = true;
+
+        if ( ! array_key_exists( 'area', $section ) ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": falta area.',
+                $section_id
+            );
+        } elseif (
+            ! in_array(
+                $section['area'],
+                array( 'main', 'more' ),
+                true
+            )
+        ) {
+            $report['errors'][] = sprintf(
+                'Sección "%s": area debe ser "main" o "more".',
+                $section_id
+            );
+        }
+
+        foreach ( array_keys( $section ) as $key ) {
+            if (
+                0 === strpos( $key, 'feature_' )
+                && ! in_array(
+                    $key,
+                    array(
+                        'feature_file',
+                        'feature_location',
+                        'feature_comments',
+                    ),
+                    true
+                )
+            ) {
+                $report['errors'][] = sprintf(
+                    'Sección "%s": feature desconocida "%s".',
+                    $section_id,
+                    $key
+                );
+            }
+        }
+    }
+
+    $class_slugs = array();
+
+    foreach ( $classes as $class_id => $class ) {
+
+        if ( ! is_array( $class ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": definición inválida.',
+                $class_id
+            );
+            continue;
+        }
+
+        if ( empty( $class['name'] ) || empty( $class['slug'] ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": faltan name o slug.',
+                $class_id
+            );
+            continue;
+        }
+
+        $slug = sanitize_title( $class['slug'] );
+
+        if ( '' === $slug ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": slug inválido.',
+                $class_id
+            );
+            continue;
+        }
+
+        if ( isset( $class_slugs[ $slug ] ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": slug duplicado "%s".',
+                $class_id,
+                $slug
+            );
+        } else {
+            $class_slugs[ $slug ] = true;
+        }
+
+        if ( 'section' !== ( $class['scope'] ?? '' ) ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": scope debe ser "section".',
+                $class_id
+            );
+            continue;
+        }
+
+        $scope_id = sanitize_title(
+            (string) ( $class['scope_id'] ?? '' )
+        );
+
+        if (
+            '' === $scope_id
+            || ! isset( $section_slugs[ $scope_id ] )
+        ) {
+            $report['errors'][] = sprintf(
+                'Clase "%s": scope_id "%s" no corresponde a una sección.',
+                $class_id,
+                $scope_id ?: '(vacío)'
+            );
+        }
+    }
+
+    $report['valid'] = empty( $report['errors'] );
+
+    return $report;
+}
+
+
+/**
  * Valida si un perfil está completo y puede ponerse en uso.
  *
+ * Compatibilidad temporal con el modelo stored/editor actual.
  * No modifica ni siembra configuración.
  */
 function bitacora_validate_profile( $profile_id ) {
