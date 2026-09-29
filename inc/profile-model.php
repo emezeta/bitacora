@@ -733,7 +733,7 @@ function bitacora_check_profile_candidate_duplicate( $candidate ) {
         };
 
         $candidate_label = $normalize_text(
-                $candidate['label']
+                sanitize_text_field( (string) $candidate['label'] )
         );
 
         $candidate_section_names = array();
