@@ -594,6 +594,226 @@ function bitacora_get_bundled_profile_ids() {
  * aparece en más de una fuente y por lo tanto no representa un perfil
  * resoluble.
  */
+/**
+ * Devuelve la biblioteca resoluble de Perfiles conocida por Bitácora.
+ *
+ * Esta vista contiene sólo identidad, denominación humana y secciones
+ * complementarias. No incorpora estado de instancia ni propiedades de UI.
+ *
+ * Durante la transición incluye tanto perfiles bundled como stored
+ * actualmente resolubles.
+ */
+function bitacora_get_profile_library() {
+
+        $identities = array();
+
+        foreach ( bitacora_get_bundled_profile_ids() as $profile_id ) {
+                $identities[ $profile_id ] = true;
+        }
+
+        $stored_posts = get_posts(
+                array(
+                        'post_type'      => 'bitacora_profile',
+                        'post_status'    => 'any',
+                        'posts_per_page' => -1,
+                        'fields'         => 'ids',
+                )
+        );
+
+        foreach ( $stored_posts as $post_id ) {
+
+                $profile_id = get_post_meta(
+                        $post_id,
+                        '_bitacora_profile_id',
+                        true
+                );
+
+                if ( ! is_string( $profile_id ) ) {
+                        continue;
+                }
+
+                $profile_id = strtolower( trim( $profile_id ) );
+
+                if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                        continue;
+                }
+
+                $identities[ $profile_id ] = true;
+        }
+
+        $library = array();
+
+        foreach ( array_keys( $identities ) as $profile_id ) {
+
+                $profile = bitacora_load_profile( $profile_id );
+
+                if ( ! is_array( $profile ) ) {
+                        continue;
+                }
+
+                $label = isset( $profile['label'] )
+                        ? trim( (string) $profile['label'] )
+                        : '';
+
+                $sections = isset( $profile['sections'] )
+                        && is_array( $profile['sections'] )
+                                ? $profile['sections']
+                                : array();
+
+                $library[] = array(
+                        'id'       => $profile_id,
+                        'label'    => $label,
+                        'sections' => $sections,
+                );
+        }
+
+        usort(
+                $library,
+                static function ( $a, $b ) {
+
+                        $label_compare = strcasecmp(
+                                $a['label'],
+                                $b['label']
+                        );
+
+                        if ( 0 !== $label_compare ) {
+                                return $label_compare;
+                        }
+
+                        return strcmp(
+                                $a['id'],
+                                $b['id']
+                        );
+                }
+        );
+
+        return $library;
+}
+
+
+/**
+ * Comprueba si un candidato presume duplicación con un Perfil existente.
+ *
+ * Reglas:
+ * - mismo label, ignorando mayúsculas/minúsculas y espacios exteriores; o
+ * - misma cantidad y mismos nombres de secciones complementarias,
+ *   ignorando orden, mayúsculas/minúsculas y espacios exteriores.
+ *
+ * No genera identidad ni modifica la biblioteca.
+ */
+function bitacora_check_profile_candidate_duplicate( $candidate ) {
+
+        $report = array(
+                'duplicate' => false,
+                'matches'   => array(),
+                'errors'    => array(),
+        );
+
+        $validation = bitacora_validate_profile_candidate( $candidate );
+
+        if ( empty( $validation['valid'] ) ) {
+
+                $report['errors'] = isset( $validation['errors'] )
+                        && is_array( $validation['errors'] )
+                                ? $validation['errors']
+                                : array( 'El candidato no es válido.' );
+
+                return $report;
+        }
+
+        $normalize_text = static function ( $value ) {
+
+                $value = trim( (string) $value );
+
+                if ( function_exists( 'mb_strtolower' ) ) {
+                        return mb_strtolower( $value, 'UTF-8' );
+                }
+
+                return strtolower( $value );
+        };
+
+        $candidate_label = $normalize_text(
+                $candidate['label']
+        );
+
+        $candidate_section_names = array();
+
+        foreach ( $candidate['definition']['sections'] as $section ) {
+
+                $candidate_section_names[] = $normalize_text(
+                        $section['name']
+                );
+        }
+
+        sort(
+                $candidate_section_names,
+                SORT_STRING
+        );
+
+        foreach ( bitacora_get_profile_library() as $profile ) {
+
+                $reasons = array();
+
+                if (
+                        $candidate_label === $normalize_text(
+                                $profile['label']
+                        )
+                ) {
+                        $reasons[] = 'label';
+                }
+
+                $profile_section_names = array();
+                $sections_comparable   = true;
+
+                foreach ( $profile['sections'] as $section ) {
+
+                        if (
+                                ! is_array( $section )
+                                || ! isset( $section['name'] )
+                                || '' === trim( (string) $section['name'] )
+                        ) {
+                                $sections_comparable = false;
+                                break;
+                        }
+
+                        $profile_section_names[] = $normalize_text(
+                                $section['name']
+                        );
+                }
+
+                if ( $sections_comparable ) {
+
+                        sort(
+                                $profile_section_names,
+                                SORT_STRING
+                        );
+
+                        if (
+                                count( $candidate_section_names )
+                                === count( $profile_section_names )
+                                && $candidate_section_names
+                                === $profile_section_names
+                        ) {
+                                $reasons[] = 'sections';
+                        }
+                }
+
+                if ( ! empty( $reasons ) ) {
+
+                        $report['matches'][] = array(
+                                'id'      => $profile['id'],
+                                'label'   => $profile['label'],
+                                'reasons' => $reasons,
+                        );
+                }
+        }
+
+        $report['duplicate'] = ! empty( $report['matches'] );
+
+        return $report;
+}
+
+
 function bitacora_get_profile_catalog() {
 
         $configured_profile_id = bitacora_get_configured_profile_id();
