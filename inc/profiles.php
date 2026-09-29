@@ -484,11 +484,9 @@ function bitacora_validate_profile( $profile_id ) {
     $profile = bitacora_load_profile( $profile_id );
 
     $report = array(
-        'profile'   => sanitize_key( (string) $profile_id ),
-        'valid'     => false,
-        'complete'  => false,
-        'enabled'   => false,
-        'errors'    => array(),
+        'profile' => sanitize_key( (string) $profile_id ),
+        'valid'   => false,
+        'errors'  => array(),
     );
 
     if ( ! $profile ) {
@@ -497,8 +495,6 @@ function bitacora_validate_profile( $profile_id ) {
     }
 
     $report['profile'] = $profile['id'];
-
-    $complete = true;
 
     /*
      * Secciones válidas a las que podrán referirse las clases.
@@ -553,12 +549,6 @@ function bitacora_validate_profile( $profile_id ) {
 
         $section_slugs[ $slug ] = true;
 
-        /*
-         * Bitácora/core pertenece siempre a main.
-         *
-         * Una sección complementaria sin "area" es válida durante la
-         * construcción del perfil, pero mantiene el perfil incompleto.
-         */
         if ( 'core' === $section_id ) {
 
             if (
@@ -569,12 +559,9 @@ function bitacora_validate_profile( $profile_id ) {
                     'Sección "core": area debe ser "main".';
             }
 
-        } elseif ( ! array_key_exists( 'area', $section ) ) {
-
-            $complete = false;
-
         } elseif (
-            ! in_array(
+            ! array_key_exists( 'area', $section )
+            || ! in_array(
                 $section['area'],
                 array( 'main', 'more' ),
                 true
@@ -588,8 +575,8 @@ function bitacora_validate_profile( $profile_id ) {
     }
 
     /*
-     * La colección de clases debe ser estructuralmente válida.
-     * Un array vacío es válido: los tipos de contenido son opcionales.
+     * Los tipos de contenido son opcionales, pero la colección,
+     * cuando existe, debe ser estructuralmente válida.
      */
     if (
         ! isset( $profile['classes'] )
@@ -664,9 +651,6 @@ function bitacora_validate_profile( $profile_id ) {
     }
 
     $report['valid'] = empty( $report['errors'] );
-
-    $report['complete'] = $report['valid'] && $complete;
-    $report['enabled'] = $report['valid'] && $report['complete'];
 
     return $report;
 }

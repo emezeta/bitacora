@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registra la entidad interna utilizada para perfiles editables.
+ * Registra la entidad interna utilizada para Profiles persistidos.
  *
  * No tiene representación pública ni interfaz administrativa propia.
  * La disponibilidad de un perfil no depende del post_status:
@@ -829,9 +829,7 @@ function bitacora_get_bundled_profile_ids() {
  * - label
  * - source: bundled | stored | collision
  * - resolvable
- * - available
  * - in_use
- * - editable
  * - deletable
  * - errors
  *
@@ -1139,16 +1137,6 @@ function bitacora_get_profile_catalog() {
                         $validation['valid']
                 );
 
-                $complete = ! empty(
-                        $validation['complete']
-                );
-
-                $enabled = ! empty(
-                        $validation['enabled']
-                );
-
-                $available = $enabled;
-
                 $errors = isset( $validation['errors'] )
                         && is_array( $validation['errors'] )
                                 ? $validation['errors']
@@ -1159,30 +1147,19 @@ function bitacora_get_profile_catalog() {
                         && $profile_id === $configured_profile_id
                 );
 
-                /*
-                 * Ya no existe edición de Profiles.
-                 * Se conserva sólo hasta P3B para no mezclar pasos.
-                 */
-                $editable = false;
-
                 $deletable = (
                         'stored' === $source
                         && ! $in_use
                 );
 
                 $catalog[] = array(
-                        'id'         => $profile_id,
-                        'label'      => $label,
-                        'source'     => $source,
-                        'resolvable' => true,
-                        'valid'      => $valid,
-                        'complete'   => $complete,
-                        'enabled'    => $enabled,
-                        'available'  => $available,
-                        'in_use'     => $in_use,
-                        'editable'   => $editable,
-                        'deletable'  => $deletable,
-                        'errors'     => $errors,
+                        'id'        => $profile_id,
+                        'label'     => $label,
+                        'source'    => $source,
+                        'valid'     => $valid,
+                        'in_use'    => $in_use,
+                        'deletable' => $deletable,
+                        'errors'    => $errors,
                 );
         }
 

@@ -48,41 +48,23 @@ function bitacora_register_profiles_admin_page() {
  */
 function bitacora_get_profile_admin_status( $profile ) {
 
-        if (
-                'collision' === $profile['source']
-                || ! $profile['resolvable']
-                || empty( $profile['valid'] )
-        ) {
+        if ( empty( $profile['valid'] ) ) {
                 return array(
                         'key'   => 'error',
                         'label' => 'ERROR',
                 );
         }
 
-        if ( $profile['in_use'] ) {
+        if ( ! empty( $profile['in_use'] ) ) {
                 return array(
                         'key'   => 'in_use',
                         'label' => 'EN USO',
                 );
         }
 
-        if ( empty( $profile['complete'] ) ) {
-                return array(
-                        'key'   => 'incomplete',
-                        'label' => 'EN CONSTRUCCIÓN',
-                );
-        }
-
-        if ( ! empty( $profile['enabled'] ) ) {
-                return array(
-                        'key'   => 'enabled',
-                        'label' => 'DISPONIBLE',
-                );
-        }
-
         return array(
-                'key'   => 'error',
-                'label' => 'ERROR',
+                'key'   => 'ready',
+                'label' => 'DISPONIBLE',
         );
 }
 
@@ -325,7 +307,7 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 			'La identidad del perfil no es válida.',
 
 		'bitacora_profile_not_stored' =>
-			'El perfil no es un perfil persistente editable.',
+			'El perfil no es un Profile persistido eliminable.',
 
 		'bitacora_profile_not_resolvable' =>
 			'No se pudo resolver correctamente el perfil persistente.',
@@ -345,12 +327,6 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 
 		'bitacora_profile_definition_not_saved' =>
 			'No se pudo guardar la definición del perfil.',
-
-		'bitacora_profile_not_editable' =>
-			'Este perfil no puede editarse.',
-
-		'bitacora_profile_section_not_editable' =>
-			'La sección indicada no puede editarse.',
 
 		'bitacora_profile_section_invalid' =>
 			'La sección indicada no es válida.',
@@ -430,7 +406,7 @@ function bitacora_render_profiles_admin_page() {
                         $catalog_profile
                     );
 
-                if ( 'enabled' === $confirm_status['key'] ) {
+                if ( 'ready' === $confirm_status['key'] ) {
                     $confirm_profile = $catalog_profile;
                 }
             }
@@ -707,7 +683,7 @@ function bitacora_render_profiles_admin_page() {
                                 <p>
                                         <strong>
                                                 Se eliminará únicamente su
-                                                definición editable.
+                                                definición persistida.
                                                 Esta operación no se puede
                                                 deshacer.
                                         </strong>
@@ -842,16 +818,6 @@ function bitacora_render_profiles_admin_page() {
                                                                         ?>
                                                                 </strong>
 
-                                                                <?php
-                                                                if (
-                                                                        'incomplete'
-                                                                        === $status['key']
-                                                                ) :
-                                                                        ?>
-                                                                        <div>
-                                                                                Todavía necesita completar su definición.
-                                                                        </div>
-                                                                <?php endif; ?>
                                                         </td>
 
                                                         <td>
@@ -867,7 +833,7 @@ function bitacora_render_profiles_admin_page() {
 
                                                                 <?php
                                                                 elseif (
-                                                                    'enabled'
+                                                                    'ready'
                                                                     === $status['key']
                                                                     && current_user_can(
                                                                         'use_bitacora_profiles'

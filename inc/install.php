@@ -606,11 +606,11 @@ function bitacora_configure_profile( $profile_id ) {
 
         $profile_validation = bitacora_validate_profile( $profile_id );
 
-        if ( ! $profile_validation['enabled'] ) {
+        if ( empty( $profile_validation['valid'] ) ) {
                 return new WP_Error(
-                        'bitacora_profile_not_available',
+                        'bitacora_profile_invalid',
                         sprintf(
-                                'El perfil "%s" todavía no está habilitado para usar.',
+                                'El perfil aceptado "%s" no tiene una definición válida.',
                                 $profile_id
                         ),
                         $profile_validation
@@ -967,11 +967,11 @@ function bitacora_change_profile( $profile_id ) {
 
     $validation = bitacora_validate_profile( $profile_id );
 
-    if ( empty( $validation['enabled'] ) ) {
+    if ( empty( $validation['valid'] ) ) {
         return new WP_Error(
-            'bitacora_profile_not_available',
+            'bitacora_profile_invalid',
             sprintf(
-                'El perfil "%s" no está DISPONIBLE para usar.',
+                'El perfil aceptado "%s" no tiene una definición válida.',
                 $profile_id
             ),
             $validation
