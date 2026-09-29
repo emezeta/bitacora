@@ -390,6 +390,90 @@ function bitacora_validate_profile_definition( $definition ) {
 
 
 /**
+ * Valida un candidato antes de cualquier operación de adopción.
+ *
+ * El candidato contiene exclusivamente label + definition.
+ * No conoce UUID, persistencia, biblioteca ni estado de instancia.
+ */
+function bitacora_validate_profile_candidate( $candidate ) {
+
+    $report = array(
+        'valid'  => false,
+        'errors' => array(),
+    );
+
+    if ( ! is_array( $candidate ) ) {
+        $report['errors'][] = 'El candidato debe ser un array.';
+        return $report;
+    }
+
+    foreach ( array_keys( $candidate ) as $key ) {
+        if ( ! in_array( $key, array( 'label', 'definition' ), true ) ) {
+            $report['errors'][] = sprintf(
+                'Candidato: atributo no permitido "%s".',
+                $key
+            );
+        }
+    }
+
+    $label = isset( $candidate['label'] )
+        ? trim( sanitize_text_field( (string) $candidate['label'] ) )
+        : '';
+
+    if ( '' === $label ) {
+        $report['errors'][] = 'Candidato: label es obligatorio.';
+    }
+
+    if ( ! array_key_exists( 'definition', $candidate ) ) {
+        $report['errors'][] = 'Candidato: definition es obligatoria.';
+        return $report;
+    }
+
+    if ( ! is_array( $candidate['definition'] ) ) {
+        $report['errors'][] = 'Candidato: definition debe ser un array.';
+        return $report;
+    }
+
+    foreach ( array_keys( $candidate['definition'] ) as $key ) {
+        if (
+            ! in_array(
+                $key,
+                array( 'core', 'sections', 'classes' ),
+                true
+            )
+        ) {
+            $report['errors'][] = sprintf(
+                'Definition: atributo no permitido "%s".',
+                $key
+            );
+        }
+    }
+
+    $definition = bitacora_prepare_profile_definition(
+        $candidate['definition']
+    );
+
+    if ( is_wp_error( $definition ) ) {
+        $report['errors'][] = $definition->get_error_message();
+        return $report;
+    }
+
+    $definition_validation =
+        bitacora_validate_profile_definition( $definition );
+
+    if ( empty( $definition_validation['valid'] ) ) {
+        foreach ( $definition_validation['errors'] as $error ) {
+            $report['errors'][] = $error;
+        }
+    }
+
+    $report['valid'] = empty( $report['errors'] );
+
+    return $report;
+}
+
+
+/**
  * Valida si un perfil está completo y puede ponerse en uso.
  *
  * Compatibilidad temporal con el modelo stored/editor actual.
