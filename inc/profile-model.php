@@ -129,7 +129,7 @@ function bitacora_get_stored_profile_definition( $profile_id ) {
         $post_ids = get_posts(
                 array(
                         'post_type'      => 'bitacora_profile',
-                        'post_status'    => 'any',
+                        'post_status'    => 'publish',
                         'posts_per_page' => 2,
                         'fields'         => 'ids',
                         'meta_key'       => '_bitacora_profile_id',
@@ -935,6 +935,35 @@ function bitacora_get_profile_library() {
         return $library;
 }
 
+/**
+ * Indica si una identidad pertenece a la biblioteca de Profiles aceptados.
+ */
+function bitacora_profile_library_contains( $profile_id ) {
+
+        if ( ! is_string( $profile_id ) ) {
+                return false;
+        }
+
+        $profile_id = strtolower( trim( $profile_id ) );
+
+        if ( ! wp_is_uuid( $profile_id, 4 ) ) {
+                return false;
+        }
+
+        foreach ( bitacora_get_profile_library() as $profile ) {
+
+                if (
+                        isset( $profile['id'] )
+                        && $profile_id === $profile['id']
+                ) {
+                        return true;
+                }
+        }
+
+        return false;
+}
+
+
 
 /**
  * Comprueba si un candidato presume duplicación con un Perfil existente.
@@ -1063,169 +1092,67 @@ function bitacora_get_profile_catalog() {
 
         $configured_profile_id = bitacora_get_configured_profile_id();
 
-        $identities = array();
+        $catalog = array();
 
-        /*
-         * Perfiles incluidos.
-         */
-        foreach ( bitacora_get_bundled_profile_ids() as $profile_id ) {
+        foreach ( bitacora_get_profile_library() as $library_profile ) {
 
-                $identities[ $profile_id ] = array(
-                        'bundled'     => true,
-                        'stored_ids'  => array(),
-                );
-        }
-
-        /*
-         * Perfiles persistentes.
-         *
-         * Se conservan todas las coincidencias para detectar identidades
-         * duplicadas en lugar de dejar que una gane silenciosamente.
-         */
-        $stored_posts = get_posts(
-                array(
-                        'post_type'      => 'bitacora_profile',
-                        'post_status'    => 'any',
-                        'posts_per_page' => -1,
-                        'fields'         => 'ids',
-                        'orderby'        => 'ID',
-                        'order'          => 'ASC',
-                )
-        );
-
-        foreach ( $stored_posts as $post_id ) {
-
-                $profile_id = get_post_meta(
-                        $post_id,
-                        '_bitacora_profile_id',
-                        true
-                );
-
-                if ( ! is_string( $profile_id ) ) {
-                        continue;
-                }
-
-                $profile_id = strtolower( trim( $profile_id ) );
+                $profile_id = isset( $library_profile['id'] )
+                        ? strtolower(
+                                trim(
+                                        (string) $library_profile['id']
+                                )
+                        )
+                        : '';
 
                 if ( ! wp_is_uuid( $profile_id, 4 ) ) {
                         continue;
                 }
 
-                if ( ! isset( $identities[ $profile_id ] ) ) {
-                        $identities[ $profile_id ] = array(
-                                'bundled'    => false,
-                                'stored_ids' => array(),
-                        );
+                $profile = bitacora_load_profile( $profile_id );
+
+                if ( ! is_array( $profile ) ) {
+                        continue;
                 }
 
-                $identities[ $profile_id ]['stored_ids'][] = (int) $post_id;
-        }
+                $label = isset( $profile['label'] )
+                        ? trim( (string) $profile['label'] )
+                        : $profile_id;
 
-        $catalog = array();
-
-        foreach ( $identities as $profile_id => $identity ) {
-
-                $has_bundled = ! empty( $identity['bundled'] );
-                $stored_ids  = $identity['stored_ids'];
-                $stored_count = count( $stored_ids );
-
-                $collision = (
-                        $has_bundled
-                        && $stored_count > 0
-                ) || $stored_count > 1;
-
-                if ( $collision ) {
-                        $source = 'collision';
-                } elseif ( $has_bundled ) {
-                        $source = 'bundled';
-                } else {
-                        $source = 'stored';
-                }
-
-                $profile    = false;
-                $resolvable = false;
-                $valid      = false;
-                $complete   = false;
-                $enabled    = false;
-                $available  = false;
-                $errors     = array();
-
-                if ( ! $collision ) {
-
-                        $profile = bitacora_load_profile(
-                                $profile_id
-                        );
-
-                        $resolvable = is_array( $profile );
-
-                        if ( $resolvable ) {
-
-                                $validation = bitacora_validate_profile(
-                                        $profile_id
-                                );
-
-                                $valid = ! empty(
-                                        $validation['valid']
-                                );
-
-                                $complete = ! empty(
-                                        $validation['complete']
-                                );
-
-                                $enabled = ! empty(
-                                        $validation['enabled']
-                                );
-
-                                /*
-                                 * Disponibilidad es una condición operativa
-                                 * del catálogo, no un alias de "sin errores".
-                                 * Por ahora, para un perfil resoluble, coincide
-                                 * con estar habilitado.
-                                 */
-                                $available = $enabled;
-
-                                $errors = isset( $validation['errors'] )
-                                        && is_array( $validation['errors'] )
-                                                ? $validation['errors']
-                                                : array();
-                        } else {
-                                $errors[] = 'No se pudo resolver el perfil.';
-                        }
-                } elseif ( $has_bundled && $stored_count > 0 ) {
-
-                        $errors[] = 'La identidad técnica está duplicada entre un perfil incluido y uno persistente.';
-                } else {
-
-                        $errors[] = 'La identidad técnica está duplicada entre perfiles persistentes.';
-                }
-
-                /*
-                 * Para perfiles resolubles, el nombre procede del loader.
-                 * Ante una colisión stored se usa sólo como diagnóstico el
-                 * primer título encontrado, sin considerar esa fuente válida.
-                 */
-                if (
-                        $resolvable
-                        && isset( $profile['label'] )
-                        && '' !== trim( (string) $profile['label'] )
-                ) {
-                        $label = trim( (string) $profile['label'] );
-                } elseif ( ! empty( $stored_ids ) ) {
-
-                        $label = trim(
-                                (string) get_post_field(
-                                        'post_title',
-                                        $stored_ids[0],
-                                        'raw'
-                                )
-                        );
-
-                        if ( '' === $label ) {
-                                $label = $profile_id;
-                        }
-                } else {
+                if ( '' === $label ) {
                         $label = $profile_id;
                 }
+
+                $bundled_file = get_stylesheet_directory()
+                        . '/inc/profiles/'
+                        . $profile_id
+                        . '.php';
+
+                $source = is_file( $bundled_file )
+                        ? 'bundled'
+                        : 'stored';
+
+                $validation = bitacora_validate_profile(
+                        $profile_id
+                );
+
+                $valid = ! empty(
+                        $validation['valid']
+                );
+
+                $complete = ! empty(
+                        $validation['complete']
+                );
+
+                $enabled = ! empty(
+                        $validation['enabled']
+                );
+
+                $available = $enabled;
+
+                $errors = isset( $validation['errors'] )
+                        && is_array( $validation['errors'] )
+                                ? $validation['errors']
+                                : array();
 
                 $in_use = (
                         '' !== $configured_profile_id
@@ -1233,27 +1160,13 @@ function bitacora_get_profile_catalog() {
                 );
 
                 /*
-                 * Editable no es una decisión de UI.
-                 *
-                 * Sólo un perfil persistente y resoluble que no esté en uso
-                 * puede cambiar su definición.
+                 * Ya no existe edición de Profiles.
+                 * Se conserva sólo hasta P3B para no mezclar pasos.
                  */
-                $editable = (
-                        'stored' === $source
-                        && $resolvable
-                        && ! $in_use
-                );
+                $editable = false;
 
-                /*
-                 * Eliminable es una propiedad separada aunque hoy comparta
-                 * las mismas condiciones que editable.
-                 *
-                 * Mantener ambas semánticas explícitas permite que las reglas
-                 * diverjan en el futuro sin trasladar decisiones a la UI.
-                 */
                 $deletable = (
                         'stored' === $source
-                        && $resolvable
                         && ! $in_use
                 );
 
@@ -1261,7 +1174,7 @@ function bitacora_get_profile_catalog() {
                         'id'         => $profile_id,
                         'label'      => $label,
                         'source'     => $source,
-                        'resolvable' => $resolvable,
+                        'resolvable' => true,
                         'valid'      => $valid,
                         'complete'   => $complete,
                         'enabled'    => $enabled,
@@ -1273,10 +1186,6 @@ function bitacora_get_profile_catalog() {
                 );
         }
 
-        /*
-         * Orden estable y humano.
-         * La identidad técnica resuelve empates de denominación.
-         */
         usort(
                 $catalog,
                 static function ( $a, $b ) {
@@ -1352,7 +1261,7 @@ function bitacora_delete_stored_profile( $profile_id ) {
         $post_ids = get_posts(
                 array(
                         'post_type'      => 'bitacora_profile',
-                        'post_status'    => 'any',
+                        'post_status'    => 'publish',
                         'posts_per_page' => 2,
                         'fields'         => 'ids',
                         'meta_key'       => '_bitacora_profile_id',

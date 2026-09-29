@@ -591,11 +591,14 @@ function bitacora_configure_profile( $profile_id ) {
                 );
         }
 
-        if ( ! bitacora_load_profile( $profile_id ) ) {
+        if (
+                ! bitacora_profile_library_contains( $profile_id )
+                || ! bitacora_load_profile( $profile_id )
+        ) {
                 return new WP_Error(
                         'bitacora_profile_not_found',
                         sprintf(
-                                'No se pudo cargar el perfil "%s".',
+                                'No se pudo cargar el perfil aceptado "%s".',
                                 $profile_id
                         )
                 );
@@ -949,11 +952,14 @@ function bitacora_change_profile( $profile_id ) {
      * Validar completamente el destino antes de tocar la
      * Bitácora actualmente materializada.
      */
-    if ( ! bitacora_load_profile( $profile_id ) ) {
+    if (
+        ! bitacora_profile_library_contains( $profile_id )
+        || ! bitacora_load_profile( $profile_id )
+    ) {
         return new WP_Error(
             'bitacora_profile_not_found',
             sprintf(
-                'No se pudo cargar el perfil "%s".',
+                'No se pudo cargar el perfil aceptado "%s".',
                 $profile_id
             )
         );
