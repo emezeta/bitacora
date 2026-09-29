@@ -673,22 +673,6 @@ function bitacora_adopt_profile_candidate( $candidate ) {
                 );
         }
 
-        /*
-         * El registro transitorio debe resolver correctamente antes
-         * de convertirse en un Perfil aceptado.
-         */
-        $resolved = bitacora_load_profile( $profile_id );
-
-        if ( ! is_array( $resolved ) ) {
-
-                return $rollback(
-                        array(
-                                'code'    => 'bitacora_profile_not_resolvable',
-                                'message' => 'El candidato persistido no pudo resolverse correctamente.',
-                        )
-                );
-        }
-
         $published = wp_update_post(
                 array(
                         'ID'          => $post_id,
