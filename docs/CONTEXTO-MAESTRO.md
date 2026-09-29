@@ -4,7 +4,7 @@
 **Estado técnico de referencia:** 2026-09-29
 **Rama:** `0.3.0-dev`  
 **Repo canónico:** `/home/dosmilun/repos/bitacora`  
-**HEAD verificado:** `c025660 Remove legacy profile editor remnants`
+**HEAD verificado:** `2291c2c Fix accepted profile adoption flow`
 
 > Este documento describe el **estado vigente** del proyecto y debe servir como referencia
 > de continuidad entre chats y estaciones de trabajo. No pretende narrar toda la historia.
@@ -773,6 +773,7 @@ Secuencia:
 b4a5a4d  Enforce accepted profile boundary
 740ad60  Simplify profile availability semantics
 c025660  Remove legacy profile editor remnants
+2291c2c  Fix accepted profile adoption flow
 ```
 
 Consecuencias:
@@ -809,6 +810,145 @@ catálogo                                    = 0 coincidencias
 ```
 
 No es un Perfil para el Engine.
+
+## Pruebas end-to-end Candidate → Profile — CERRADAS 2026-09-29
+
+La primera prueba integral de CREACIÓN descubrió una incompatibilidad entre la frontera
+accepted-only y la secuencia interna de adopción:
+
+```text
+draft provisional
+→ guardar UUID y definition
+→ bitacora_load_profile()
+→ publish
+```
+
+Desde P3A, `bitacora_load_profile()` sólo reconoce Profiles stored `publish`, por lo que
+intentar resolver el registro provisional `draft` producía:
+
+```text
+accepted=false
+bitacora_profile_not_resolvable
+```
+
+El rollback funcionó correctamente y no dejó Profile residual.
+
+La resolución prematura del `draft` era redundante, porque después de publicar la adopción
+ya realiza una verificación autoritativa mediante la Library accepted-only.
+
+Se retiró ese paso en:
+
+```text
+2291c2c  Fix accepted profile adoption flow
+```
+
+La secuencia efectiva queda:
+
+```text
+validar candidato
+→ adquirir lock
+→ START TRANSACTION
+→ revalidar duplicados
+→ generar UUID
+→ crear registro provisional draft
+→ persistir UUID y definition
+→ publish
+→ resolver/verificar desde Library
+→ COMMIT
+→ release lock
+```
+
+### CREACIÓN desde Template
+
+Prueba completa verificada en KOOPITA:
+
+```text
+Template temporal
+→ bitacora_load_profile_template()
+→ Candidate válido
+→ bitacora_create_profile_from_template()
+→ adopción autoritativa
+→ ACCEPT
+→ UUID v4
+→ stored publish
+→ Library
+→ catálogo
+→ DELETE
+```
+
+Durante la prueba:
+
+```text
+Library: 4 → 5
+catálogo: 4 → 5
+source=stored
+valid=yes
+in_use=no
+deletable=yes
+```
+
+Después de DELETE:
+
+```text
+Library=4
+catálogo=4
+stored publish=0
+Eventos continúa configurado
+sin residuo del Profile temporal
+```
+
+### PROMOCIÓN directa
+
+Se verificaron tres casos sobre `bitacora_promote_profile_candidate()`:
+
+```text
+A. candidato nuevo
+   → ACCEPT
+   → UUID v4
+   → stored accepted
+
+B. mismo label, ignorando case y espacios exteriores
+   → REJECT
+   → bitacora_profile_duplicate
+   → reason=label
+
+C. otro label, mismas secciones complementarias
+   con distinto orden, case, espacios, slugs y areas
+   → REJECT
+   → bitacora_profile_duplicate
+   → reason=sections
+```
+
+Después de ambos REJECT:
+
+```text
+Library permaneció en 5
+catálogo permaneció en 5
+stored publish permaneció en 1
+instancia Eventos no cambió
+```
+
+Luego se eliminó el único Profile aceptado por la prueba y se restauró exactamente el
+baseline:
+
+```text
+Library=4
+catálogo=4
+stored publish=0
+Eventos continúa configurado
+```
+
+Queda verificado en ejecución:
+
+```text
+ACCEPT
+    → nace exactamente un Profile
+
+REJECT
+    → no nace Profile
+    → no queda residuo
+    → no cambia la instancia
+```
 
 ---
 
@@ -1394,7 +1534,7 @@ branch:
 0.3.0-dev
 
 HEAD verificado:
-c025660 Remove legacy profile editor remnants
+2291c2c Fix accepted profile adoption flow
 
 worktree:
 limpio
@@ -1667,13 +1807,13 @@ adopta.
 | P18 | DECIDIDO / PROBAR | Primera puesta en uso desde instalación neutra |
 | P19 | DECIDIDO / PROBAR | Usuario `use_bitacora_profiles=yes`, `manage_bitacora_profiles=no` |
 | P20 | DECIDIDO / PROBAR | Regresión final/fresh 0.3.0 en BITA |
-| P21 | EN CURSO | Actualizar y versionar `docs/CONTEXTO-MAESTRO.md` al estado post-refactor de Profiles |
+| P21 | CERRADO | `docs/CONTEXTO-MAESTRO.md` actualizado y versionado al estado post-refactor de Profiles |
 | P22 | DECIDIDO | Release 0.3.0 después de la regresión final |
 | P23 | OBSERVACIÓN | Búsqueda multisección |
 | P24 | OBSERVACIÓN | Shortcuts/referencias entre entradas |
 | P25 | OBSERVACIÓN | Diferencia visual menor frontend/wp-admin |
-| P26 | DECIDIDO / PROBAR | Ciclo completo de un Profile stored aceptado: Template → CREACIÓN → Library → catálogo → DELETE |
-| P27 | DECIDIDO / PROBAR | PROMOCIÓN: ACCEPT y rechazos por duplicado de label y composición de secciones |
+| P26 | CERRADO | Ciclo completo Template → CREACIÓN → adopción → Library → catálogo → DELETE verificado en KOOPITA |
+| P27 | CERRADO | PROMOCIÓN verificada: ACCEPT + REJECT por label duplicado + REJECT por composición de secciones |
 
 ---
 
@@ -1688,16 +1828,14 @@ Engine si esa UI está destinada a convertirse en Constructor.
 Prioridades:
 
 ```text
-1. probar ciclo completo de un Profile stored aceptado
-2. probar PROMOCIÓN y rechazos autoritativos por duplicación
-3. refactor mínimo de Cerrar Bitácora
-4. verificar instalación neutra
-5. Usar Perfil desde estado neutro
-6. permisos reales
-7. no regresión de los cuatro bundled
-8. BITA fresh
-9. idempotencia
-10. release
+1. refactor mínimo de Cerrar Bitácora
+2. verificar instalación neutra
+3. Usar Perfil desde estado neutro
+4. permisos reales
+5. no regresión de los cuatro bundled
+6. BITA fresh
+7. idempotencia
+8. release
 ```
 
 Las pruebas específicas del Constructor se definirán después de cerrar su frontera y forma
@@ -1748,37 +1886,30 @@ No confundir bloques clásicos con bloques `cacli`.
 
 # 27. Punto de reentrada recomendado
 
-Empezar desde este orden:
+La frontera Candidate → Profile y sus dos formas de entrada —CREACIÓN y PROMOCIÓN— quedaron implementadas y verificadas end-to-end.
+
+Retomar desde:
 
 ```text
-1. verificar ciclo completo de Profile stored aceptado:
-       Template
-       → CREACIÓN
-       → adopción
-       → Library
-       → catálogo
-       → DELETE
-
-2. verificar PROMOCIÓN por la misma frontera:
-       ACCEPT
-       rechazo por label duplicado
-       rechazo por composición de secciones duplicada
-
-3. cerrar operación runtime:
+1. cerrar operación runtime:
        Instancia actual
        Cerrar Bitácora
        instalación neutra
        Usar Perfil
 
-4. trasladar/reutilizar el warning destructivo probado en `e20211c`
+2. trasladar/reutilizar el warning destructivo probado en `e20211c`
 
-5. probar permisos reales:
-       use_bitacora_profiles
-       manage_bitacora_profiles
+3. verificar:
+       Cerrar Bitácora deja instalación neutra
+       Usar Perfil sólo aparece/opera en instalación neutra
+       primera puesta en uso
+       permisos use_bitacora_profiles / manage_bitacora_profiles
 
-6. regresión bundled + BITA fresh + idempotencia
+4. regresión de los cuatro bundled
 
-7. después retomar como bloques separados:
+5. BITA fresh + idempotencia
+
+6. después retomar como bloques separados:
        EN PAUSA
        Constructor de Templates
        EXPORTACIÓN Profile → Template
