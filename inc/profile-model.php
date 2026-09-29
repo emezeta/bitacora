@@ -435,6 +435,8 @@ function bitacora_promote_profile_candidate( $candidate ) {
  */
 function bitacora_adopt_profile_candidate( $candidate ) {
 
+        global $wpdb;
+
         $reject = static function ( $errors ) {
 
                 if ( ! is_array( $errors ) ) {
@@ -447,6 +449,10 @@ function bitacora_adopt_profile_candidate( $candidate ) {
                 );
         };
 
+        /*
+         * Toda comprobación puramente lógica ocurre antes de entrar
+         * en la sección crítica de persistencia.
+         */
         $validation = bitacora_validate_profile_candidate( $candidate );
 
         if ( empty( $validation['valid'] ) ) {
@@ -456,26 +462,6 @@ function bitacora_adopt_profile_candidate( $candidate ) {
                         && is_array( $validation['errors'] )
                                 ? $validation['errors']
                                 : array( 'El candidato no es válido.' )
-                );
-        }
-
-        $duplicate = bitacora_check_profile_candidate_duplicate(
-                $candidate
-        );
-
-        if ( ! empty( $duplicate['errors'] ) ) {
-                return $reject( $duplicate['errors'] );
-        }
-
-        if ( ! empty( $duplicate['duplicate'] ) ) {
-
-                return $reject(
-                        array(
-                                array(
-                                        'code'    => 'bitacora_profile_duplicate',
-                                        'matches' => $duplicate['matches'],
-                                ),
-                        )
                 );
         }
 
@@ -490,6 +476,7 @@ function bitacora_adopt_profile_candidate( $candidate ) {
         );
 
         if ( is_wp_error( $definition ) ) {
+
                 return $reject(
                         array(
                                 array(
@@ -500,6 +487,133 @@ function bitacora_adopt_profile_candidate( $candidate ) {
                 );
         }
 
+        /*
+         * Todas las adopciones del Engine se serializan.
+         *
+         * Esto convierte la comprobación de duplicados y la posterior
+         * aceptación en una única sección crítica.
+         */
+        $lock_name = 'bitacora_profile_adoption';
+
+        $lock_acquired = $wpdb->get_var(
+                $wpdb->prepare(
+                        'SELECT GET_LOCK(%s, %d)',
+                        $lock_name,
+                        10
+                )
+        );
+
+        if ( '1' !== (string) $lock_acquired ) {
+
+                return $reject(
+                        array(
+                                array(
+                                        'code'    => 'bitacora_profile_adoption_lock_unavailable',
+                                        'message' => 'No se pudo adquirir el bloqueo de adopción de perfiles.',
+                                ),
+                        )
+                );
+        }
+
+        $release_lock = static function () use ( $wpdb, $lock_name ) {
+
+                return $wpdb->get_var(
+                        $wpdb->prepare(
+                                'SELECT RELEASE_LOCK(%s)',
+                                $lock_name
+                        )
+                );
+        };
+
+        $transaction_started = false;
+        $post_id             = 0;
+
+        $rollback = static function ( $error ) use (
+                $wpdb,
+                $reject,
+                $release_lock,
+                &$transaction_started,
+                &$post_id
+        ) {
+
+                if ( $transaction_started ) {
+                        $wpdb->query( 'ROLLBACK' );
+                        $transaction_started = false;
+                }
+
+                if ( $post_id > 0 ) {
+                        clean_post_cache( $post_id );
+                }
+
+                $release_lock();
+
+                return $reject(
+                        array(
+                                $error,
+                        )
+                );
+        };
+
+        /*
+         * posts y postmeta son InnoDB en los entornos soportados.
+         * Desde aquí, REJECT revierte físicamente toda persistencia
+         * realizada por esta adopción.
+         */
+        $transaction_result = $wpdb->query(
+                'START TRANSACTION'
+        );
+
+        if ( false === $transaction_result ) {
+
+                $release_lock();
+
+                return $reject(
+                        array(
+                                array(
+                                        'code'    => 'bitacora_profile_transaction_not_started',
+                                        'message' => 'No se pudo iniciar la transacción de adopción.',
+                                ),
+                        )
+                );
+        }
+
+        $transaction_started = true;
+
+        /*
+         * Debe comprobarse dentro del lock.
+         *
+         * Una comprobación anterior permitiría que dos adopciones
+         * concurrentes aceptaran candidatos funcionalmente duplicados.
+         */
+        $duplicate = bitacora_check_profile_candidate_duplicate(
+                $candidate
+        );
+
+        if ( ! empty( $duplicate['errors'] ) ) {
+
+                return $rollback(
+                        array(
+                                'code'    => 'bitacora_profile_duplicate_check_failed',
+                                'message' => 'No se pudo comprobar la duplicación del candidato.',
+                                'data'    => $duplicate['errors'],
+                        )
+                );
+        }
+
+        if ( ! empty( $duplicate['duplicate'] ) ) {
+
+                return $rollback(
+                        array(
+                                'code'    => 'bitacora_profile_duplicate',
+                                'matches' => $duplicate['matches'],
+                        )
+                );
+        }
+
+        /*
+         * La identidad técnica nace únicamente dentro de la adopción
+         * ya serializada y transaccional.
+         */
         $profile_id = bitacora_generate_profile_id();
 
         $post_data = array(
@@ -519,31 +633,21 @@ function bitacora_adopt_profile_candidate( $candidate ) {
                 true
         );
 
-        if ( is_wp_error( $post_id ) ) {
+        if ( is_wp_error( $post_id ) || ! $post_id ) {
 
-                return $reject(
+                return $rollback(
                         array(
-                                array(
-                                        'code'    => $post_id->get_error_code(),
-                                        'message' => $post_id->get_error_message(),
-                                ),
+                                'code'    => is_wp_error( $post_id )
+                                        ? $post_id->get_error_code()
+                                        : 'bitacora_profile_post_not_created',
+                                'message' => is_wp_error( $post_id )
+                                        ? $post_id->get_error_message()
+                                        : 'No se pudo crear el registro transitorio del perfil.',
                         )
                 );
         }
 
-        $rollback = static function ( $post_id, $error ) use ( $reject ) {
-
-                wp_delete_post(
-                        (int) $post_id,
-                        true
-                );
-
-                return $reject(
-                        array(
-                                $error,
-                        )
-                );
-        };
+        $post_id = (int) $post_id;
 
         $identity_saved = add_post_meta(
                 $post_id,
@@ -555,7 +659,6 @@ function bitacora_adopt_profile_candidate( $candidate ) {
         if ( false === $identity_saved ) {
 
                 return $rollback(
-                        $post_id,
                         array(
                                 'code'    => 'bitacora_profile_identity_not_saved',
                                 'message' => 'No se pudo guardar la identidad del perfil.',
@@ -573,7 +676,6 @@ function bitacora_adopt_profile_candidate( $candidate ) {
         if ( false === $definition_saved ) {
 
                 return $rollback(
-                        $post_id,
                         array(
                                 'code'    => 'bitacora_profile_definition_not_saved',
                                 'message' => 'No se pudo guardar la definición del perfil.',
@@ -582,15 +684,14 @@ function bitacora_adopt_profile_candidate( $candidate ) {
         }
 
         /*
-         * El registro transitorio debe resolver correctamente antes de
-         * convertirse en un Perfil aceptado.
+         * El registro transitorio debe resolver correctamente antes
+         * de convertirse en un Perfil aceptado.
          */
         $resolved = bitacora_load_profile( $profile_id );
 
         if ( ! is_array( $resolved ) ) {
 
                 return $rollback(
-                        $post_id,
                         array(
                                 'code'    => 'bitacora_profile_not_resolvable',
                                 'message' => 'El candidato persistido no pudo resolverse correctamente.',
@@ -600,7 +701,7 @@ function bitacora_adopt_profile_candidate( $candidate ) {
 
         $published = wp_update_post(
                 array(
-                        'ID'          => (int) $post_id,
+                        'ID'          => $post_id,
                         'post_status' => 'publish',
                 ),
                 true
@@ -609,7 +710,6 @@ function bitacora_adopt_profile_candidate( $candidate ) {
         if ( is_wp_error( $published ) ) {
 
                 return $rollback(
-                        $post_id,
                         array(
                                 'code'    => $published->get_error_code(),
                                 'message' => $published->get_error_message(),
@@ -617,10 +717,9 @@ function bitacora_adopt_profile_candidate( $candidate ) {
                 );
         }
 
-        if ( (int) $published !== (int) $post_id ) {
+        if ( (int) $published !== $post_id ) {
 
                 return $rollback(
-                        $post_id,
                         array(
                                 'code'    => 'bitacora_profile_not_accepted',
                                 'message' => 'No se pudo aceptar el perfil.',
@@ -630,6 +729,8 @@ function bitacora_adopt_profile_candidate( $candidate ) {
 
         /*
          * Verificación final desde la biblioteca aceptada.
+         * La conexión actual ve sus propias escrituras todavía no
+         * confirmadas por COMMIT.
          */
         $accepted_profile = false;
 
@@ -644,13 +745,35 @@ function bitacora_adopt_profile_candidate( $candidate ) {
         if ( ! is_array( $accepted_profile ) ) {
 
                 return $rollback(
-                        $post_id,
                         array(
                                 'code'    => 'bitacora_profile_not_in_library',
                                 'message' => 'El perfil aceptado no pudo resolverse desde la biblioteca.',
                         )
                 );
         }
+
+        $committed = $wpdb->query(
+                'COMMIT'
+        );
+
+        if ( false === $committed ) {
+
+                return $rollback(
+                        array(
+                                'code'    => 'bitacora_profile_commit_failed',
+                                'message' => 'No se pudo confirmar la adopción del perfil.',
+                        )
+                );
+        }
+
+        $transaction_started = false;
+
+        /*
+         * Una vez confirmado COMMIT, el Perfil ya existe.
+         * RELEASE_LOCK no forma parte de su identidad ni aceptación.
+         * La conexión también liberará el advisory lock al cerrarse.
+         */
+        $release_lock();
 
         return array(
                 'accepted' => true,
