@@ -269,6 +269,152 @@ function bitacora_prepare_stored_profile_definition( $definition = null ) {
 
 
 /**
+ * Lee un Template externo de Perfil y construye un candidato transitorio.
+ *
+ * Los Templates viven fuera de la biblioteca de Perfiles y no poseen UUID
+ * ni estado de dominio Bitácora.
+ */
+function bitacora_load_profile_template( $template_name ) {
+
+        if ( ! is_string( $template_name ) ) {
+                return new WP_Error(
+                        'bitacora_profile_template_name_invalid',
+                        'El nombre del Template no es válido.'
+                );
+        }
+
+        $template_name = sanitize_file_name(
+                trim( $template_name )
+        );
+
+        if ( '' === $template_name ) {
+                return new WP_Error(
+                        'bitacora_profile_template_name_invalid',
+                        'El nombre del Template no es válido.'
+                );
+        }
+
+        if ( '.php' !== substr( $template_name, -4 ) ) {
+                $template_name .= '.php';
+        }
+
+        $directory = get_stylesheet_directory()
+                . '/inc/profile-templates';
+
+        $file = $directory . '/' . $template_name;
+
+        if ( ! is_file( $file ) ) {
+                return new WP_Error(
+                        'bitacora_profile_template_not_found',
+                        'No se encontró el Template solicitado.'
+                );
+        }
+
+        $template = require $file;
+
+        if ( ! is_array( $template ) ) {
+                return new WP_Error(
+                        'bitacora_profile_template_invalid',
+                        'El Template debe devolver un array.'
+                );
+        }
+
+        foreach ( array_keys( $template ) as $key ) {
+
+                if (
+                        ! in_array(
+                                $key,
+                                array(
+                                        'label',
+                                        'core',
+                                        'sections',
+                                        'classes',
+                                ),
+                                true
+                        )
+                ) {
+                        return new WP_Error(
+                                'bitacora_profile_template_invalid',
+                                sprintf(
+                                        'Template: atributo no permitido "%s".',
+                                        $key
+                                )
+                        );
+                }
+        }
+
+        if ( ! array_key_exists( 'label', $template ) ) {
+                return new WP_Error(
+                        'bitacora_profile_template_invalid',
+                        'Template: label es obligatorio.'
+                );
+        }
+
+        $definition = array(
+                'core'     => isset( $template['core'] )
+                        ? $template['core']
+                        : array(),
+                'sections' => isset( $template['sections'] )
+                        ? $template['sections']
+                        : array(),
+                'classes'  => isset( $template['classes'] )
+                        ? $template['classes']
+                        : array(),
+        );
+
+        $candidate = array(
+                'label'      => $template['label'],
+                'definition' => $definition,
+        );
+
+        $validation = bitacora_validate_profile_candidate(
+                $candidate
+        );
+
+        if ( empty( $validation['valid'] ) ) {
+                return new WP_Error(
+                        'bitacora_profile_template_invalid',
+                        'El Template no puede producir un candidato válido.',
+                        $validation
+                );
+        }
+
+        return $candidate;
+}
+
+
+/**
+ * Crea un Perfil a partir de un Template externo.
+ *
+ * El Template se limita a producir un candidato transitorio. La decisión
+ * autoritativa de ACCEPT / REJECT pertenece a la adopción del Engine.
+ */
+function bitacora_create_profile_from_template( $template_name ) {
+
+        $candidate = bitacora_load_profile_template(
+                $template_name
+        );
+
+        if ( is_wp_error( $candidate ) ) {
+                return array(
+                        'accepted' => false,
+                        'errors'   => array(
+                                array(
+                                        'code'    => $candidate->get_error_code(),
+                                        'message' => $candidate->get_error_message(),
+                                        'data'    => $candidate->get_error_data(),
+                                ),
+                        ),
+                );
+        }
+
+        return bitacora_adopt_profile_candidate(
+                $candidate
+        );
+}
+
+
+/**
  * Promueve un candidato presentado por un productor externo.
  *
  * PROMOCIÓN sólo define el origen de la operación. La decisión autoritativa
