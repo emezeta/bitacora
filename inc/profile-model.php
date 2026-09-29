@@ -614,7 +614,7 @@ function bitacora_get_profile_library() {
         $stored_posts = get_posts(
                 array(
                         'post_type'      => 'bitacora_profile',
-                        'post_status'    => 'any',
+                        'post_status'    => 'publish',
                         'posts_per_page' => -1,
                         'fields'         => 'ids',
                 )
