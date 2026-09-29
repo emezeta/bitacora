@@ -1,10 +1,10 @@
 # Bitácora — Contexto Maestro de desarrollo
 
-**Revisión documental:** 2026-09-28  
-**Estado técnico de referencia:** 2026-09-28  
+**Revisión documental:** 2026-09-29
+**Estado técnico de referencia:** 2026-09-29
 **Rama:** `0.3.0-dev`  
 **Repo canónico:** `/home/dosmilun/repos/bitacora`  
-**HEAD verificado:** `e20211c Add destructive profile change guard`
+**HEAD verificado:** `c025660 Remove legacy profile editor remnants`
 
 > Este documento describe el **estado vigente** del proyecto y debe servir como referencia
 > de continuidad entre chats y estaciones de trabajo. No pretende narrar toda la historia.
@@ -281,17 +281,32 @@ El Constructor puede implementarse como plugin/addon/módulo opcional.
 Bitácora debe funcionar perfectamente con una biblioteca de Perfiles predefinidos sin
 tener instalado ningún Constructor.
 
-El actual editor de Perfiles `stored` contiene ya una parte muy avanzada de la lógica de
-autoría. No debe eliminarse ni moverse precipitadamente. Primero se define la frontera
-contractual; luego se evalúa costo/beneficio de:
+La antigua creación y edición progresiva de Perfiles `stored` dentro del Engine fue
+retirada después de cerrar la frontera contractual.
+
+El Engine ya no contiene una UX de autoría de “Perfil en construcción”. Esa responsabilidad
+queda reservada para un futuro productor/Constructor de Templates.
+
+Estado verificado al 2026-09-29:
 
 ```text
-- extraerlo físicamente a plugin
-- mantener código compartido
-- ocultar la UI de autoría en el Core
-- introducir una API pequeña y reutilizar gran parte del código existente
-- una combinación de las anteriores
+069acbc  Remove legacy profile creation
+91f0861  Remove legacy profile editing
+b4a5a4d  Enforce accepted profile boundary
+740ad60  Simplify profile availability semantics
+c025660  Remove legacy profile editor remnants
 ```
+
+La forma física futura del Constructor sigue pendiente de análisis:
+
+```text
+- plugin
+- addon
+- módulo opcional
+- otra integración externa que use la frontera del Engine
+```
+
+Esa decisión no condiciona el funcionamiento normal de Bitácora Engine.
 
 ---
 
@@ -405,14 +420,24 @@ La adopción se rechaza si se cumple **cualquiera** de estas premisas:
 
 En ese caso Bitácora presume que el candidato es un duplicado.
 
-Detalles de normalización todavía por especificar técnicamente:
+Normalización técnica vigente:
 
 ```text
-- mayúsculas/minúsculas
-- acentos
-- espacios
-- orden de secciones
-- inclusión/exclusión de la Bitácora core section en la comparación
+label
+    trim
+    comparación case-insensitive
+    el candidato se normaliza de forma consistente con persistencia
+
+nombres de secciones complementarias
+    trim
+    comparación case-insensitive
+    orden irrelevante
+    misma cantidad
+    Bitácora core section (`notas`) excluida
+
+acentos
+    no se eliminan
+    `Catalogos` != `Catálogos`
 ```
 
 Una Template presuntamente duplicada puede seguir existiendo en el productor y puede
@@ -598,17 +623,50 @@ no lo cumple
 
 ---
 
-# 7. API / hooks de frontera — PENDIENTE DE IMPLEMENTACIÓN
+# 7. API / frontera del Engine — ESTADO ACTUAL
 
-Bitácora Engine debe poder habilitar una frontera pública para un Constructor u otro
-productor autorizado.
+La frontera gruesa Candidate → Profile ya está implementada en PHP.
 
-Una vez definida/habilitada, esa frontera debe ser estable y el Engine debe mantener sus
-hooks/API atentos a solicitudes de promoción.
+Entradas principales:
 
-El contrato debe ocultar la implementación interna de WordPress.
+```text
+bitacora_adopt_profile_candidate()
+    adopción autoritativa común
 
-El productor no debería necesitar conocer:
+bitacora_promote_profile_candidate()
+    entrada de PROMOCIÓN
+
+bitacora_load_profile_template()
+    lectura de Template externo soportado actualmente
+
+bitacora_create_profile_from_template()
+    entrada de CREACIÓN
+    Template → candidato → misma adopción autoritativa
+```
+
+La frontera mantiene el principio:
+
+```text
+productor construye TODO
+        ↓
+entrega UNA definición candidata
+        ↓
+Engine valida/adopta TODO
+        ↓
+REJECT | ACCEPT
+```
+
+No existe API de edición incremental de Profile dentro del Engine.
+
+El candidato no puede imponer identidad Bitácora ni estado operacional. La persistencia,
+UUID, resolución y entrada en biblioteca pertenecen exclusivamente al Engine.
+
+La API PHP actual constituye la frontera interna/autoritativa ya implementada. Si un futuro
+Constructor externo necesita otro transporte —hook WordPress, endpoint u otra integración—,
+éste deberá ser una envoltura fina sobre estas mismas operaciones y no un segundo pipeline de
+adopción.
+
+El productor no necesita conocer:
 
 ```text
 CPT bitacora_profile
@@ -619,88 +677,138 @@ opciones internas
 IDs WordPress
 ```
 
-La API conceptual mínima es una solicitud de promoción y una respuesta binaria/estructurada.
-
-No diseñar todavía una gran API de edición del tipo:
+No diseñar una API del tipo:
 
 ```text
 add_section()
 delete_class()
 update_feature()
-...
 ```
 
 Eso volvería a introducir el Constructor dentro del Engine.
 
-La frontera debe ser gruesa:
-
-```text
-Constructor construye TODO
-        ↓
-entrega UNA definición candidata
-        ↓
-Engine adopta TODO o rechaza TODO
-```
-
 ---
 
-# 8. Auditoría del código actual respecto del contrato
+# 8. Implementación del contrato Candidate → Profile — CERRADA 2026-09-29
 
-La auditoría de 2026-09-28 confirmó que una parte importante del contrato ya existe de
-hecho en el código, pero mezclada con responsabilidades de autoría.
+El contrato C01–C04 dejó de ser solamente arquitectura objetivo y posee implementación
+verificada.
 
-Funciones relevantes:
+Pipeline incorporado:
+
+```text
+ba4639f  Extract neutral profile definition validation
+b8763e5  Add profile candidate validation
+c30aee5  Add profile duplicate detection
+b6f51d2  Normalize profile labels before duplicate check
+2ff8dd5  Limit profile library to accepted profiles
+b1718d4  Add authoritative profile adoption
+129e0b3  Add profile promotion entrypoint
+a629b11  Add profile creation from templates
+17f0f73  Make profile adoption atomic
+```
+
+Funciones principales:
 
 ```text
 inc/profiles.php
-    bitacora_get_default_core_section_definition()
+    bitacora_validate_profile_definition()
+    bitacora_validate_profile_candidate()
     bitacora_load_profile()
     bitacora_validate_profile()
 
 inc/profile-model.php
-    bitacora_prepare_stored_profile_definition()
-    bitacora_create_stored_profile()
-    bitacora_update_stored_profile_definition()
-    bitacora_generate_profile_id()
-    bitacora_get_profile_catalog()
-
-inc/install.php
-    bitacora_configure_profile()
-    bitacora_remove_configured_profile()
-    bitacora_change_profile()
+    bitacora_prepare_profile_definition()
+    bitacora_check_profile_candidate_duplicate()
+    bitacora_adopt_profile_candidate()
+    bitacora_promote_profile_candidate()
+    bitacora_load_profile_template()
+    bitacora_create_profile_from_template()
+    bitacora_get_profile_library()
+    bitacora_profile_library_contains()
 ```
 
-Hallazgos:
+Garantías verificadas:
 
 ```text
-- el Engine ya aporta una Bitácora core section por default
-- profile['core'] funciona hoy como overrides
-- sections puede estar vacío
-- classes puede estar vacío
-- role=core / role=section son impuestos por el loader
-- el UUID stored ya se genera internamente
-- bundled y stored convergen en un loader común
-- bitacora_configure_profile() vuelve a validar antes de materializar
+- PROMOCIÓN y CREACIÓN convergen en la misma adopción
+- candidato rechazado no produce Profile
+- UUID v4 se genera sólo dentro del Engine
+- duplicados se rechazan antes de la aceptación
+- duplicate check se repite dentro de lock/transacción
+- fallo de persistencia provoca rollback
+- Profile accepted stored termina como publish
+- la Library contiene sólo bundled + stored publish resolubles
+- drafts/residuos legacy no pertenecen a Library
+- configure/change requieren pertenencia a Library
 ```
 
-Pero el modelo `stored` actual también permite:
+Atomicidad de stored adoption:
 
 ```text
-- crear un registro inicialmente incompleto
-- guardarlo aunque siga incompleto
-- incluirlo en el catálogo
-- exponer valid/complete/enabled/available/in_use
+GET_LOCK('bitacora_profile_adoption', 10)
+START TRANSACTION
+recheck duplicados
+generar UUID
+insertar draft provisional
+persistir meta
+resolver
+publicar
+verificar Library
+COMMIT
+release lock
 ```
 
-Esto es **DEUDA ACTUAL** respecto del nuevo contrato.
+Se probó además una falla inducida de persistencia y adopción concurrente: el resultado
+observable fue un único ACCEPT y el otro intento rechazado como duplicado, sin Profile
+residual.
 
-Importante: no se considera un error histórico; fue una solución útil para construir y
-probar el editor actual. La nueva arquitectura simplemente coloca esa función de taller
-fuera del dominio conceptual del Engine.
+## Retiro del modelo legacy de autoría dentro del Engine
 
-También se comprobó que hoy **no existe todavía un hook/API público de incorporación de
-candidatos**. Existen hooks de WordPress y handlers administrativos, pero no la frontera de
-extensión definida en las secciones 6 y 7.
+Secuencia:
+
+```text
+069acbc  Remove legacy profile creation
+91f0861  Remove legacy profile editing
+b4a5a4d  Enforce accepted profile boundary
+740ad60  Simplify profile availability semantics
+c025660  Remove legacy profile editor remnants
+```
+
+Consecuencias:
+
+```text
+- no creación administrativa de Perfil incompleto
+- no edición incremental de Profile stored
+- no estado complete
+- no estado enabled
+- no estado available como dominio
+- no estado editable
+- no estado incomplete / EN CONSTRUCCIÓN
+```
+
+`DISPONIBLE` puede seguir apareciendo en UI como indicación contextual de que un Profile
+aceptado, válido y fuera de uso puede elegirse. No es un estado persistido del dominio.
+
+Existe todavía en KOOPITA un registro histórico:
+
+```text
+post ID 160
+Perfil_pruebas00
+post_status=draft
+UUID=fadfd407-b74a-46cf-a5f7-6dc7bb6ce4e7
+```
+
+Se conserva físicamente como residuo de pruebas, pero quedó verificado que:
+
+```text
+bitacora_profile_library_contains()         = false
+bitacora_load_profile()                     = false
+bitacora_get_stored_profile_definition()    = false
+catálogo                                    = 0 coincidencias
+```
+
+No es un Perfil para el Engine.
 
 ---
 
@@ -1274,7 +1382,7 @@ Bocetos anteriores con `Planificación`, `Actividades`, `Recursos`, etc. están 
 
 ---
 
-# 20. Estado técnico operativo — 2026-09-28
+# 20. Estado técnico operativo — 2026-09-29
 
 ## Git
 
@@ -1286,7 +1394,7 @@ branch:
 0.3.0-dev
 
 HEAD verificado:
-e20211c Add destructive profile change guard
+c025660 Remove legacy profile editor remnants
 
 worktree:
 limpio
@@ -1539,31 +1647,33 @@ adopta.
 
 | ID | Estado | Asunto |
 |---|---|---|
-| P01 | DECIDIDO / IMPLEMENTAR | Formalizar C01–C04 como contrato técnico del Engine |
-| P02 | PENDIENTE DE ANÁLISIS | Definir normalización exacta de duplicados por label/nombres de secciones |
-| P03 | DECIDIDO / IMPLEMENTAR | Crear API/hook público y estable de promoción de candidatos |
-| P04 | DECIDIDO / IMPLEMENTAR | Garantizar atomicidad real de promoción: REJECT sin residuo |
-| P05 | DECIDIDO / IMPLEMENTAR | Separar biblioteca de Perfiles de la autoría de Templates |
-| P06 | PENDIENTE DE ANÁLISIS | Decidir forma física del Constructor: plugin/addon/módulo y cuánto código extraer |
+| P01 | CERRADO | C01–C04 formalizados y reflejados en el pipeline Candidate → Profile |
+| P02 | CERRADO | Normalización de duplicados definida e implementada |
+| P03 | CERRADO | Entrada PHP de PROMOCIÓN implementada sobre adopción autoritativa común |
+| P04 | CERRADO | Adopción stored protegida por lock + transacción + rollback; REJECT sin Profile residual |
+| P05 | CERRADO | Library limitada a Profiles aceptados; autoría legacy retirada del Engine |
+| P06 | PENDIENTE DE ANÁLISIS | Decidir forma física futura del Constructor: plugin/addon/módulo/integración externa |
 | P07 | DECIDIDO / IMPLEMENTAR | Refactorizar UI: `Cerrar Bitácora` separado de `Usar Perfil` |
 | P08 | DECIDIDO / IMPLEMENTAR | Reutilizar warning/guard destructivo en `Cerrar Bitácora` |
-| P09 | DECIDIDO / IMPLEMENTAR | Sacar `EN USO`/`DISPONIBLE` del modelo técnico de Perfil |
+| P09 | CERRADO | `EN USO`/`DISPONIBLE` retirados como estados técnicos de Profile; `DISPONIBLE` queda sólo como UI contextual |
 | P10 | DECIDIDO / IMPLEMENTAR | Ocultar `Usar este perfil` mientras exista una instancia |
 | P11 | DECIDIDO / IMPLEMENTAR | Separar identidad técnica y etiqueta visible en editor/runtime |
 | P12 | DECIDIDO / IMPLEMENTAR | Implementar EN PAUSA / edición light conservativa |
 | P13 | DECIDIDO / IMPLEMENTAR | Ocultar Sección preserva historia, excluye navegación normal e impide nuevas entradas; mantiene referencias y búsqueda multisección |
 | P14 | PENDIENTE DE ANÁLISIS | Semántica exacta de ocultar Tipo |
-| P15 | DECIDIDO / IMPLEMENTAR | Exportar Perfil como Template externo; no existe “importar Perfil” |
-| P16 | DECIDIDO / IMPLEMENTAR | Crear Perfil desde Engine leyendo Template externo y reutilizando la adopción autoritativa |
+| P15 | DECIDIDO / IMPLEMENTAR | Exportar Profile como Template externo; no existe “importar Perfil” |
+| P16 | CERRADO | CREACIÓN desde Template externo implementada reutilizando la adopción autoritativa |
 | P17 | PENDIENTE DE ANÁLISIS | Evaluar si alguna vez hace falta Perfil sucesor |
 | P18 | DECIDIDO / PROBAR | Primera puesta en uso desde instalación neutra |
 | P19 | DECIDIDO / PROBAR | Usuario `use_bitacora_profiles=yes`, `manage_bitacora_profiles=no` |
 | P20 | DECIDIDO / PROBAR | Regresión final/fresh 0.3.0 en BITA |
-| P21 | DECIDIDO | Commit final de `docs/CONTEXTO-MAESTRO.md` cuando esta revisión sea aprobada |
+| P21 | EN CURSO | Actualizar y versionar `docs/CONTEXTO-MAESTRO.md` al estado post-refactor de Profiles |
 | P22 | DECIDIDO | Release 0.3.0 después de la regresión final |
 | P23 | OBSERVACIÓN | Búsqueda multisección |
 | P24 | OBSERVACIÓN | Shortcuts/referencias entre entradas |
 | P25 | OBSERVACIÓN | Diferencia visual menor frontend/wp-admin |
+| P26 | DECIDIDO / PROBAR | Ciclo completo de un Profile stored aceptado: Template → CREACIÓN → Library → catálogo → DELETE |
+| P27 | DECIDIDO / PROBAR | PROMOCIÓN: ACCEPT y rechazos por duplicado de label y composición de secciones |
 
 ---
 
@@ -1578,14 +1688,16 @@ Engine si esa UI está destinada a convertirse en Constructor.
 Prioridades:
 
 ```text
-1. refactor mínimo de Cerrar Bitácora
-2. verificar instalación neutra
-3. Usar Perfil desde estado neutro
-4. permisos reales
-5. no regresión de los cuatro bundled
-6. BITA fresh
-7. idempotencia
-8. release
+1. probar ciclo completo de un Profile stored aceptado
+2. probar PROMOCIÓN y rechazos autoritativos por duplicación
+3. refactor mínimo de Cerrar Bitácora
+4. verificar instalación neutra
+5. Usar Perfil desde estado neutro
+6. permisos reales
+7. no regresión de los cuatro bundled
+8. BITA fresh
+9. idempotencia
+10. release
 ```
 
 Las pruebas específicas del Constructor se definirán después de cerrar su frontera y forma
@@ -1639,18 +1751,37 @@ No confundir bloques clásicos con bloques `cacli`.
 Empezar desde este orden:
 
 ```text
-1. llevar esta revisión aprobada al repo como docs/CONTEXTO-MAESTRO.md
-2. traducir C01–C04 a una especificación técnica mínima
-3. auditar qué funciones actuales pueden reutilizarse sin conservar
-   la noción de Perfil incompleto
-4. diseñar el mínimo API/hook de PROMOCIÓN / CREACIÓN
-5. refactorizar la UI de instancia:
+1. verificar ciclo completo de Profile stored aceptado:
+       Template
+       → CREACIÓN
+       → adopción
+       → Library
+       → catálogo
+       → DELETE
+
+2. verificar PROMOCIÓN por la misma frontera:
+       ACCEPT
+       rechazo por label duplicado
+       rechazo por composición de secciones duplicada
+
+3. cerrar operación runtime:
        Instancia actual
        Cerrar Bitácora
-       biblioteca de Perfiles
-       Usar Perfil sólo en instalación neutra
-6. trasladar/reutilizar el warning destructivo probado en `e20211c`
-7. luego retomar EN PAUSA y Constructor como bloques separados
+       instalación neutra
+       Usar Perfil
+
+4. trasladar/reutilizar el warning destructivo probado en `e20211c`
+
+5. probar permisos reales:
+       use_bitacora_profiles
+       manage_bitacora_profiles
+
+6. regresión bundled + BITA fresh + idempotencia
+
+7. después retomar como bloques separados:
+       EN PAUSA
+       Constructor de Templates
+       EXPORTACIÓN Profile → Template
 ```
 
 Principio de cierre:
