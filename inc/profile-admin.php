@@ -288,21 +288,6 @@ function bitacora_handle_use_profile() {
 function bitacora_get_profile_admin_error_message( $error_code ) {
 
 	$messages = array(
-		'bitacora_profile_class_scope_invalid' =>
-			'La sección de los tipos de contenido no es válida.',
-
-		'bitacora_profile_class_name_invalid' =>
-			'Uno de los tipos de contenido no tiene un nombre válido.',
-
-		'bitacora_profile_class_duplicate' =>
-			'Hay tipos de contenido repetidos.',
-
-		'bitacora_profile_class_definition_invalid' =>
-			'La definición de tipos de contenido no es válida.',
-
-		'bitacora_profile_class_collision' =>
-			'Un tipo de contenido entra en conflicto con otro existente.',
-
 		'bitacora_profile_id_invalid' =>
 			'La identidad del perfil no es válida.',
 
@@ -313,7 +298,7 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 			'No se pudo resolver correctamente el perfil persistente.',
 
 		'bitacora_profile_in_use' =>
-			'No se puede modificar un perfil que está en uso.',
+			'No se puede eliminar un perfil que está en uso.',
 
 
 		'bitacora_profile_not_deleted' =>
@@ -327,25 +312,10 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 
 		'bitacora_profile_definition_not_saved' =>
 			'No se pudo guardar la definición del perfil.',
-
-		'bitacora_profile_section_invalid' =>
-			'La sección indicada no es válida.',
-
-		'bitacora_profile_section_name_invalid' =>
-			'Una de las secciones no tiene un nombre válido.',
-
-		'bitacora_profile_section_core_collision' =>
-			'Una sección entra en conflicto con el core.',
-
-		'bitacora_profile_section_duplicate' =>
-			'Hay secciones repetidas.',
-
-		'bitacora_profile_section_has_types' =>
-			'Primero eliminá los tipos de contenido de la sección que querés quitar o renombrar.',
 	);
 
 	return $messages[ $error_code ]
-		?? 'No se pudieron guardar los cambios.';
+		?? 'No se pudo completar la operación solicitada.';
 }
 
 

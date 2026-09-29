@@ -11,8 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Registra la entidad interna utilizada para Profiles persistidos.
  *
  * No tiene representación pública ni interfaz administrativa propia.
- * La disponibilidad de un perfil no depende del post_status:
- * se determina mediante bitacora_validate_profile().
+ * Los Profiles persistidos aceptados se almacenan con post_status=publish.
  */
 function bitacora_register_profile_cpt() {
 
@@ -42,12 +41,12 @@ function bitacora_register_profile_cpt() {
                         ),
 
                         /*
-                         * Toda operación CRUD sobre perfiles persistentes
-                         * requiere el permiso de administración de perfiles.
+                         * El acceso técnico a Profiles persistidos requiere
+                         * el permiso de administración de perfiles.
                          *
                          * use_bitacora_profiles queda reservado para la
-                         * operación distinta y sensible de poner un perfil
-                         * disponible en uso.
+                         * operación distinta y sensible de poner un Profile
+                         * en uso.
                          */
                         'capabilities' => array(
                                 'edit_post'              => 'manage_bitacora_profiles',
