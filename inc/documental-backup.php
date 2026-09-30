@@ -520,3 +520,441 @@ function bitacora_collect_documental_backup() {
         'attachments' => $attachments,
     );
 }
+
+
+/**
+ * Serializa una estructura del respaldo documental como JSON legible.
+ *
+ * @return string|WP_Error
+ */
+function bitacora_documental_encode_json( $value, $label ) {
+
+    $json = wp_json_encode(
+        $value,
+        JSON_PRETTY_PRINT
+        | JSON_UNESCAPED_UNICODE
+        | JSON_UNESCAPED_SLASHES
+    );
+
+    if ( false === $json ) {
+        return new WP_Error(
+            'bitacora_documental_json_error',
+            sprintf(
+                'No se pudo serializar "%s" como JSON.',
+                (string) $label
+            )
+        );
+    }
+
+    return $json . "\n";
+}
+
+
+/**
+ * Produce el texto explicativo incluido en cada respaldo.
+ */
+function bitacora_documental_build_readme( $backup ) {
+
+    $manifest = $backup['manifest'];
+    $profile  = $backup['profile'];
+
+    $configured_at = isset(
+        $manifest['instance']['configured_at']['utc']
+    )
+        ? $manifest['instance']['configured_at']['utc']
+        : null;
+
+    $generated_at = isset(
+        $manifest['instance']['backup_generated_at']['utc']
+    )
+        ? $manifest['instance']['backup_generated_at']['utc']
+        : '';
+
+    $counts = isset( $manifest['counts'] )
+        && is_array( $manifest['counts'] )
+        ? $manifest['counts']
+        : array();
+
+    $lines = array(
+        'RESPALDO DOCUMENTAL BITÁCORA',
+        '=============================',
+        '',
+        'Este paquete conserva una representación documental de una',
+        'instancia de Bitácora para archivo, auditoría, documentación',
+        'o análisis posterior.',
+        '',
+        'IMPORTANTE',
+        '----------',
+        'Este respaldo NO es una copia restaurable.',
+        'NO es un Template.',
+        'NO es una exportación de Profile.',
+        'NO puede reutilizarse directamente para reconstruir una Bitácora.',
+        '',
+        'PROFILE',
+        '-------',
+        'Nombre: ' . (
+            isset( $profile['label'] )
+                ? $profile['label']
+                : ''
+        ),
+        'UUID: ' . (
+            isset( $profile['id'] )
+                ? $profile['id']
+                : ''
+        ),
+        '',
+        'INSTANCIA',
+        '---------',
+        'Puesta en uso: ' . (
+            $configured_at
+                ? $configured_at
+                : 'No disponible'
+        ),
+        'Respaldo generado: ' . $generated_at,
+        '',
+        'CONTENIDO',
+        '---------',
+        'Secciones: ' . (
+            isset( $counts['sections'] )
+                ? $counts['sections']
+                : 0
+        ),
+        'Tipos: ' . (
+            isset( $counts['classes'] )
+                ? $counts['classes']
+                : 0
+        ),
+        'Páginas materializadas: ' . (
+            isset( $counts['pages'] )
+                ? $counts['pages']
+                : 0
+        ),
+        'Entradas: ' . (
+            isset( $counts['items'] )
+                ? $counts['items']
+                : 0
+        ),
+        'Comentarios: ' . (
+            isset( $counts['comments'] )
+                ? $counts['comments']
+                : 0
+        ),
+        'Archivos adjuntos: ' . (
+            isset( $counts['attachments'] )
+                ? $counts['attachments']
+                : 0
+        ),
+        '',
+        'ARCHIVOS DEL PAQUETE',
+        '--------------------',
+        'manifest.json     Metadatos generales del respaldo.',
+        'perfil.json       Identidad y definición del Profile utilizado.',
+        'estructura.json   Secciones, tipos y páginas materializadas.',
+        'entradas.json     Contenido producido por la instancia.',
+        'comentarios.json  Comentarios asociados a las entradas.',
+        'adjuntos.json     Inventario, metadatos y SHA-256 de adjuntos.',
+        'archivos/         Copias de los archivos físicos disponibles.',
+        '',
+    );
+
+    return implode( "\n", $lines );
+}
+
+
+/**
+ * Construye un nombre seguro y descriptivo para el ZIP.
+ */
+function bitacora_documental_build_filename( $backup ) {
+
+    $label = isset( $backup['profile']['label'] )
+        ? (string) $backup['profile']['label']
+        : 'bitacora';
+
+    $slug = sanitize_title( $label );
+
+    if ( '' === $slug ) {
+        $slug = 'bitacora';
+    }
+
+    $timestamp = isset(
+        $backup['manifest']['instance']['backup_generated_at']['timestamp']
+    )
+        ? absint(
+            $backup['manifest']['instance']['backup_generated_at']['timestamp']
+        )
+        : time();
+
+    return sprintf(
+        'bitacora-documental-%s-%s.zip',
+        $slug,
+        gmdate( 'Ymd-His', $timestamp )
+    );
+}
+
+
+/**
+ * Valida y devuelve la ruta interna del ZIP para un attachment.
+ *
+ * La ruta física nunca se expone en el paquete.
+ */
+function bitacora_documental_get_archive_file_path( $attachment ) {
+
+    $relative_file = isset( $attachment['relative_file'] )
+        ? wp_normalize_path(
+            (string) $attachment['relative_file']
+        )
+        : '';
+
+    $relative_file = ltrim(
+        $relative_file,
+        '/'
+    );
+
+    if (
+        '' === $relative_file
+        || false !== strpos( $relative_file, '../' )
+        || '..' === $relative_file
+    ) {
+        return '';
+    }
+
+    return 'archivos/' . $relative_file;
+}
+
+
+/**
+ * Obtiene nuevamente la ruta física de un attachment al empaquetar.
+ *
+ * El colector no conserva rutas absolutas del servidor.
+ */
+function bitacora_documental_get_attachment_source( $attachment ) {
+
+    $attachment_id = isset( $attachment['id'] )
+        ? absint( $attachment['id'] )
+        : 0;
+
+    if ( ! $attachment_id ) {
+        return '';
+    }
+
+    $file = get_attached_file( $attachment_id );
+
+    if (
+        ! is_string( $file )
+        || '' === $file
+        || ! is_file( $file )
+        || ! is_readable( $file )
+    ) {
+        return '';
+    }
+
+    return $file;
+}
+
+
+/**
+ * Empaqueta el respaldo documental actual en un ZIP temporal.
+ *
+ * El llamador es responsable de entregar y posteriormente eliminar
+ * el archivo temporal.
+ *
+ * @return array|WP_Error
+ */
+function bitacora_build_documental_backup() {
+
+    if ( ! class_exists( 'ZipArchive' ) ) {
+        return new WP_Error(
+            'bitacora_documental_zip_unavailable',
+            'La extensión ZipArchive no está disponible en el servidor.'
+        );
+    }
+
+    $backup = bitacora_collect_documental_backup();
+
+    if ( is_wp_error( $backup ) ) {
+        return $backup;
+    }
+
+    $filename = bitacora_documental_build_filename(
+        $backup
+    );
+
+    $temp_file = wp_tempnam(
+        $filename
+    );
+
+    if (
+        ! is_string( $temp_file )
+        || '' === $temp_file
+    ) {
+        return new WP_Error(
+            'bitacora_documental_tempfile_error',
+            'No se pudo crear el archivo temporal del respaldo.'
+        );
+    }
+
+    $zip = new ZipArchive();
+
+    $opened = $zip->open(
+        $temp_file,
+        ZipArchive::CREATE
+        | ZipArchive::OVERWRITE
+    );
+
+    if ( true !== $opened ) {
+
+        @unlink( $temp_file );
+
+        return new WP_Error(
+            'bitacora_documental_zip_open_error',
+            'No se pudo inicializar el paquete ZIP.'
+        );
+    }
+
+    $json_files = array(
+        'manifest.json' => $backup['manifest'],
+        'perfil.json' => $backup['profile'],
+        'estructura.json' => $backup['structure'],
+        'entradas.json' => $backup['items'],
+        'comentarios.json' => $backup['comments'],
+        'adjuntos.json' => $backup['attachments'],
+    );
+
+    $errors   = array();
+    $warnings = array();
+
+    if (
+        ! $zip->addFromString(
+            'LEEME.txt',
+            bitacora_documental_build_readme(
+                $backup
+            )
+        )
+    ) {
+        $errors[] =
+            'No se pudo agregar LEEME.txt al paquete.';
+    }
+
+    foreach ( $json_files as $name => $data ) {
+
+        $json = bitacora_documental_encode_json(
+            $data,
+            $name
+        );
+
+        if ( is_wp_error( $json ) ) {
+            $errors[] = $json->get_error_message();
+            continue;
+        }
+
+        if ( ! $zip->addFromString( $name, $json ) ) {
+            $errors[] = sprintf(
+                'No se pudo agregar %s al paquete.',
+                $name
+            );
+        }
+    }
+
+    foreach ( $backup['attachments'] as $attachment ) {
+
+        $attachment_id = isset( $attachment['id'] )
+            ? absint( $attachment['id'] )
+            : 0;
+
+        $archive_path =
+            bitacora_documental_get_archive_file_path(
+                $attachment
+            );
+
+        $source =
+            bitacora_documental_get_attachment_source(
+                $attachment
+            );
+
+        if (
+            '' === $archive_path
+            || '' === $source
+        ) {
+            $warnings[] = sprintf(
+                'Attachment %d sin archivo físico disponible.',
+                $attachment_id
+            );
+
+            continue;
+        }
+
+        if (
+            ! $zip->addFile(
+                $source,
+                $archive_path
+            )
+        ) {
+            $errors[] = sprintf(
+                'No se pudo agregar el attachment %d al paquete.',
+                $attachment_id
+            );
+        }
+    }
+
+    if ( ! empty( $warnings ) ) {
+
+        $warning_text =
+            "ADVERTENCIAS DEL RESPALDO\n"
+            . "========================\n\n"
+            . implode( "\n", $warnings )
+            . "\n";
+
+        if (
+            ! $zip->addFromString(
+                'ADVERTENCIAS.txt',
+                $warning_text
+            )
+        ) {
+            $errors[] =
+                'No se pudo agregar ADVERTENCIAS.txt al paquete.';
+        }
+    }
+
+    $closed = $zip->close();
+
+    if (
+        ! $closed
+        || ! empty( $errors )
+    ) {
+
+        @unlink( $temp_file );
+
+        return new WP_Error(
+            'bitacora_documental_package_error',
+            'No se pudo construir completamente el respaldo documental.',
+            array(
+                'errors'   => $errors,
+                'warnings' => $warnings,
+            )
+        );
+    }
+
+    if (
+        ! is_file( $temp_file )
+        || ! is_readable( $temp_file )
+    ) {
+        @unlink( $temp_file );
+
+        return new WP_Error(
+            'bitacora_documental_package_missing',
+            'El paquete fue generado pero no quedó disponible para lectura.'
+        );
+    }
+
+    return array(
+        'path'      => $temp_file,
+        'filename'  => $filename,
+        'size'      => (int) filesize( $temp_file ),
+        'sha256'    => hash_file(
+            'sha256',
+            $temp_file
+        ),
+        'warnings'  => $warnings,
+        'manifest'  => $backup['manifest'],
+    );
+}
