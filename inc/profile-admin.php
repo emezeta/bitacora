@@ -207,6 +207,70 @@ function bitacora_handle_use_profile() {
         )
         : '';
 
+    $current_profile_id = bitacora_get_configured_profile_id();
+
+    if ( '' !== $current_profile_id ) {
+
+        $result = new WP_Error(
+            'bitacora_already_configured',
+            'Bitácora ya tiene un perfil en uso. Cerrala antes de usar otro perfil.'
+        );
+
+    } else {
+
+        $result = bitacora_configure_profile( $profile_id );
+    }
+
+    if ( is_wp_error( $result ) ) {
+
+        $redirect = add_query_arg(
+            array(
+                'bitacora_profile_notice' => 'use_error',
+                'bitacora_profile_error'  => $result->get_error_code(),
+            ),
+            bitacora_get_profiles_admin_url()
+        );
+
+    } else {
+
+        $redirect = add_query_arg(
+            'bitacora_profile_notice',
+            'used',
+            bitacora_get_profiles_admin_url()
+        );
+    }
+
+    wp_safe_redirect( $redirect );
+    exit;
+}
+
+/**
+ * Cierra la Bitácora actualmente en uso.
+ *
+ * La operación es explícita y termina en estado neutro.
+ * No configura automáticamente otro Profile.
+ */
+add_action(
+    'admin_post_bitacora_close_bitacora',
+    'bitacora_handle_close_bitacora'
+);
+
+function bitacora_handle_close_bitacora() {
+
+    if ( ! current_user_can( 'use_bitacora_profiles' ) ) {
+        wp_die(
+            esc_html__(
+                'No tenés permisos para cerrar Bitácora.',
+                'bitacora'
+            )
+        );
+    }
+
+    check_admin_referer(
+        'bitacora_close_bitacora',
+        'bitacora_close_bitacora_nonce'
+    );
+
     $expected_profile_id = isset( $_POST['current_profile_id'] )
         ? sanitize_key(
             wp_unslash( $_POST['current_profile_id'] )
@@ -227,14 +291,17 @@ function bitacora_handle_use_profile() {
             : 0,
     );
 
-    if ( $expected_profile_id !== $current_profile_id ) {
+    if (
+        '' === $current_profile_id
+        || $expected_profile_id !== $current_profile_id
+    ) {
 
         $result = new WP_Error(
             'bitacora_profile_state_changed',
             'El perfil en uso cambió desde que se presentó esta acción.'
         );
 
-    } elseif ( '' !== $current_profile_id ) {
+    } else {
 
         $current_impact = bitacora_get_profile_change_impact();
 
@@ -242,24 +309,34 @@ function bitacora_handle_use_profile() {
 
             $result = new WP_Error(
                 'bitacora_profile_content_changed',
-                'El contenido de la Bitácora cambió desde que se presentó esta acción.'
+                'El contenido de la Bitácora cambió desde la confirmación.'
             );
 
         } else {
 
-            $result = bitacora_change_profile( $profile_id );
+            $result = bitacora_remove_configured_profile();
+
+            if (
+                ! is_wp_error( $result )
+                && (
+                    ! empty( $result['errors'] )
+                    || ! empty( $result['configured'] )
+                )
+            ) {
+                $result = new WP_Error(
+                    'bitacora_profile_teardown_failed',
+                    'No se pudo cerrar completamente la Bitácora.',
+                    $result
+                );
+            }
         }
-
-    } else {
-
-        $result = bitacora_change_profile( $profile_id );
     }
 
     if ( is_wp_error( $result ) ) {
 
         $redirect = add_query_arg(
             array(
-                'bitacora_profile_notice' => 'use_error',
+                'bitacora_profile_notice' => 'close_error',
                 'bitacora_profile_error'  => $result->get_error_code(),
             ),
             bitacora_get_profiles_admin_url()
@@ -269,7 +346,7 @@ function bitacora_handle_use_profile() {
 
         $redirect = add_query_arg(
             'bitacora_profile_notice',
-            'used',
+            'closed',
             bitacora_get_profiles_admin_url()
         );
     }
@@ -340,11 +417,13 @@ function bitacora_render_profiles_admin_page() {
 
         $change_impact = bitacora_get_profile_change_impact();
 
-        $confirm_profile_id = isset( $_GET['confirm_profile'] )
-            ? sanitize_key(
-                wp_unslash( $_GET['confirm_profile'] )
+        $confirm_close = (
+            '' !== $current_profile_id
+            && isset( $_GET['confirm_close'] )
+            && '1' === sanitize_text_field(
+                wp_unslash( $_GET['confirm_close'] )
             )
-            : '';
+        );
 
         $confirm_delete_profile_id = isset(
             $_GET['confirm_delete_profile']
@@ -355,7 +434,6 @@ function bitacora_render_profiles_admin_page() {
             : '';
 
         $current_profile_label  = '';
-        $confirm_profile        = false;
         $confirm_delete_profile = false;
 
         foreach ( $catalog as $catalog_profile ) {
@@ -365,20 +443,6 @@ function bitacora_render_profiles_admin_page() {
             ) {
                 $current_profile_label =
                     (string) $catalog_profile['label'];
-            }
-
-            if (
-                '' !== $current_profile_id
-                && $confirm_profile_id === $catalog_profile['id']
-            ) {
-                $confirm_status =
-                    bitacora_get_profile_admin_status(
-                        $catalog_profile
-                    );
-
-                if ( 'ready' === $confirm_status['key'] ) {
-                    $confirm_profile = $catalog_profile;
-                }
             }
 
             if (
@@ -455,6 +519,42 @@ function bitacora_render_profiles_admin_page() {
 
                 <?php endif; ?>
 
+                <?php if ( 'closed' === $notice ) : ?>
+
+                        <div class="notice notice-success inline">
+                                <p>Bitácora cerrada. La instalación quedó sin un perfil en uso.</p>
+                        </div>
+
+                <?php elseif ( 'close_error' === $notice ) : ?>
+
+                        <div class="notice notice-error inline">
+                                <p>
+                                        <?php
+                                        if (
+                                            'bitacora_profile_state_changed'
+                                            === $error_code
+                                        ) {
+                                            echo esc_html(
+                                                'El perfil en uso cambió. Revisá el estado actual antes de continuar.'
+                                            );
+                                        } elseif (
+                                            'bitacora_profile_content_changed'
+                                            === $error_code
+                                        ) {
+                                            echo esc_html(
+                                                'El contenido de la Bitácora cambió desde la confirmación. Revisá los nuevos conteos antes de continuar.'
+                                            );
+                                        } else {
+                                            echo esc_html(
+                                                'No se pudo cerrar completamente la Bitácora.'
+                                            );
+                                        }
+                                        ?>
+                                </p>
+                        </div>
+
+                <?php endif; ?>
+
                 <?php if ( 'deleted' === $notice ) : ?>
 
                         <div class="notice notice-success inline">
@@ -477,30 +577,23 @@ function bitacora_render_profiles_admin_page() {
 
                 <?php endif; ?>
 
-                <?php if ( $confirm_profile ) : ?>
+                <?php if ( $confirm_close ) : ?>
 
                         <div class="notice notice-warning inline">
 
-                                <h2>Confirmar cambio de perfil</h2>
+                                <h2>
+                                        Cerrar Bitácora
+                                        <?php if ( '' !== $current_profile_label ) : ?>
+                                                — <?php echo esc_html( $current_profile_label ); ?>
+                                        <?php endif; ?>
+                                </h2>
 
                                 <p>
-                                        Vas a cambiar de
-                                        <strong><?php
-                                        echo esc_html(
-                                            $current_profile_label
-                                                ?: 'la Bitácora actual'
-                                        );
-                                        ?></strong>
-                                        a
-                                        <strong><?php
-                                        echo esc_html(
-                                            $confirm_profile['label']
-                                        );
-                                        ?></strong>.
+                                        Vas a cerrar definitivamente la Bitácora actualmente en uso.
                                 </p>
 
                                 <p>
-                                        Al continuar se eliminarán definitivamente:
+                                        Se eliminarán definitivamente:
                                 </p>
 
                                 <ul>
@@ -546,11 +639,42 @@ function bitacora_render_profiles_admin_page() {
 
                                 <p>
                                         <strong>
-                                                Los archivos adjuntos se borrarán
-                                                también físicamente del servidor.
-                                                Esta operación no se puede deshacer
-                                                desde Bitácora.
+                                                Esta es una acción destructiva e
+                                                irreversible desde Bitácora.
                                         </strong>
+                                </p>
+
+                                <p>
+                                        Los archivos adjuntos también se borrarán
+                                        físicamente del servidor.
+                                </p>
+
+                                <p>
+                                        Después del cierre, Bitácora permanecerá
+                                        instalada y funcionando, pero quedará sin
+                                        ningún Profile en uso. Para volver a utilizar
+                                        sus funciones normales deberás seleccionar
+                                        explícitamente uno de los Profiles disponibles.
+                                </p>
+
+                                <p>
+                                        Si necesitás conservar una copia documental
+                                        de esta instancia, cancelá esta operación y
+                                        utilizá <strong>RESPALDO DOCUMENTAL</strong>
+                                        desde la pantalla de perfiles.
+                                </p>
+
+                                <p>
+                                        El Profile
+                                        <strong><?php
+                                        echo esc_html(
+                                            $current_profile_label
+                                                ?: 'actual'
+                                        );
+                                        ?></strong>
+                                        permanecerá disponible en la biblioteca.
+                                        Lo que se perderá definitivamente es el
+                                        contenido producido por esta instancia.
                                 </p>
 
                                 <form
@@ -562,15 +686,7 @@ function bitacora_render_profiles_admin_page() {
                                         <input
                                                 type="hidden"
                                                 name="action"
-                                                value="bitacora_use_profile"
-                                        >
-
-                                        <input
-                                                type="hidden"
-                                                name="profile_id"
-                                                value="<?php echo esc_attr(
-                                                    $confirm_profile['id']
-                                                ); ?>"
+                                                value="bitacora_close_bitacora"
                                         >
 
                                         <input
@@ -607,33 +723,33 @@ function bitacora_render_profiles_admin_page() {
 
                                         <?php
                                         wp_nonce_field(
-                                            'bitacora_use_profile',
-                                            'bitacora_use_profile_nonce'
+                                            'bitacora_close_bitacora',
+                                            'bitacora_close_bitacora_nonce'
                                         );
                                         ?>
 
                                         <p>
-                                                <?php
-                                                submit_button(
-                                                    'Eliminar contenido y usar este perfil',
-                                                    'delete',
-                                                    'submit',
-                                                    false
-                                                );
-                                                ?>
-
                                                 <a
                                                         href="<?php echo esc_url(
                                                             bitacora_get_profiles_admin_url()
                                                         ); ?>"
                                                         class="button button-secondary"
-                                                >Cancelar</a>
+                                                >CANCELAR</a>
+
+                                                <?php
+                                                submit_button(
+                                                    'CERRAR BITÁCORA',
+                                                    'delete',
+                                                    'submit',
+                                                    false
+                                                );
+                                                ?>
                                         </p>
                                 </form>
-
                         </div>
 
                 <?php endif; ?>
+
 
                 <?php if ( $confirm_delete_profile ) : ?>
 
@@ -799,7 +915,32 @@ function bitacora_render_profiles_admin_page() {
                                                                 ) :
                                                                     ?>
 
-                                                                        <strong>Perfil actual</strong>
+                                                                        <button
+                                                                                type="button"
+                                                                                class="button button-secondary"
+                                                                                disabled
+                                                                                title="Este respaldo no genera un paquete reutilizable directamente por Bitácora."
+                                                                        >RESPALDO DOCUMENTAL ?</button>
+
+                                                                        <button
+                                                                                type="button"
+                                                                                class="button button-secondary"
+                                                                                disabled
+                                                                                title="PAUSAR se incorporará en una etapa posterior."
+                                                                        >PAUSAR</button>
+
+                                                                        <a
+                                                                                href="<?php echo esc_url(
+                                                                                    add_query_arg(
+                                                                                        'confirm_close',
+                                                                                        '1',
+                                                                                        bitacora_get_profiles_admin_url()
+                                                                                    )
+                                                                                ); ?>"
+                                                                                class="button button-secondary"
+                                                                                style="border-color:#b32d2e;color:#b32d2e;"
+                                                                                title="Cierra definitivamente la instancia actual."
+                                                                        >CERRAR</a>
 
                                                                 <?php
                                                                 elseif (
@@ -808,75 +949,47 @@ function bitacora_render_profiles_admin_page() {
                                                                     && current_user_can(
                                                                         'use_bitacora_profiles'
                                                                     )
+                                                                    && ''
+                                                                    === $current_profile_id
                                                                 ) :
                                                                     ?>
 
-                                                                        <?php
-                                                                        if (
-                                                                            ''
-                                                                            === $current_profile_id
-                                                                        ) :
-                                                                            ?>
+                                                                        <form
+                                                                                method="post"
+                                                                                action="<?php echo esc_url(
+                                                                                    admin_url(
+                                                                                        'admin-post.php'
+                                                                                    )
+                                                                                ); ?>"
+                                                                        >
+                                                                                <input
+                                                                                        type="hidden"
+                                                                                        name="action"
+                                                                                        value="bitacora_use_profile"
+                                                                                >
 
-                                                                                <form
-                                                                                        method="post"
-                                                                                        action="<?php echo esc_url(
-                                                                                            admin_url(
-                                                                                                'admin-post.php'
-                                                                                            )
+                                                                                <input
+                                                                                        type="hidden"
+                                                                                        name="profile_id"
+                                                                                        value="<?php echo esc_attr(
+                                                                                            $profile['id']
                                                                                         ); ?>"
                                                                                 >
-                                                                                        <input
-                                                                                                type="hidden"
-                                                                                                name="action"
-                                                                                                value="bitacora_use_profile"
-                                                                                        >
 
-                                                                                        <input
-                                                                                                type="hidden"
-                                                                                                name="profile_id"
-                                                                                                value="<?php echo esc_attr(
-                                                                                                    $profile['id']
-                                                                                                ); ?>"
-                                                                                        >
+                                                                                <?php
+                                                                                wp_nonce_field(
+                                                                                    'bitacora_use_profile',
+                                                                                    'bitacora_use_profile_nonce'
+                                                                                );
 
-                                                                                        <input
-                                                                                                type="hidden"
-                                                                                                name="current_profile_id"
-                                                                                                value="<?php echo esc_attr(
-                                                                                                    $current_profile_id
-                                                                                                ); ?>"
-                                                                                        >
-
-                                                                                        <?php
-                                                                                        wp_nonce_field(
-                                                                                            'bitacora_use_profile',
-                                                                                            'bitacora_use_profile_nonce'
-                                                                                        );
-
-                                                                                        submit_button(
-                                                                                            'Usar este perfil',
-                                                                                            'secondary',
-                                                                                            'submit',
-                                                                                            false
-                                                                                        );
-                                                                                        ?>
-                                                                                </form>
-
-                                                                        <?php else : ?>
-
-                                                                                <a
-                                                                                        href="<?php echo esc_url(
-                                                                                            add_query_arg(
-                                                                                                'confirm_profile',
-                                                                                                $profile['id'],
-                                                                                                bitacora_get_profiles_admin_url()
-                                                                                            )
-                                                                                        ); ?>"
-                                                                                        class="button button-secondary"
-                                                                                >Usar este perfil</a>
-
-                                                                        <?php endif; ?>
+                                                                                submit_button(
+                                                                                    'Usar este perfil',
+                                                                                    'secondary',
+                                                                                    'submit',
+                                                                                    false
+                                                                                );
+                                                                                ?>
+                                                                        </form>
 
                                                                 <?php else : ?>
 
