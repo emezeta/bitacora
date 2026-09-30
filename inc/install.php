@@ -39,6 +39,23 @@ function bitacora_is_configured() {
 
 
 /**
+ * Devuelve el instante en que la instancia actual quedó puesta en uso.
+ *
+ * Se persiste como timestamp Unix UTC. Las instancias creadas antes de
+ * incorporar este dato pueden devolver 0.
+ */
+function bitacora_get_configured_at() {
+
+    $configured_at = get_option(
+        'bitacora_configured_at',
+        0
+    );
+
+    return absint( $configured_at );
+}
+
+
+/**
  * Devuelve el estado básico de configuración.
  */
 function bitacora_get_configuration_state() {
@@ -552,6 +569,16 @@ function bitacora_remove_configured_profile() {
      * el problema y volver a ejecutar esta operación.
      */
     if ( empty( $report['errors'] ) ) {
+
+        delete_option( 'bitacora_configured_at' );
+
+        if ( 0 !== bitacora_get_configured_at() ) {
+            $report['errors'][] =
+                'No se pudo eliminar la fecha de puesta en uso.';
+        }
+    }
+
+    if ( empty( $report['errors'] ) ) {
         delete_option( 'bitacora_configured_profile' );
     }
 
@@ -891,12 +918,33 @@ function bitacora_configure_profile( $profile_id ) {
          */
         update_option( 'obras_theme_install_schema', '5' );
 
+        /*
+         * El instante pertenece a esta instancia materializada, no al Profile.
+         * Se registra inmediatamente antes de declarar el Profile EN USO.
+         */
+        $configured_at = time();
+
+        update_option(
+                'bitacora_configured_at',
+                $configured_at
+        );
+
+        if ( $configured_at !== bitacora_get_configured_at() ) {
+                return new WP_Error(
+                        'bitacora_configuration_timestamp_not_saved',
+                        'No se pudo registrar la fecha de puesta en uso de Bitácora.'
+                );
+        }
+
         update_option(
                 'bitacora_configured_profile',
                 $profile_id
         );
 
         if ( $profile_id !== bitacora_get_configured_profile_id() ) {
+
+                delete_option( 'bitacora_configured_at' );
+
                 return new WP_Error(
                         'bitacora_configuration_state_not_saved',
                         'No se pudo registrar la configuración de Bitácora.'
