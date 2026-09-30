@@ -414,6 +414,19 @@ function bitacora_render_profiles_admin_page() {
         $catalog = bitacora_get_profile_catalog();
 
         $current_profile_id = bitacora_get_configured_profile_id();
+        $configured_at      = bitacora_get_configured_at();
+
+        $configured_at_label = $configured_at
+            ? wp_date(
+                'd/m/Y H:i T',
+                $configured_at
+            )
+            : '';
+
+        $close_now_label = wp_date(
+            'd/m/Y H:i T',
+            time()
+        );
 
         $change_impact = bitacora_get_profile_change_impact();
 
@@ -581,6 +594,12 @@ function bitacora_render_profiles_admin_page() {
 
                         <div class="notice notice-warning inline">
 
+                                <p>
+                                        <strong>
+                                                LEÉ ATENTAMENTE ANTES DE CONTINUAR
+                                        </strong>
+                                </p>
+
                                 <h2>
                                         Cerrar Bitácora
                                         <?php if ( '' !== $current_profile_label ) : ?>
@@ -593,7 +612,29 @@ function bitacora_render_profiles_admin_page() {
                                 </p>
 
                                 <p>
-                                        Se eliminarán definitivamente:
+                                        <strong>Período de actividad</strong><br>
+                                        Desde:
+                                        <strong><?php
+                                        echo esc_html(
+                                            $configured_at_label
+                                                ?: 'fecha no disponible'
+                                        );
+                                        ?></strong><br>
+                                        Hasta:
+                                        <strong><?php
+                                        echo esc_html(
+                                            $close_now_label
+                                        );
+                                        ?></strong>
+                                </p>
+
+                                <p>
+                                        Todo el contenido generado durante este período
+                                        será eliminado definitivamente.
+                                </p>
+
+                                <p>
+                                        Se eliminarán:
                                 </p>
 
                                 <ul>
