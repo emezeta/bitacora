@@ -255,6 +255,11 @@ add_action(
     'bitacora_handle_close_bitacora'
 );
 
+add_action(
+    'admin_post_bitacora_documental_backup',
+    'bitacora_handle_documental_backup'
+);
+
 function bitacora_handle_close_bitacora() {
 
     if ( ! current_user_can( 'use_bitacora_profiles' ) ) {
@@ -393,6 +398,126 @@ function bitacora_get_profile_admin_error_message( $error_code ) {
 
 	return $messages[ $error_code ]
 		?? 'No se pudo completar la operación solicitada.';
+}
+
+
+/**
+ * Descarga el respaldo documental de la instancia activa.
+ */
+function bitacora_handle_documental_backup() {
+
+        if ( ! current_user_can( 'use_bitacora_profiles' ) ) {
+                wp_die(
+                        esc_html__(
+                                'No tenés permisos para generar este respaldo.',
+                                'bitacora'
+                        )
+                );
+        }
+
+        check_admin_referer(
+                'bitacora_documental_backup',
+                'bitacora_documental_backup_nonce'
+        );
+
+        $expected_profile_id = isset(
+                $_POST['profile_id']
+        )
+                ? sanitize_text_field(
+                        wp_unslash(
+                                $_POST['profile_id']
+                        )
+                )
+                : '';
+
+        $current_profile_id =
+                bitacora_get_configured_profile_id();
+
+        if (
+                '' === $current_profile_id
+                || $expected_profile_id !== $current_profile_id
+        ) {
+                wp_die(
+                        esc_html__(
+                                'La instancia activa cambió. Volvé a la pantalla de perfiles e intentá nuevamente.',
+                                'bitacora'
+                        )
+                );
+        }
+
+        $result =
+                bitacora_build_documental_backup();
+
+        if ( is_wp_error( $result ) ) {
+                wp_die(
+                        esc_html(
+                                $result->get_error_message()
+                        )
+                );
+        }
+
+        $path = isset( $result['path'] )
+                ? (string) $result['path']
+                : '';
+
+        $filename = isset( $result['filename'] )
+                ? sanitize_file_name(
+                        $result['filename']
+                )
+                : 'bitacora-documental.zip';
+
+        if (
+                '' === $path
+                || ! is_file( $path )
+                || ! is_readable( $path )
+        ) {
+                if (
+                        '' !== $path
+                        && is_file( $path )
+                ) {
+                        @unlink( $path );
+                }
+
+                wp_die(
+                        esc_html__(
+                                'El respaldo fue generado pero no quedó disponible para descarga.',
+                                'bitacora'
+                        )
+                );
+        }
+
+        ignore_user_abort( true );
+
+        while ( ob_get_level() ) {
+                ob_end_clean();
+        }
+
+        nocache_headers();
+
+        header(
+                'Content-Type: application/zip'
+        );
+
+        header(
+                'Content-Disposition: attachment; filename="'
+                . $filename
+                . '"'
+        );
+
+        header(
+                'Content-Length: '
+                . (string) filesize( $path )
+        );
+
+        header(
+                'X-Content-Type-Options: nosniff'
+        );
+
+        readfile( $path );
+
+        @unlink( $path );
+
+        exit;
 }
 
 
@@ -956,12 +1081,42 @@ function bitacora_render_profiles_admin_page() {
                                                                 ) :
                                                                     ?>
 
-                                                                        <button
-                                                                                type="button"
-                                                                                class="button button-secondary"
-                                                                                disabled
-                                                                                title="Este respaldo no genera un paquete reutilizable directamente por Bitácora."
-                                                                        >RESPALDO DOCUMENTAL ?</button>
+                                                                        <form
+                                                                                method="post"
+                                                                                action="<?php echo esc_url(
+                                                                                    admin_url(
+                                                                                        'admin-post.php'
+                                                                                    )
+                                                                                ); ?>"
+                                                                                style="display:inline"
+                                                                        >
+                                                                                <input
+                                                                                        type="hidden"
+                                                                                        name="action"
+                                                                                        value="bitacora_documental_backup"
+                                                                                >
+
+                                                                                <input
+                                                                                        type="hidden"
+                                                                                        name="profile_id"
+                                                                                        value="<?php echo esc_attr(
+                                                                                            $current_profile_id
+                                                                                        ); ?>"
+                                                                                >
+
+                                                                                <?php
+                                                                                wp_nonce_field(
+                                                                                    'bitacora_documental_backup',
+                                                                                    'bitacora_documental_backup_nonce'
+                                                                                );
+                                                                                ?>
+
+                                                                                <button
+                                                                                        type="submit"
+                                                                                        class="button button-primary"
+                                                                                        title="Este respaldo no genera un paquete reutilizable directamente por Bitácora."
+                                                                                >RESPALDO DOCUMENTAL ?</button>
+                                                                        </form>
 
                                                                         <button
                                                                                 type="button"
