@@ -1,10 +1,10 @@
 # Bitácora — Contexto Maestro de desarrollo
 
-**Revisión documental:** 2026-09-29
-**Estado técnico de referencia:** 2026-09-29
+**Revisión documental:** 2026-10-01
+**Estado técnico de referencia:** 2026-10-01
 **Rama:** `0.3.0-dev`  
 **Repo canónico:** `/home/dosmilun/repos/bitacora`  
-**HEAD verificado:** `2291c2c Fix accepted profile adoption flow`
+**HEAD verificado:** `2d6032a Add documental backup download`
 
 > Este documento describe el **estado vigente** del proyecto y debe servir como referencia
 > de continuidad entre chats y estaciones de trabajo. No pretende narrar toda la historia.
@@ -1092,6 +1092,201 @@ Sólo después del cierre puede ofrecerse nuevamente `Usar este perfil`.
 
 ---
 
+
+## Respaldo Documental de la instancia — CERRADO 2026-10-01
+
+Antes de destruir una instancia mediante `Cerrar Bitácora`, el Supervisor puede generar un
+**RESPALDO DOCUMENTAL** de la instancia activa.
+
+Propósito:
+
+```text
+conservar una representación documental completa de la instancia
+para archivo, auditoría, documentación o análisis posterior
+```
+
+No es:
+
+```text
+- un backup restaurable
+- un paquete importable
+- una Template
+- una exportación de Profile
+- un mecanismo de reconstrucción automática de Bitácora
+```
+
+La interfaz lo expresa explícitamente:
+
+> Este respaldo no genera un paquete reutilizable directamente por Bitácora.
+
+El respaldo no modifica la instancia.
+
+### Frontera documental
+
+La frontera coincide deliberadamente con la frontera destructiva de `Cerrar Bitácora`.
+
+Incluye:
+
+```text
+Profile de origen
+estructura materializada
+secciones
+Tipos
+páginas de sección
+bitacora_item
+comentarios
+todos los attachments de la instalación
+archivos físicos disponibles
+metadatos
+hashes SHA-256 de archivos físicos
+```
+
+Dado que una instalación mantiene cero o una única instancia y `Cerrar Bitácora` elimina todos
+los attachments, RESPALDO DOCUMENTAL conserva también **todos los attachments**, no sólo aquellos
+referenciados directamente por una entrada.
+
+### Formato v1
+
+El paquete generado es un ZIP:
+
+```text
+bitacora-documental-<perfil>-AAAAMMDD-HHMMSS.zip
+
+LEEME.txt
+manifest.json
+perfil.json
+estructura.json
+entradas.json
+comentarios.json
+adjuntos.json
+archivos/
+```
+
+Si existe un attachment registrado cuyo archivo físico ya no está disponible, el respaldo puede
+generarse igualmente y documenta la anomalía mediante `ADVERTENCIAS.txt`.
+
+### Identidad temporal de la instancia
+
+Se incorporó estado runtime mínimo:
+
+```text
+bitacora_configured_profile
+    identidad del Profile que originó la instancia activa
+
+bitacora_configured_at
+    timestamp Unix UTC de puesta en uso de la instancia
+```
+
+`bitacora_configured_at`:
+
+- se registra sólo después de materializar correctamente la instancia;
+- no pertenece al Profile;
+- no se infiere silenciosamente para instancias históricas;
+- se elimina únicamente durante un cierre exitoso;
+- se utiliza en la advertencia de `Cerrar Bitácora`;
+- se incorpora al Respaldo Documental.
+
+La pantalla de cierre muestra ahora:
+
+```text
+LEÉ ATENTAMENTE ANTES DE CONTINUAR
+
+Período de actividad
+Desde: <configured_at>
+Hasta: <momento de render del cierre>
+```
+
+### Implementación
+
+Commits principales:
+
+```text
+defa588  Record Bitacora instance start time
+4faf81e  Show instance period in close warning
+bea2d7b  Add documental backup collector
+b5924a6  Add documental backup package
+2d6032a  Add documental backup download
+```
+
+La implementación está separada en dos responsabilidades:
+
+```text
+collect
+    fotografía lógica de la instancia
+
+package
+    serialización + ZIP + archivos físicos
+```
+
+El botón `RESPALDO DOCUMENTAL ?` está activo sólo sobre el Profile de la instancia `EN USO`,
+genera el ZIP mediante `admin-post.php`, valida capability, nonce e identidad de la instancia,
+entrega el archivo al navegador y elimina el temporal del servidor.
+
+### Pruebas funcionales
+
+Primera prueba con instancia vacía:
+
+```text
+Profile: Eventos
+secciones: 9
+Tipos: 44
+páginas: 9
+entradas: 0
+comentarios: 0
+attachments: 0
+
+ZIP:
+LEEME.txt
+manifest.json
+perfil.json
+estructura.json
+entradas.json
+comentarios.json
+adjuntos.json
+```
+
+Prueba posterior con contenido real:
+
+```text
+1 bitacora_item
+2 comentarios
+1 attachment físico
+```
+
+El ZIP descargado contenía correctamente:
+
+```text
+archivos/2026/10/ca.txt
+adjuntos.json
+comentarios.json
+entradas.json
+estructura.json
+LEEME.txt
+manifest.json
+perfil.json
+```
+
+`manifest.json` informó:
+
+```text
+items=1
+comments=2
+attachments=1
+```
+
+Con esa prueba queda validado el recorrido completo:
+
+```text
+UI
+→ handler
+→ collector
+→ package ZIP
+→ descarga
+→ archivo físico incluido
+```
+
+---
+
 # 13. Prueba UI del cierre destructivo — CERRADA 2026-09-28
 
 Se probó en KOOPITA la pantalla actualmente implementada como cambio de Perfil.
@@ -1218,6 +1413,18 @@ complete la separación con el Constructor.
 ---
 
 # 15. Instancia EN PAUSA — fuera del contrato Template/Perfil
+
+**Estado al 2026-10-01: PENDIENTE DE ANÁLISIS FUNCIONAL Y DE INTERFAZ.**
+
+La decisión general permanece vigente: PAUSA pertenece al ciclo de vida de la instancia y no
+convierte la instancia en un Profile editable ni reintroduce el antiguo editor de Profiles.
+
+Como línea principal de análisis de UX debe evaluarse una interfaz que **simule o represente la
+Bitácora tal como la ve el usuario**, permitiendo editar sobre esa representación las etiquetas,
+orden, organización y capacidades admitidas. La alternativa debe compararse con formularios de
+configuración abstractos antes de elegir implementación.
+
+La interfaz no puede alterar las invariantes de conservación de historia definidas para PAUSA.
 
 `EN PAUSA` pertenece al ciclo operativo de la instancia y **no forma parte del Contrato de
 Frontera**.
@@ -1522,9 +1729,35 @@ Bocetos anteriores con `Planificación`, `Actividades`, `Recursos`, etc. están 
 
 ---
 
-# 20. Estado técnico operativo — 2026-09-29
+# 20. Estado técnico operativo — 2026-10-01
 
 ## Git
+
+Estado runtime/Profile más reciente verificado:
+
+```text
+2d6032a  Add documental backup download
+b5924a6  Add documental backup package
+bea2d7b  Add documental backup collector
+4faf81e  Show instance period in close warning
+defa588  Record Bitacora instance start time
+cd8197a  Separate profile use from Bitacora closing
+```
+
+Desde `cd8197a`, `Usar Perfil` y `Cerrar Bitácora` son operaciones separadas:
+
+```text
+instalación neutra
+    → Usar Perfil
+    → instancia EN USO
+
+instancia EN USO
+    → Cerrar Bitácora
+    → instalación neutra
+```
+
+`Usar Perfil` no destruye ni sustituye una instancia activa.
+
 
 ```text
 repo:
@@ -1793,12 +2026,12 @@ adopta.
 | P04 | CERRADO | Adopción stored protegida por lock + transacción + rollback; REJECT sin Profile residual |
 | P05 | CERRADO | Library limitada a Profiles aceptados; autoría legacy retirada del Engine |
 | P06 | PENDIENTE DE ANÁLISIS | Decidir forma física futura del Constructor: plugin/addon/módulo/integración externa |
-| P07 | DECIDIDO / IMPLEMENTAR | Refactorizar UI: `Cerrar Bitácora` separado de `Usar Perfil` |
-| P08 | DECIDIDO / IMPLEMENTAR | Reutilizar warning/guard destructivo en `Cerrar Bitácora` |
+| P07 | CERRADO | `Cerrar Bitácora` separado de `Usar Perfil`; commit `cd8197a` |
+| P08 | CERRADO | Warning/guard destructivo reutilizado y ampliado con período real de instancia |
 | P09 | CERRADO | `EN USO`/`DISPONIBLE` retirados como estados técnicos de Profile; `DISPONIBLE` queda sólo como UI contextual |
-| P10 | DECIDIDO / IMPLEMENTAR | Ocultar `Usar este perfil` mientras exista una instancia |
+| P10 | CERRADO | `Usar este perfil` sólo se ofrece y opera desde instalación neutra |
 | P11 | DECIDIDO / IMPLEMENTAR | Separar identidad técnica y etiqueta visible en editor/runtime |
-| P12 | DECIDIDO / IMPLEMENTAR | Implementar EN PAUSA / edición light conservativa |
+| P12 | PENDIENTE DE ANÁLISIS | Definir alcance, transición, invariantes y UX de EN PAUSA / edición conservativa |
 | P13 | DECIDIDO / IMPLEMENTAR | Ocultar Sección preserva historia, excluye navegación normal e impide nuevas entradas; mantiene referencias y búsqueda multisección |
 | P14 | PENDIENTE DE ANÁLISIS | Semántica exacta de ocultar Tipo |
 | P15 | DECIDIDO / IMPLEMENTAR | Exportar Profile como Template externo; no existe “importar Perfil” |
@@ -1814,6 +2047,7 @@ adopta.
 | P25 | OBSERVACIÓN | Diferencia visual menor frontend/wp-admin |
 | P26 | CERRADO | Ciclo completo Template → CREACIÓN → adopción → Library → catálogo → DELETE verificado en KOOPITA |
 | P27 | CERRADO | PROMOCIÓN verificada: ACCEPT + REJECT por label duplicado + REJECT por composición de secciones |
+| P28 | CERRADO | RESPALDO DOCUMENTAL v1: collector + ZIP + descarga UI + prueba con entrada, comentarios y attachment físico |
 
 ---
 
@@ -1825,17 +2059,18 @@ separación Template/Perfil.
 No conviene invertir más trabajo en consolidar una UX de “Perfil incompleto” dentro del
 Engine si esa UI está destinada a convertirse en Constructor.
 
-Prioridades:
+Prioridades actuales:
 
 ```text
-1. refactor mínimo de Cerrar Bitácora
-2. verificar instalación neutra
-3. Usar Perfil desde estado neutro
-4. permisos reales
-5. no regresión de los cuatro bundled
-6. BITA fresh
-7. idempotencia
-8. release
+1. analizar y cerrar contrato funcional de EN PAUSA
+2. definir UX de edición conservativa de instancia
+3. evaluar interfaz simulada de Bitácora vs formulario abstracto
+4. implementar PAUSA una vez cerrado su contrato
+5. verificar permisos reales use_bitacora_profiles / manage_bitacora_profiles
+6. no regresión de los cuatro bundled
+7. BITA fresh
+8. idempotencia
+9. release 0.3.0
 ```
 
 Las pruebas específicas del Constructor se definirán después de cerrar su frontera y forma
@@ -1886,39 +2121,71 @@ No confundir bloques clásicos con bloques `cacli`.
 
 # 27. Punto de reentrada recomendado
 
-La frontera Candidate → Profile y sus dos formas de entrada —CREACIÓN y PROMOCIÓN— quedaron implementadas y verificadas end-to-end.
-
-Retomar desde:
+Estado de reentrada al 2026-10-01:
 
 ```text
-1. cerrar operación runtime:
-       Instancia actual
-       Cerrar Bitácora
-       instalación neutra
-       Usar Perfil
+Candidate → Profile
+    CERRADO
 
-2. trasladar/reutilizar el warning destructivo probado en `e20211c`
+Usar Perfil / instalación neutra
+    CERRADO
 
-3. verificar:
-       Cerrar Bitácora deja instalación neutra
-       Usar Perfil sólo aparece/opera en instalación neutra
-       primera puesta en uso
-       permisos use_bitacora_profiles / manage_bitacora_profiles
+Cerrar Bitácora
+    CERRADO
 
-4. regresión de los cuatro bundled
+bitacora_configured_at
+    CERRADO
 
-5. BITA fresh + idempotencia
+RESPALDO DOCUMENTAL v1
+    CERRADO Y PROBADO CON CONTENIDO REAL
 
-6. después retomar como bloques separados:
-       EN PAUSA
-       Constructor de Templates
-       EXPORTACIÓN Profile → Template
+EN PAUSA
+    PRÓXIMO BLOQUE DE ANÁLISIS
 ```
 
-Principio de cierre:
+Retomar desde **EN PAUSA**, sin modificar todavía código runtime.
 
-> **Bitácora Engine hace lo que sabe hacer: garantiza sus servicios, administra Perfiles
-> Bitácora y opera una instancia. La construcción de Templates pertenece a una herramienta
-> opcional. La frontera entre ambos mundos es una adopción atómica: sea iniciada por PROMOCIÓN o por
-> CREACIÓN, o nace un Perfil o el candidato es rechazado sin dejar rastro en el dominio de
-> Bitácora.**
+Preguntas que deben cerrarse antes de implementar:
+
+```text
+1. transición exacta:
+       EN USO → EN PAUSA → EN USO
+
+2. qué operaciones quedan bloqueadas durante PAUSA
+
+3. qué modificaciones estructurales se permiten
+
+4. invariantes de historia:
+       no romper referencias
+       no destruir contenido existente
+       no eliminar estructuras usadas
+
+5. semántica de:
+       renombrar
+       reordenar
+       reorganizar main|more
+       agregar secciones
+       agregar Tipos
+       deshabilitar para uso futuro
+       features
+
+6. semántica exacta de ocultar/deshabilitar Tipo
+
+7. tratamiento de la sección core Bitácora
+
+8. UX:
+       evaluar una representación simulada de la propia Bitácora
+       con etiquetas y elementos editables
+       frente a un formulario abstracto de configuración
+
+9. distinguir siempre:
+       editar INSTANCIA en PAUSA
+       de
+       construir/editar TEMPLATE
+```
+
+Principio rector:
+
+> PAUSA permite evolucionar de forma controlada una instancia con historia. No reabre la autoría
+> de Profiles dentro del Engine y no debe convertir la configuración runtime en un Constructor
+> encubierto.
