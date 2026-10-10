@@ -530,15 +530,43 @@ Los acentos no se eliminan:
 Catalogos != Catálogos
 ```
 
-La similitud **no provoca REJECT**.
+La similitud **no constituye REJECT por duplicación**, pero requiere una
+decisión explícita del operador antes de crear el Profile.
 
-Debe producir solamente una advertencia al productor/operador, por ejemplo:
+Primera invocación:
+
+```text
+similar detectado
+    ↓
+accepted = false
+confirmation_required = true
+warnings = [...]
+    ↓
+no UUID
+no Profile
+no persistencia intermedia
+```
+
+El productor/addon presenta la advertencia, por ejemplo:
 
 ```text
 Existe un Profile similar al que se está guardando: <Nombre>.
 
 Se sugiere verificar o comparar ambos Profiles antes de continuar.
 ```
+
+Si el operador decide continuar, el productor repite la misma adopción
+indicando autorización operacional:
+
+```text
+allow_similar = true
+```
+
+`allow_similar` no forma parte del candidato ni de la definición del Profile.
+Pertenece exclusivamente a la operación de adopción.
+
+La segunda invocación vuelve a ejecutar dentro de la sección crítica todas las
+comprobaciones autoritativas antes de aceptar el Profile.
 
 La comparación ofrecida por la interfaz puede ser deliberadamente light:
 su objetivo es permitir percibir la similitud, no sustituir una revisión
@@ -555,8 +583,10 @@ mismo nombre + estructura distinta
     → exigir otro label
 
 label distinto + estructura igual o similar
+    → confirmation_required
     → ADVERTIR
     → operador decide
+    → allow_similar=true permite continuar
 
 diferente
     → puede ser un nuevo Profile
@@ -2550,7 +2580,7 @@ adopta.
 | ID | Estado | Asunto |
 |---|---|---|
 | P01 | CERRADO | C01–C04 formalizados y reflejados en el pipeline Candidate → Profile |
-| P02 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Sustituir presunción de duplicado por: duplicado exacto; label único; similitud como advertencia |
+| P02 | CERRADO | Duplicado exacto por label+definición; label único; similitud con confirmation_required y allow_similar explícito |
 | P03 | CERRADO | Entrada PHP de PROMOCIÓN implementada sobre adopción autoritativa común |
 | P04 | CERRADO | Adopción stored protegida por lock + transacción + rollback; REJECT sin Profile residual |
 | P05 | CERRADO | Library limitada a Profiles aceptados; autoría legacy retirada del Engine |
@@ -2590,16 +2620,15 @@ Engine si esa UI está destinada a convertirse en Constructor.
 
 Prioridades actuales:
 
-1. implementar el nuevo criterio de duplicado exacto, label único y similitud como advertencia;
-2. implementar extracción `instancia → definición canónica`;
-3. verificar round-trip sobre KOOPITA:
+1. implementar extracción `instancia → definición canónica`;
+2. verificar round-trip sobre KOOPITA:
    `Profile P → instancia sin cambios → esqueleto E`, con `E ≡ P`;
-4. definir/comprobar comparación determinista y huella estructural PRE;
-5. implementar reconciliación segura `PRE → PROPUESTA → POST`, incluida recuperación hacia PRE;
-6. incorporar rol/capability de Administrador Bitácora y guard operativo de la PAUSA breve;
-7. resolver bloqueo efectivo de enlaces compartibles y acceso directo a medios durante PAUSA;
-8. construir el addon/editor estructural común cuando las primitivas del Engine estén cerradas;
-9. ejecutar regresión bundled, BITA fresh, idempotencia y cierre de 0.3.0.
+3. definir/comprobar comparación determinista y huella estructural PRE;
+4. implementar reconciliación segura `PRE → PROPUESTA → POST`, incluida recuperación hacia PRE;
+5. incorporar rol/capability de Administrador Bitácora y guard operativo de la PAUSA breve;
+6. resolver bloqueo efectivo de enlaces compartibles y acceso directo a medios durante PAUSA;
+7. construir el addon/editor estructural común cuando las primitivas del Engine estén cerradas;
+8. ejecutar regresión bundled, BITA fresh, idempotencia y cierre de 0.3.0.
 
 # 26. Convenciones operativas de terminal
 
