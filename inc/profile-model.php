@@ -1275,6 +1275,75 @@ function bitacora_get_canonical_profile_definition( $definition ) {
 
 
 /**
+ * Calcula una huella determinista de una definición estructural.
+ *
+ * La huella se obtiene exclusivamente desde la representación canónica del
+ * contrato Profile. No incorpora label, UUID, procedencia ni datos runtime.
+ */
+function bitacora_get_profile_definition_fingerprint( $definition ) {
+
+        $canonical =
+                bitacora_get_canonical_profile_definition(
+                        $definition
+                );
+
+        if ( is_wp_error( $canonical ) ) {
+                return $canonical;
+        }
+
+        $encoded = wp_json_encode(
+                $canonical,
+                JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+        );
+
+        if ( ! is_string( $encoded ) ) {
+                return new WP_Error(
+                        'bitacora_profile_definition_fingerprint_failed',
+                        'No se pudo serializar la definición canónica.'
+                );
+        }
+
+        return hash(
+                'sha256',
+                $encoded
+        );
+}
+
+
+/**
+ * Toma una instantánea puramente estructural de la instancia vigente.
+ *
+ * La definición es la reconstrucción canónica del runtime y fingerprint es
+ * su huella determinista. Este par puede utilizarse como PRE para detectar
+ * drift estructural antes de una modificación controlada.
+ */
+function bitacora_get_instance_structure_snapshot() {
+
+        $definition =
+                bitacora_get_instance_profile_definition();
+
+        if ( is_wp_error( $definition ) ) {
+                return $definition;
+        }
+
+        $fingerprint =
+                bitacora_get_profile_definition_fingerprint(
+                        $definition
+                );
+
+        if ( is_wp_error( $fingerprint ) ) {
+                return $fingerprint;
+        }
+
+        return array(
+                'definition'  => $definition,
+                'fingerprint' => $fingerprint,
+        );
+}
+
+
+/**
  * Extrae la estructura vigente de la instancia como definición canónica.
  *
  * La extracción contiene solamente propiedades pertenecientes al contrato
