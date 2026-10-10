@@ -1545,6 +1545,562 @@ function bitacora_compare_profile_definitions(
 
 
 /**
+ * Devuelve el uso histórico actual de la estructura materializada.
+ *
+ * No interpreta política. Sólo observa referencias persistidas:
+ * - ítems relacionados con secciones;
+ * - ítems relacionados con Tipos;
+ * - uso efectivo de features documentales por sección.
+ */
+function bitacora_get_instance_structure_usage() {
+
+        $sections = get_terms(
+                array(
+                        'taxonomy'   => 'bitacora_section',
+                        'hide_empty' => false,
+                )
+        );
+
+        if ( is_wp_error( $sections ) ) {
+                return $sections;
+        }
+
+        $classes = get_terms(
+                array(
+                        'taxonomy'   => 'bitacora_class',
+                        'hide_empty' => false,
+                )
+        );
+
+        if ( is_wp_error( $classes ) ) {
+                return $classes;
+        }
+
+        $usage = array(
+                'sections' => array(),
+                'classes'  => array(),
+        );
+
+        foreach ( $sections as $term ) {
+
+                $item_ids = get_objects_in_term(
+                        $term->term_id,
+                        'bitacora_section'
+                );
+
+                if ( is_wp_error( $item_ids ) ) {
+                        return $item_ids;
+                }
+
+                $item_ids = array_values(
+                        array_unique(
+                                array_map(
+                                        'intval',
+                                        $item_ids
+                                )
+                        )
+                );
+
+                sort( $item_ids, SORT_NUMERIC );
+
+                $file_items     = array();
+                $location_items = array();
+                $comment_items  = array();
+                $comment_count  = 0;
+
+                foreach ( $item_ids as $item_id ) {
+
+                        if (
+                                absint(
+                                        get_post_meta(
+                                                $item_id,
+                                                'bitacora_item_file',
+                                                true
+                                        )
+                                ) > 0
+                        ) {
+                                $file_items[] = $item_id;
+                        }
+
+                        if (
+                                '' !== trim(
+                                        (string) get_post_meta(
+                                                $item_id,
+                                                'bitacora_item_location',
+                                                true
+                                        )
+                                )
+                        ) {
+                                $location_items[] = $item_id;
+                        }
+
+                        $item_comments = (int) get_comments(
+                                array(
+                                        'post_id' => $item_id,
+                                        'status'  => 'all',
+                                        'count'   => true,
+                                )
+                        );
+
+                        if ( $item_comments > 0 ) {
+                                $comment_items[] = $item_id;
+                                $comment_count  += $item_comments;
+                        }
+                }
+
+                $usage['sections'][ $term->slug ] = array(
+                        'term_id'    => (int) $term->term_id,
+                        'item_count' => count( $item_ids ),
+                        'item_ids'   => $item_ids,
+
+                        'features' => array(
+                                'file' => array(
+                                        'count'    => count( $file_items ),
+                                        'item_ids' => $file_items,
+                                ),
+
+                                'location' => array(
+                                        'count'    => count( $location_items ),
+                                        'item_ids' => $location_items,
+                                ),
+
+                                'comments' => array(
+                                        'count'         => count( $comment_items ),
+                                        'item_ids'      => $comment_items,
+                                        'comment_count' => $comment_count,
+                                ),
+                        ),
+                );
+        }
+
+        foreach ( $classes as $term ) {
+
+                $item_ids = get_objects_in_term(
+                        $term->term_id,
+                        'bitacora_class'
+                );
+
+                if ( is_wp_error( $item_ids ) ) {
+                        return $item_ids;
+                }
+
+                $item_ids = array_values(
+                        array_unique(
+                                array_map(
+                                        'intval',
+                                        $item_ids
+                                )
+                        )
+                );
+
+                sort( $item_ids, SORT_NUMERIC );
+
+                $usage['classes'][ $term->slug ] = array(
+                        'term_id'    => (int) $term->term_id,
+                        'item_count' => count( $item_ids ),
+                        'item_ids'   => $item_ids,
+                );
+        }
+
+        ksort( $usage['sections'], SORT_STRING );
+        ksort( $usage['classes'], SORT_STRING );
+
+        return $usage;
+}
+
+
+/**
+ * Valida una PROPUESTA de evolución sobre una instancia viva.
+ *
+ * La función no aplica cambios.
+ *
+ * Política:
+ * - PRE debe seguir describiendo CURRENT;
+ * - PROPUESTA debe ser una definición Profile válida;
+ * - agregar estructura está permitido;
+ * - renombrar, reordenar, cambiar área/estado y presentation está permitido;
+ * - una sección o Tipo referenciado no puede eliminarse;
+ * - un Tipo referenciado no puede cambiar de scope_id;
+ * - una feature puede activarse libremente;
+ * - una feature sólo puede desactivarse si no existe contenido histórico que
+ *   dependa de ella en esa sección.
+ *
+ * La política se recalcula contra uso runtime fresco para que una propuesta
+ * pueda volver a comprobarse justo antes de aplicar.
+ */
+function bitacora_validate_instance_structure_proposal(
+        $pre,
+        $proposal_definition
+) {
+
+        $report = array(
+                'valid'                => false,
+                'errors'               => array(),
+                'comparison'           => null,
+                'proposal'             => null,
+                'proposal_fingerprint' => '',
+        );
+
+        $precondition =
+                bitacora_check_instance_structure_precondition(
+                        $pre
+                );
+
+        if ( is_wp_error( $precondition ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => $precondition->get_error_code(),
+                        'message' => $precondition->get_error_message(),
+                        'data'    => $precondition->get_error_data(),
+                );
+
+                return $report;
+        }
+
+        if ( empty( $precondition['matches'] ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => 'bitacora_instance_structure_drift',
+                        'message' => 'La estructura de la instancia cambió desde PRE.',
+                        'data'    => array(
+                                'expected_fingerprint' =>
+                                        $precondition['expected']['fingerprint'],
+
+                                'current_fingerprint' =>
+                                        $precondition['current']['fingerprint'],
+                        ),
+                );
+
+                return $report;
+        }
+
+        $validation =
+                bitacora_validate_profile_definition(
+                        $proposal_definition
+                );
+
+        if ( empty( $validation['valid'] ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => 'bitacora_instance_proposal_invalid',
+                        'message' => 'La PROPUESTA estructural no es válida.',
+                        'data'    => isset( $validation['errors'] )
+                                ? $validation['errors']
+                                : array(),
+                );
+
+                return $report;
+        }
+
+        $proposal =
+                bitacora_get_canonical_profile_definition(
+                        $proposal_definition
+                );
+
+        if ( is_wp_error( $proposal ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => $proposal->get_error_code(),
+                        'message' => $proposal->get_error_message(),
+                        'data'    => $proposal->get_error_data(),
+                );
+
+                return $report;
+        }
+
+        $comparison =
+                bitacora_compare_profile_definitions(
+                        $precondition['expected']['definition'],
+                        $proposal
+                );
+
+        if ( is_wp_error( $comparison ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => $comparison->get_error_code(),
+                        'message' => $comparison->get_error_message(),
+                        'data'    => $comparison->get_error_data(),
+                );
+
+                return $report;
+        }
+
+        $usage = bitacora_get_instance_structure_usage();
+
+        if ( is_wp_error( $usage ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => $usage->get_error_code(),
+                        'message' => $usage->get_error_message(),
+                        'data'    => $usage->get_error_data(),
+                );
+
+                return $report;
+        }
+
+        $report['comparison'] = $comparison;
+        $report['proposal']   = $proposal;
+
+        $proposal_fingerprint =
+                bitacora_get_profile_definition_fingerprint(
+                        $proposal
+                );
+
+        if ( is_wp_error( $proposal_fingerprint ) ) {
+
+                $report['errors'][] = array(
+                        'code'    => $proposal_fingerprint->get_error_code(),
+                        'message' => $proposal_fingerprint->get_error_message(),
+                        'data'    => $proposal_fingerprint->get_error_data(),
+                );
+
+                return $report;
+        }
+
+        $report['proposal_fingerprint'] =
+                $proposal_fingerprint;
+
+        /*
+         * Eliminación de secciones.
+         */
+        foreach (
+                $comparison['sections']['removed']
+                as $slug => $section
+        ) {
+
+                $section_usage =
+                        isset( $usage['sections'][ $slug ] )
+                                ? $usage['sections'][ $slug ]
+                                : array(
+                                        'item_count' => 0,
+                                        'item_ids'   => array(),
+                                );
+
+                if ( $section_usage['item_count'] > 0 ) {
+
+                        $report['errors'][] = array(
+                                'code'    => 'bitacora_instance_section_in_use',
+                                'message' => sprintf(
+                                        'La sección "%s" no puede eliminarse porque está usada.',
+                                        $section['name']
+                                ),
+                                'data'    => array(
+                                        'slug'       => $slug,
+                                        'item_count' => $section_usage['item_count'],
+                                        'item_ids'   => $section_usage['item_ids'],
+                                ),
+                        );
+                }
+        }
+
+        /*
+         * Eliminación de Tipos.
+         */
+        foreach (
+                $comparison['classes']['removed']
+                as $slug => $class
+        ) {
+
+                $class_usage =
+                        isset( $usage['classes'][ $slug ] )
+                                ? $usage['classes'][ $slug ]
+                                : array(
+                                        'item_count' => 0,
+                                        'item_ids'   => array(),
+                                );
+
+                if ( $class_usage['item_count'] > 0 ) {
+
+                        $report['errors'][] = array(
+                                'code'    => 'bitacora_instance_class_in_use',
+                                'message' => sprintf(
+                                        'El Tipo "%s" no puede eliminarse porque está usado.',
+                                        $class['name']
+                                ),
+                                'data'    => array(
+                                        'slug'       => $slug,
+                                        'item_count' => $class_usage['item_count'],
+                                        'item_ids'   => $class_usage['item_ids'],
+                                ),
+                        );
+                }
+        }
+
+        /*
+         * Un Tipo usado puede cambiar nombre, orden o estado, pero no puede
+         * pasar a otra sección porque rompería la relación histórica
+         * sección + Tipo de los ítems existentes.
+         */
+        foreach (
+                $comparison['classes']['modified']
+                as $slug => $modified
+        ) {
+
+                if (
+                        ! isset(
+                                $modified['changes']['scope_id']
+                        )
+                ) {
+                        continue;
+                }
+
+                $class_usage =
+                        isset( $usage['classes'][ $slug ] )
+                                ? $usage['classes'][ $slug ]
+                                : array(
+                                        'item_count' => 0,
+                                        'item_ids'   => array(),
+                                );
+
+                if ( $class_usage['item_count'] > 0 ) {
+
+                        $report['errors'][] = array(
+                                'code'    => 'bitacora_instance_class_scope_in_use',
+                                'message' => sprintf(
+                                        'El Tipo "%s" no puede cambiar de sección porque está usado.',
+                                        $modified['before']['name']
+                                ),
+                                'data'    => array(
+                                        'slug'       => $slug,
+                                        'before'     =>
+                                                $modified['changes']['scope_id']['before'],
+                                        'after'      =>
+                                                $modified['changes']['scope_id']['after'],
+                                        'item_count' => $class_usage['item_count'],
+                                        'item_ids'   => $class_usage['item_ids'],
+                                ),
+                        );
+                }
+        }
+
+        /*
+         * Desactivación de features.
+         *
+         * También se aplica al core, cuya sección materializada es "notas".
+         */
+        $feature_map = array(
+                'feature_file'     => 'file',
+                'feature_location' => 'location',
+                'feature_comments' => 'comments',
+        );
+
+        $check_feature_changes = static function (
+                $entity_slug,
+                $changes,
+                $entity_label
+        ) use (
+                &$report,
+                $usage,
+                $feature_map
+        ) {
+
+                if (
+                        ! isset(
+                                $usage['sections'][ $entity_slug ]
+                        )
+                ) {
+                        return;
+                }
+
+                foreach (
+                        $feature_map
+                        as $property => $feature
+                ) {
+
+                        if (
+                                ! isset( $changes[ $property ] )
+                        ) {
+                                continue;
+                        }
+
+                        $before =
+                                ! empty(
+                                        $changes[ $property ]['before']
+                                );
+
+                        $after =
+                                ! empty(
+                                        $changes[ $property ]['after']
+                                );
+
+                        /*
+                         * Activar siempre es aditivo.
+                         * Mantener false tampoco requiere política.
+                         */
+                        if ( ! $before || $after ) {
+                                continue;
+                        }
+
+                        $feature_usage =
+                                $usage['sections']
+                                      [ $entity_slug ]
+                                      ['features']
+                                      [ $feature ];
+
+                        if ( $feature_usage['count'] <= 0 ) {
+                                continue;
+                        }
+
+                        $data = array(
+                                'slug'       => $entity_slug,
+                                'feature'    => $feature,
+                                'item_count' => $feature_usage['count'],
+                                'item_ids'   => $feature_usage['item_ids'],
+                        );
+
+                        if (
+                                'comments' === $feature
+                                && isset(
+                                        $feature_usage['comment_count']
+                                )
+                        ) {
+                                $data['comment_count'] =
+                                        $feature_usage['comment_count'];
+                        }
+
+                        $report['errors'][] = array(
+                                'code'    => 'bitacora_instance_feature_in_use',
+                                'message' => sprintf(
+                                        'No puede desactivarse "%s" en "%s" porque existe contenido histórico que la utiliza.',
+                                        $feature,
+                                        $entity_label
+                                ),
+                                'data'    => $data,
+                        );
+                }
+        };
+
+        if ( ! empty( $comparison['core']['modified'] ) ) {
+
+                $check_feature_changes(
+                        'notas',
+                        $comparison['core']['changes'],
+                        'Bitácora'
+                );
+        }
+
+        foreach (
+                $comparison['sections']['modified']
+                as $slug => $modified
+        ) {
+
+                $check_feature_changes(
+                        $slug,
+                        $modified['changes'],
+                        isset( $modified['before']['name'] )
+                                ? $modified['before']['name']
+                                : $slug
+                );
+        }
+
+        $report['valid'] =
+                empty( $report['errors'] );
+
+        return $report;
+}
+
+
+/**
  * Toma una instantánea puramente estructural de la instancia vigente.
  *
  * La definición es la reconstrucción canónica del runtime y fingerprint es
