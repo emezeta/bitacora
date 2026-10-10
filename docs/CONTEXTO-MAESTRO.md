@@ -458,17 +458,33 @@ Se distinguen tres conceptos diferentes.
 
 #### Duplicado exacto
 
-Un candidato se considera duplicado solamente cuando su definición estructural
-canónica es funcionalmente idéntica a la de un Profile existente.
+Un candidato se considera duplicado solamente cuando coincide con un Profile
+existente tanto en su identidad humana normalizada como en su definición
+estructural canónica.
 
 ```text
-misma definición completa
+mismo label normalizado
++
+misma definición estructural completa
     → REJECT
 ```
 
-La comparación debe abarcar todas las propiedades pertenecientes al contrato
-vigente del Profile. Si existe una diferencia estructural válida, no se trata
-de un duplicado exacto.
+Por lo tanto, cualquier diferencia entre ambos candidatos impide hablar de
+duplicado exacto.
+
+En particular:
+
+```text
+mismo label + estructura distinta
+    → colisión de nombre
+
+label distinto + misma estructura
+    → no es duplicado
+    → puede considerarse similar
+```
+
+La comparación estructural debe abarcar todas las propiedades pertenecientes
+al contrato vigente del Profile.
 
 #### Nombre de Profile
 
@@ -532,12 +548,13 @@ Resumen:
 
 ```text
 duplicado exacto
+    mismo label + misma estructura
     → REJECT
 
-mismo nombre
+mismo nombre + estructura distinta
     → exigir otro label
 
-similar
+label distinto + estructura igual o similar
     → ADVERTIR
     → operador decide
 
@@ -2429,7 +2446,7 @@ feature_comments
 - REJECT → no existe Perfil
 - UUID asignado exclusivamente por Engine
 - label aporta identidad humana
-- duplicado exacto sólo por equivalencia de definición estructural canónica
+- duplicado exacto sólo cuando coinciden label normalizado y definición estructural canónica
 - label de Profile único; una colisión de nombre exige elegir otro
 - similitud estructural produce advertencia, no rechazo
 - Engine no administra candidatos rechazados
