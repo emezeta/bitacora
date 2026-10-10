@@ -1719,7 +1719,8 @@ function bitacora_get_instance_structure_usage() {
  * - PROPUESTA debe ser una definición Profile válida;
  * - agregar estructura está permitido;
  * - renombrar, reordenar, cambiar área/estado y presentation está permitido;
- * - una sección o Tipo referenciado no puede eliminarse;
+ * - una sección o Tipo que ya existía en PRE no puede eliminarse;
+ * - para retirarlo debe conservarse su identidad y cambiar su state;
  * - un Tipo referenciado no puede cambiar de scope_id;
  * - una feature puede activarse libremente;
  * - una feature sólo puede desactivarse si no existe contenido histórico que
@@ -1861,7 +1862,15 @@ function bitacora_validate_instance_structure_proposal(
                 $proposal_fingerprint;
 
         /*
-         * Eliminación de secciones.
+         * Eliminación de estructura PRE.
+         *
+         * Aunque una entidad no tenga contenido asociado, eliminarla
+         * destruiría su identidad física WordPress (term_id) y volvería
+         * imposible garantizar un rollback exacto.
+         *
+         * Para retirar estructura existente debe conservarse la entidad
+         * y cambiar su state. Las únicas entidades que podrán eliminarse
+         * durante rollback serán las creadas por ese mismo apply.
          */
         foreach (
                 $comparison['sections']['removed']
@@ -1890,12 +1899,24 @@ function bitacora_validate_instance_structure_proposal(
                                         'item_ids'   => $section_usage['item_ids'],
                                 ),
                         );
+
+                        continue;
                 }
+
+                $report['errors'][] = array(
+                        'code'    => 'bitacora_instance_section_removal_not_supported',
+                        'message' => sprintf(
+                                'La sección "%s" ya pertenece a PRE y no puede eliminarse; debe conservarse y deshabilitarse.',
+                                $section['name']
+                        ),
+                        'data'    => array(
+                                'slug'       => $slug,
+                                'item_count' => 0,
+                                'item_ids'   => array(),
+                        ),
+                );
         }
 
-        /*
-         * Eliminación de Tipos.
-         */
         foreach (
                 $comparison['classes']['removed']
                 as $slug => $class
@@ -1923,7 +1944,22 @@ function bitacora_validate_instance_structure_proposal(
                                         'item_ids'   => $class_usage['item_ids'],
                                 ),
                         );
+
+                        continue;
                 }
+
+                $report['errors'][] = array(
+                        'code'    => 'bitacora_instance_class_removal_not_supported',
+                        'message' => sprintf(
+                                'El Tipo "%s" ya pertenece a PRE y no puede eliminarse; debe conservarse y deshabilitarse.',
+                                $class['name']
+                        ),
+                        'data'    => array(
+                                'slug'       => $slug,
+                                'item_count' => 0,
+                                'item_ids'   => array(),
+                        ),
+                );
         }
 
         /*
