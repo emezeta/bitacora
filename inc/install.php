@@ -134,6 +134,55 @@ function bitacora_get_instance_maintenance_owner() {
 
 
 /**
+ * Comprueba si la conexión MySQL actual posee el advisory lock
+ * de mantenimiento estructural.
+ *
+ * @return bool|WP_Error
+ */
+function bitacora_instance_maintenance_lock_is_owned() {
+
+        global $wpdb;
+
+        $lock_name =
+                'bitacora_instance_maintenance';
+
+        $owner_connection = $wpdb->get_var(
+                $wpdb->prepare(
+                        'SELECT IS_USED_LOCK(%s)',
+                        $lock_name
+                )
+        );
+
+        /*
+         * NULL significa que el lock no está tomado.
+         */
+        if ( null === $owner_connection ) {
+                return false;
+        }
+
+        $current_connection =
+                $wpdb->get_var(
+                        'SELECT CONNECTION_ID()'
+                );
+
+        if (
+                null === $current_connection
+                || '' === (string) $current_connection
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_connection_unknown',
+                        'No se pudo identificar la conexión MySQL actual.'
+                );
+        }
+
+        return (
+                (string) $owner_connection
+                === (string) $current_connection
+        );
+}
+
+
+/**
  * Adquiere el advisory lock de mantenimiento estructural.
  *
  * El lock es de conexión MySQL y por tanto debe mantenerse dentro del mismo
@@ -226,6 +275,20 @@ function bitacora_pause_instance_for_maintenance(
                 return new WP_Error(
                         'bitacora_instance_not_configured',
                         'Bitácora no tiene una instancia configurada para pausar.'
+                );
+        }
+
+        $lock_owned =
+                bitacora_instance_maintenance_lock_is_owned();
+
+        if ( is_wp_error( $lock_owned ) ) {
+                return $lock_owned;
+        }
+
+        if ( ! $lock_owned ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_lock_required',
+                        'La PAUSA requiere poseer el bloqueo de mantenimiento de la instancia.'
                 );
         }
 
@@ -385,6 +448,20 @@ function bitacora_resume_instance_from_maintenance(
                                 'La instancia no puede reanudarse desde el estado "%s".',
                                 (string) $state
                         )
+                );
+        }
+
+        $lock_owned =
+                bitacora_instance_maintenance_lock_is_owned();
+
+        if ( is_wp_error( $lock_owned ) ) {
+                return $lock_owned;
+        }
+
+        if ( ! $lock_owned ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_lock_required',
+                        'Reanudar una instancia en PAUSA requiere poseer el bloqueo de mantenimiento.'
                 );
         }
 
