@@ -1312,6 +1312,239 @@ function bitacora_get_profile_definition_fingerprint( $definition ) {
 
 
 /**
+ * Compara dos definiciones estructurales válidas.
+ *
+ * La comparación es puramente descriptiva:
+ * no consulta runtime, uso histórico ni permisos y no modifica nada.
+ *
+ * Identidad técnica:
+ * - sección: slug;
+ * - Tipo: slug.
+ *
+ * Por eso un cambio de slug aparece como removed + added, mientras que
+ * cambios de nombre, orden, área, estado o features aparecen como modified.
+ */
+function bitacora_compare_profile_definitions(
+        $before_definition,
+        $after_definition
+) {
+
+        $before_validation =
+                bitacora_validate_profile_definition(
+                        $before_definition
+                );
+
+        if ( empty( $before_validation['valid'] ) ) {
+                return new WP_Error(
+                        'bitacora_structure_before_invalid',
+                        'La definición estructural anterior no es válida.',
+                        isset( $before_validation['errors'] )
+                                ? $before_validation['errors']
+                                : array()
+                );
+        }
+
+        $after_validation =
+                bitacora_validate_profile_definition(
+                        $after_definition
+                );
+
+        if ( empty( $after_validation['valid'] ) ) {
+                return new WP_Error(
+                        'bitacora_structure_after_invalid',
+                        'La definición estructural propuesta no es válida.',
+                        isset( $after_validation['errors'] )
+                                ? $after_validation['errors']
+                                : array()
+                );
+        }
+
+        $before =
+                bitacora_get_canonical_profile_definition(
+                        $before_definition
+                );
+
+        if ( is_wp_error( $before ) ) {
+                return $before;
+        }
+
+        $after =
+                bitacora_get_canonical_profile_definition(
+                        $after_definition
+                );
+
+        if ( is_wp_error( $after ) ) {
+                return $after;
+        }
+
+        $before_fingerprint =
+                bitacora_get_profile_definition_fingerprint(
+                        $before
+                );
+
+        if ( is_wp_error( $before_fingerprint ) ) {
+                return $before_fingerprint;
+        }
+
+        $after_fingerprint =
+                bitacora_get_profile_definition_fingerprint(
+                        $after
+                );
+
+        if ( is_wp_error( $after_fingerprint ) ) {
+                return $after_fingerprint;
+        }
+
+        /*
+         * Diferencias de propiedades de una misma entidad.
+         *
+         * exists permite distinguir una propiedad ausente de otra
+         * explícitamente presente con null, false, 0 o cadena vacía.
+         */
+        $diff_properties = static function (
+                $before_entity,
+                $after_entity
+        ) {
+
+                $keys = array_unique(
+                        array_merge(
+                                array_keys( $before_entity ),
+                                array_keys( $after_entity )
+                        )
+                );
+
+                sort( $keys, SORT_STRING );
+
+                $changes = array();
+
+                foreach ( $keys as $key ) {
+
+                        $before_exists =
+                                array_key_exists(
+                                        $key,
+                                        $before_entity
+                                );
+
+                        $after_exists =
+                                array_key_exists(
+                                        $key,
+                                        $after_entity
+                                );
+
+                        $before_value = $before_exists
+                                ? $before_entity[ $key ]
+                                : null;
+
+                        $after_value = $after_exists
+                                ? $after_entity[ $key ]
+                                : null;
+
+                        if (
+                                $before_exists === $after_exists
+                                && $before_value === $after_value
+                        ) {
+                                continue;
+                        }
+
+                        $changes[ $key ] = array(
+                                'before_exists' => $before_exists,
+                                'after_exists'  => $after_exists,
+                                'before'        => $before_value,
+                                'after'         => $after_value,
+                        );
+                }
+
+                return $changes;
+        };
+
+        $compare_entities = static function (
+                $before_entities,
+                $after_entities
+        ) use ( $diff_properties ) {
+
+                $result = array(
+                        'added'    => array(),
+                        'removed'  => array(),
+                        'modified' => array(),
+                );
+
+                foreach ( $after_entities as $slug => $entity ) {
+
+                        if ( ! array_key_exists( $slug, $before_entities ) ) {
+                                $result['added'][ $slug ] = $entity;
+                                continue;
+                        }
+
+                        $changes = $diff_properties(
+                                $before_entities[ $slug ],
+                                $entity
+                        );
+
+                        if ( ! empty( $changes ) ) {
+                                $result['modified'][ $slug ] = array(
+                                        'changes' => $changes,
+                                        'before'  => $before_entities[ $slug ],
+                                        'after'   => $entity,
+                                );
+                        }
+                }
+
+                foreach ( $before_entities as $slug => $entity ) {
+
+                        if ( ! array_key_exists( $slug, $after_entities ) ) {
+                                $result['removed'][ $slug ] = $entity;
+                        }
+                }
+
+                ksort( $result['added'], SORT_STRING );
+                ksort( $result['removed'], SORT_STRING );
+                ksort( $result['modified'], SORT_STRING );
+
+                return $result;
+        };
+
+        $core_changes =
+                $diff_properties(
+                        $before['core'],
+                        $after['core']
+                );
+
+        $sections =
+                $compare_entities(
+                        $before['sections'],
+                        $after['sections']
+                );
+
+        $classes =
+                $compare_entities(
+                        $before['classes'],
+                        $after['classes']
+                );
+
+        return array(
+                'equal' => (
+                        $before === $after
+                        && hash_equals(
+                                $before_fingerprint,
+                                $after_fingerprint
+                        )
+                ),
+
+                'before_fingerprint' => $before_fingerprint,
+                'after_fingerprint'  => $after_fingerprint,
+
+                'core' => array(
+                        'modified' => ! empty( $core_changes ),
+                        'changes'  => $core_changes,
+                ),
+
+                'sections' => $sections,
+                'classes'  => $classes,
+        );
+}
+
+
+/**
  * Toma una instantánea puramente estructural de la instancia vigente.
  *
  * La definición es la reconstrucción canónica del runtime y fingerprint es
