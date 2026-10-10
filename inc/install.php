@@ -65,6 +65,393 @@ function bitacora_get_configuration_state() {
 }
 
 /**
+ * Devuelve el estado operativo de la instancia.
+ *
+ * La ausencia de opción es deliberadamente compatible con todas las
+ * instancias existentes: una Bitácora configurada se considera ACTIVE.
+ *
+ * Estados:
+ * - unconfigured: no existe instancia materializada;
+ * - active: instancia disponible para uso normal;
+ * - paused: ventana crítica de mantenimiento estructural.
+ */
+function bitacora_get_instance_runtime_state() {
+
+        if ( ! bitacora_is_configured() ) {
+                return 'unconfigured';
+        }
+
+        $state = get_option(
+                'bitacora_instance_runtime_state',
+                'active'
+        );
+
+        if (
+                ! is_string( $state )
+                || ! in_array(
+                        $state,
+                        array(
+                                'active',
+                                'paused',
+                        ),
+                        true
+                )
+        ) {
+                /*
+                 * Fail-open sólo para compatibilidad de una opción inválida
+                 * que no debería existir. La transición a PAUSED se realiza
+                 * exclusivamente mediante las primitivas controladas.
+                 */
+                return 'active';
+        }
+
+        return $state;
+}
+
+
+/**
+ * Devuelve el usuario que posee una PAUSA de mantenimiento.
+ *
+ * Fuera de PAUSED no existe owner operativo aunque hubiera quedado una
+ * opción residual; así el estado ACTIVE nunca adquiere exclusividad.
+ */
+function bitacora_get_instance_maintenance_owner() {
+
+        if (
+                'paused'
+                !== bitacora_get_instance_runtime_state()
+        ) {
+                return 0;
+        }
+
+        return absint(
+                get_option(
+                        'bitacora_instance_maintenance_owner',
+                        0
+                )
+        );
+}
+
+
+/**
+ * Adquiere el advisory lock de mantenimiento estructural.
+ *
+ * El lock es de conexión MySQL y por tanto debe mantenerse dentro del mismo
+ * request que ejecutará PAUSA -> APPLY/RECOVERY -> ACTIVE.
+ *
+ * PAUSED puede sobrevivir al request si una recuperación falla; el advisory
+ * lock no. La exclusividad persistente en ese caso queda representada por
+ * maintenance_owner y deberá respetarse en cualquier operación posterior.
+ *
+ * @return true|WP_Error
+ */
+function bitacora_acquire_instance_maintenance_lock(
+        $timeout = 10
+) {
+
+        global $wpdb;
+
+        $timeout = max(
+                0,
+                (int) $timeout
+        );
+
+        $lock_name =
+                'bitacora_instance_maintenance';
+
+        $acquired = $wpdb->get_var(
+                $wpdb->prepare(
+                        'SELECT GET_LOCK(%s, %d)',
+                        $lock_name,
+                        $timeout
+                )
+        );
+
+        if ( '1' !== (string) $acquired ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_lock_unavailable',
+                        'No se pudo adquirir el bloqueo de mantenimiento de la instancia.'
+                );
+        }
+
+        return true;
+}
+
+
+/**
+ * Libera el advisory lock de mantenimiento estructural.
+ *
+ * @return true|WP_Error
+ */
+function bitacora_release_instance_maintenance_lock() {
+
+        global $wpdb;
+
+        $released = $wpdb->get_var(
+                $wpdb->prepare(
+                        'SELECT RELEASE_LOCK(%s)',
+                        'bitacora_instance_maintenance'
+                )
+        );
+
+        if ( '1' !== (string) $released ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_lock_not_released',
+                        'No se pudo liberar el bloqueo de mantenimiento de la instancia.'
+                );
+        }
+
+        return true;
+}
+
+
+/**
+ * Pone la instancia en PAUSED para una sección crítica ya serializada.
+ *
+ * Esta función NO adquiere el advisory lock. El caller debe haber adquirido
+ * bitacora_instance_maintenance y conservarlo durante toda la operación.
+ *
+ * El owner se persiste antes que PAUSED para no publicar un estado pausado
+ * sin dueño.
+ */
+function bitacora_pause_instance_for_maintenance(
+        $owner_user_id
+) {
+
+        $owner_user_id = absint(
+                $owner_user_id
+        );
+
+        if ( ! bitacora_is_configured() ) {
+                return new WP_Error(
+                        'bitacora_instance_not_configured',
+                        'Bitácora no tiene una instancia configurada para pausar.'
+                );
+        }
+
+        if ( ! $owner_user_id ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_owner_required',
+                        'Debe indicarse un usuario responsable del mantenimiento.'
+                );
+        }
+
+        $owner = get_user_by(
+                'id',
+                $owner_user_id
+        );
+
+        if ( ! $owner instanceof WP_User ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_owner_invalid',
+                        'El usuario responsable del mantenimiento no existe.'
+                );
+        }
+
+        $state =
+                bitacora_get_instance_runtime_state();
+
+        if ( 'paused' === $state ) {
+
+                $current_owner =
+                        bitacora_get_instance_maintenance_owner();
+
+                if (
+                        $owner_user_id
+                        !== $current_owner
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_maintenance_owned',
+                                'La instancia ya está en mantenimiento por otro usuario.',
+                                array(
+                                        'owner_user_id' =>
+                                                $current_owner,
+                                )
+                        );
+                }
+
+                return array(
+                        'state'         => 'paused',
+                        'owner_user_id' => $owner_user_id,
+                        'changed'       => false,
+                );
+        }
+
+        if ( 'active' !== $state ) {
+                return new WP_Error(
+                        'bitacora_instance_runtime_state_invalid',
+                        sprintf(
+                                'La instancia no puede pausarse desde el estado "%s".',
+                                (string) $state
+                        )
+                );
+        }
+
+        $owner_saved = update_option(
+                'bitacora_instance_maintenance_owner',
+                $owner_user_id,
+                false
+        );
+
+        /*
+         * update_option() devuelve false también cuando no hay cambio.
+         * Verificar siempre por lectura.
+         */
+        if (
+                $owner_user_id
+                !== absint(
+                        get_option(
+                                'bitacora_instance_maintenance_owner',
+                                0
+                        )
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_owner_not_saved',
+                        'No se pudo registrar el responsable del mantenimiento.'
+                );
+        }
+
+        update_option(
+                'bitacora_instance_runtime_state',
+                'paused',
+                false
+        );
+
+        if (
+                'paused'
+                !== get_option(
+                        'bitacora_instance_runtime_state',
+                        ''
+                )
+        ) {
+                delete_option(
+                        'bitacora_instance_maintenance_owner'
+                );
+
+                return new WP_Error(
+                        'bitacora_instance_pause_not_saved',
+                        'No se pudo registrar la PAUSA de mantenimiento.'
+                );
+        }
+
+        return array(
+                'state'         => 'paused',
+                'owner_user_id' => $owner_user_id,
+                'changed'       => true,
+        );
+}
+
+
+/**
+ * Devuelve la instancia a ACTIVE después de APPLY o recuperación verificada.
+ *
+ * Sólo el owner de la PAUSA puede liberarla.
+ *
+ * Esta función NO libera el advisory lock. El caller debe reanudar primero
+ * y liberar el lock como último paso.
+ */
+function bitacora_resume_instance_from_maintenance(
+        $owner_user_id
+) {
+
+        $owner_user_id = absint(
+                $owner_user_id
+        );
+
+        if ( ! bitacora_is_configured() ) {
+                return new WP_Error(
+                        'bitacora_instance_not_configured',
+                        'Bitácora no tiene una instancia configurada para reanudar.'
+                );
+        }
+
+        $state =
+                bitacora_get_instance_runtime_state();
+
+        if ( 'active' === $state ) {
+
+                return array(
+                        'state'         => 'active',
+                        'owner_user_id' => 0,
+                        'changed'       => false,
+                );
+        }
+
+        if ( 'paused' !== $state ) {
+                return new WP_Error(
+                        'bitacora_instance_runtime_state_invalid',
+                        sprintf(
+                                'La instancia no puede reanudarse desde el estado "%s".',
+                                (string) $state
+                        )
+                );
+        }
+
+        $current_owner =
+                bitacora_get_instance_maintenance_owner();
+
+        if (
+                ! $owner_user_id
+                || $owner_user_id
+                !== $current_owner
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_owner_mismatch',
+                        'Sólo el responsable actual del mantenimiento puede reanudar la instancia.',
+                        array(
+                                'owner_user_id' =>
+                                        $current_owner,
+                        )
+                );
+        }
+
+        /*
+         * ACTIVE vuelve a ser el estado implícito.
+         *
+         * Primero desaparece PAUSED; después se limpia el owner residual.
+         */
+        delete_option(
+                'bitacora_instance_runtime_state'
+        );
+
+        if (
+                'active'
+                !== bitacora_get_instance_runtime_state()
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_resume_not_saved',
+                        'No se pudo devolver la instancia a ACTIVE.'
+                );
+        }
+
+        delete_option(
+                'bitacora_instance_maintenance_owner'
+        );
+
+        if (
+                0 !== absint(
+                        get_option(
+                                'bitacora_instance_maintenance_owner',
+                                0
+                        )
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_owner_not_cleared',
+                        'La instancia volvió a ACTIVE pero no pudo limpiarse el responsable de mantenimiento.'
+                );
+        }
+
+        return array(
+                'state'         => 'active',
+                'owner_user_id' => 0,
+                'changed'       => true,
+        );
+}
+
+
+/**
  * Comprueba las dependencias funcionales del theme.
  *
  * Devuelve únicamente problemas:
