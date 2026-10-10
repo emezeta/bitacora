@@ -1162,10 +1162,24 @@ function bitacora_get_canonical_profile_definition( $definition ) {
                         if ( ! array_key_exists( $key, $section ) ) {
 
                                 /*
-                                 * Compatibilidad funcional ya aplicada por
-                                 * bitacora_load_profile().
+                                 * En runtime una feature sin termmeta se
+                                 * interpreta como desactivada.
+                                 *
+                                 * Por lo tanto omitir false y declararlo
+                                 * explícitamente representan la misma
+                                 * estructura funcional.
                                  */
-                                if ( 'feature_comments' === $key ) {
+                                if (
+                                        in_array(
+                                                $key,
+                                                array(
+                                                        'feature_file',
+                                                        'feature_location',
+                                                        'feature_comments',
+                                                ),
+                                                true
+                                        )
+                                ) {
                                         $canonical[ $key ] = false;
                                 }
 
@@ -1256,6 +1270,377 @@ function bitacora_get_canonical_profile_definition( $definition ) {
                 'core'     => $core,
                 'sections' => $sections,
                 'classes'  => $classes,
+        );
+}
+
+
+/**
+ * Extrae la estructura vigente de la instancia como definición canónica.
+ *
+ * La extracción contiene solamente propiedades pertenecientes al contrato
+ * Profile. No incluye identidad del Profile de origen, IDs WordPress,
+ * páginas, entradas, comentarios, adjuntos ni estado operativo.
+ *
+ * La instancia debe encontrarse configurada y su estructura materializada
+ * debe satisfacer las invariantes actuales del Engine.
+ */
+function bitacora_get_instance_profile_definition() {
+
+        if (
+                ! function_exists( 'bitacora_is_configured' )
+                || ! bitacora_is_configured()
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_not_configured',
+                        'Bitácora no tiene una instancia configurada.'
+                );
+        }
+
+        $section_terms = get_terms(
+                array(
+                        'taxonomy'   => 'bitacora_section',
+                        'hide_empty' => false,
+                )
+        );
+
+        if ( is_wp_error( $section_terms ) ) {
+                return new WP_Error(
+                        'bitacora_instance_sections_unavailable',
+                        'No se pudo leer la estructura de secciones de la instancia.',
+                        $section_terms
+                );
+        }
+
+        $class_terms = get_terms(
+                array(
+                        'taxonomy'   => 'bitacora_class',
+                        'hide_empty' => false,
+                )
+        );
+
+        if ( is_wp_error( $class_terms ) ) {
+                return new WP_Error(
+                        'bitacora_instance_classes_unavailable',
+                        'No se pudo leer la estructura de Tipos de la instancia.',
+                        $class_terms
+                );
+        }
+
+        $definition = array(
+                'core'     => array(),
+                'sections' => array(),
+                'classes'  => array(),
+        );
+
+        $errors     = array();
+        $core_count = 0;
+
+        $section_meta_map = array(
+                'singular'         => 'bitacora_section_singular',
+                'plural'           => 'bitacora_section_plural',
+                'subtitle'         => 'bitacora_section_subtitle',
+                'new_label'        => 'bitacora_section_new_label',
+                'order'            => 'bitacora_section_order',
+                'area'             => 'bitacora_section_area',
+                'state'            => 'bitacora_section_state',
+                'feature_file'     => 'bitacora_section_feature_file',
+                'feature_location' => 'bitacora_section_feature_location',
+                'feature_comments' => 'bitacora_section_feature_comments',
+        );
+
+        $feature_keys = array(
+                'feature_file',
+                'feature_location',
+                'feature_comments',
+        );
+
+        foreach ( $section_terms as $term ) {
+
+                $role = metadata_exists(
+                        'term',
+                        $term->term_id,
+                        'bitacora_section_role'
+                )
+                        ? (string) get_term_meta(
+                                $term->term_id,
+                                'bitacora_section_role',
+                                true
+                        )
+                        : '';
+
+                /*
+                 * Core: identidad y estructura reservadas pertenecen
+                 * al Engine y no forman parte de los overrides extraídos.
+                 */
+                if ( 'core' === $role ) {
+
+                        $core_count++;
+
+                        if ( 'notas' !== $term->slug ) {
+                                $errors[] = sprintf(
+                                        'Core: slug runtime inesperado "%s".',
+                                        $term->slug
+                                );
+                        }
+
+                        $runtime_order = metadata_exists(
+                                'term',
+                                $term->term_id,
+                                'bitacora_section_order'
+                        )
+                                ? get_term_meta(
+                                        $term->term_id,
+                                        'bitacora_section_order',
+                                        true
+                                )
+                                : null;
+
+                        $runtime_area = metadata_exists(
+                                'term',
+                                $term->term_id,
+                                'bitacora_section_area'
+                        )
+                                ? get_term_meta(
+                                        $term->term_id,
+                                        'bitacora_section_area',
+                                        true
+                                )
+                                : null;
+
+                        $runtime_state = metadata_exists(
+                                'term',
+                                $term->term_id,
+                                'bitacora_section_state'
+                        )
+                                ? get_term_meta(
+                                        $term->term_id,
+                                        'bitacora_section_state',
+                                        true
+                                )
+                                : null;
+
+                        if (
+                                0 !== (int) $runtime_order
+                                || 'main' !== $runtime_area
+                                || 'active' !== $runtime_state
+                        ) {
+                                $errors[] =
+                                        'Core: la estructura runtime viola '
+                                        . 'order=0, area=main o state=active.';
+                        }
+
+                        $core = array(
+                                'name' => (string) $term->name,
+                        );
+
+                        foreach (
+                                array(
+                                        'singular',
+                                        'plural',
+                                        'subtitle',
+                                        'new_label',
+                                        'feature_file',
+                                        'feature_location',
+                                        'feature_comments',
+                                )
+                                as $key
+                        ) {
+                                $meta_key = $section_meta_map[ $key ];
+
+                                if (
+                                        in_array(
+                                                $key,
+                                                $feature_keys,
+                                                true
+                                        )
+                                ) {
+                                        $core[ $key ] =
+                                                metadata_exists(
+                                                        'term',
+                                                        $term->term_id,
+                                                        $meta_key
+                                                )
+                                                && '1' === (string) get_term_meta(
+                                                        $term->term_id,
+                                                        $meta_key,
+                                                        true
+                                                );
+
+                                        continue;
+                                }
+
+                                if (
+                                        metadata_exists(
+                                                'term',
+                                                $term->term_id,
+                                                $meta_key
+                                        )
+                                ) {
+                                        $core[ $key ] =
+                                                (string) get_term_meta(
+                                                        $term->term_id,
+                                                        $meta_key,
+                                                        true
+                                                );
+                                }
+                        }
+
+                        $definition['core'] = $core;
+                        continue;
+                }
+
+                /*
+                 * Toda sección no-core materializada debe declarar
+                 * explícitamente role=section.
+                 */
+                if ( 'section' !== $role ) {
+
+                        $errors[] = sprintf(
+                                'Sección runtime "%s": role inválido o ausente.',
+                                $term->slug
+                        );
+
+                        continue;
+                }
+
+                $section = array(
+                        'name' => (string) $term->name,
+                        'slug' => (string) $term->slug,
+                );
+
+                foreach ( $section_meta_map as $key => $meta_key ) {
+
+                        if (
+                                in_array(
+                                        $key,
+                                        $feature_keys,
+                                        true
+                                )
+                        ) {
+                                $section[ $key ] =
+                                        metadata_exists(
+                                                'term',
+                                                $term->term_id,
+                                                $meta_key
+                                        )
+                                        && '1' === (string) get_term_meta(
+                                                $term->term_id,
+                                                $meta_key,
+                                                true
+                                        );
+
+                                continue;
+                        }
+
+                        if (
+                                ! metadata_exists(
+                                        'term',
+                                        $term->term_id,
+                                        $meta_key
+                                )
+                        ) {
+                                continue;
+                        }
+
+                        $value = get_term_meta(
+                                $term->term_id,
+                                $meta_key,
+                                true
+                        );
+
+                        if ( 'order' === $key ) {
+                                $value = (int) $value;
+                        } else {
+                                $value = (string) $value;
+                        }
+
+                        $section[ $key ] = $value;
+                }
+
+                $definition['sections'][ $term->slug ] =
+                        $section;
+        }
+
+        if ( 1 !== $core_count ) {
+                $errors[] = sprintf(
+                        'La instancia debe contener exactamente un core; se encontraron %d.',
+                        $core_count
+                );
+        }
+
+        $class_meta_map = array(
+                'scope'    => 'bitacora_class_scope',
+                'scope_id' => 'bitacora_class_scope_id',
+                'order'    => 'bitacora_class_order',
+                'state'    => 'bitacora_class_state',
+        );
+
+        foreach ( $class_terms as $term ) {
+
+                $class = array(
+                        'name' => (string) $term->name,
+                        'slug' => (string) $term->slug,
+                );
+
+                foreach ( $class_meta_map as $key => $meta_key ) {
+
+                        if (
+                                ! metadata_exists(
+                                        'term',
+                                        $term->term_id,
+                                        $meta_key
+                                )
+                        ) {
+                                continue;
+                        }
+
+                        $value = get_term_meta(
+                                $term->term_id,
+                                $meta_key,
+                                true
+                        );
+
+                        if ( 'order' === $key ) {
+                                $value = (int) $value;
+                        } else {
+                                $value = (string) $value;
+                        }
+
+                        $class[ $key ] = $value;
+                }
+
+                $definition['classes'][ $term->slug ] =
+                        $class;
+        }
+
+        if ( ! empty( $errors ) ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_invalid',
+                        'La estructura runtime de la instancia no es válida.',
+                        $errors
+                );
+        }
+
+        /*
+         * La misma validación de frontera gobierna también la estructura
+         * reconstruida desde runtime.
+         */
+        $validation = bitacora_validate_profile_definition(
+                $definition
+        );
+
+        if ( empty( $validation['valid'] ) ) {
+                return new WP_Error(
+                        'bitacora_instance_definition_invalid',
+                        'La estructura extraída no satisface el contrato Profile.',
+                        isset( $validation['errors'] )
+                                ? $validation['errors']
+                                : array()
+                );
+        }
+
+        return bitacora_get_canonical_profile_definition(
+                $definition
         );
 }
 
