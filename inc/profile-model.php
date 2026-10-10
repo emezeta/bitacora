@@ -377,9 +377,15 @@ function bitacora_load_profile_template( $template_name ) {
  * Crea un Perfil a partir de un Template externo.
  *
  * El Template se limita a producir un candidato transitorio. La decisión
- * autoritativa de ACCEPT / REJECT pertenece a la adopción del Engine.
+ * autoritativa pertenece a la adopción del Engine.
+ *
+ * $options puede contener allow_similar=true cuando el operador ya confirmó
+ * explícitamente que desea continuar ante una advertencia de similitud.
  */
-function bitacora_create_profile_from_template( $template_name ) {
+function bitacora_create_profile_from_template(
+        $template_name,
+        $options = array()
+) {
 
         $candidate = bitacora_load_profile_template(
                 $template_name
@@ -399,7 +405,8 @@ function bitacora_create_profile_from_template( $template_name ) {
         }
 
         return bitacora_adopt_profile_candidate(
-                $candidate
+                $candidate,
+                $options
         );
 }
 
@@ -408,24 +415,49 @@ function bitacora_create_profile_from_template( $template_name ) {
  * Promueve un candidato presentado por un productor externo.
  *
  * PROMOCIÓN sólo define el origen de la operación. La decisión autoritativa
- * de ACCEPT / REJECT pertenece exclusivamente al Engine.
+ * pertenece exclusivamente al Engine.
+ *
+ * $options puede contener allow_similar=true cuando el operador ya confirmó
+ * explícitamente que desea continuar ante una advertencia de similitud.
  */
-function bitacora_promote_profile_candidate( $candidate ) {
+function bitacora_promote_profile_candidate(
+        $candidate,
+        $options = array()
+) {
 
-        return bitacora_adopt_profile_candidate( $candidate );
+        return bitacora_adopt_profile_candidate(
+                $candidate,
+                $options
+        );
 }
 
 
 /**
- * Adopta autoritativamente un candidato y, si todo resulta válido,
- * crea un Perfil aceptado en la biblioteca.
+ * Adopta autoritativamente un candidato y, si corresponde,
+ * crea un Profile aceptado en la biblioteca.
  *
  * El candidato no puede imponer identidad técnica ni estado persistente.
- * Un rechazo no deja Perfil observable ni modifica la instancia runtime.
+ * Un rechazo no deja Profile observable ni modifica la instancia runtime.
+ *
+ * La similitud puede requerir confirmación operacional antes de ACCEPT,
+ * sin crear estado persistente intermedio.
  */
-function bitacora_adopt_profile_candidate( $candidate ) {
+function bitacora_adopt_profile_candidate(
+        $candidate,
+        $options = array()
+) {
 
         global $wpdb;
+
+        if ( ! is_array( $options ) ) {
+                $options = array();
+        }
+
+        /*
+         * La confirmación de similitud pertenece a la operación de adopción,
+         * nunca al candidato ni a la definición persistida.
+         */
+        $allow_similar = ! empty( $options['allow_similar'] );
 
         $reject = static function ( $errors ) {
 
@@ -575,28 +607,72 @@ function bitacora_adopt_profile_candidate( $candidate ) {
          * Una comprobación anterior permitiría que dos adopciones
          * concurrentes aceptaran candidatos funcionalmente duplicados.
          */
-        $duplicate = bitacora_check_profile_candidate_duplicate(
+        $inspection = bitacora_inspect_profile_candidate(
                 $candidate
         );
 
-        if ( ! empty( $duplicate['errors'] ) ) {
+        if ( ! empty( $inspection['errors'] ) ) {
 
                 return $rollback(
                         array(
-                                'code'    => 'bitacora_profile_duplicate_check_failed',
-                                'message' => 'No se pudo comprobar la duplicación del candidato.',
-                                'data'    => $duplicate['errors'],
+                                'code'    => 'bitacora_profile_library_check_failed',
+                                'message' => 'No se pudo comparar el candidato con la biblioteca.',
+                                'data'    => $inspection['errors'],
                         )
                 );
         }
 
-        if ( ! empty( $duplicate['duplicate'] ) ) {
+        if ( ! empty( $inspection['duplicate'] ) ) {
 
                 return $rollback(
                         array(
                                 'code'    => 'bitacora_profile_duplicate',
-                                'matches' => $duplicate['matches'],
+                                'matches' => $inspection['duplicate_matches'],
                         )
+                );
+        }
+
+        if ( ! empty( $inspection['name_collision'] ) ) {
+
+                return $rollback(
+                        array(
+                                'code'    => 'bitacora_profile_label_exists',
+                                'message' => 'Ya existe un Profile con ese nombre.',
+                                'matches' => $inspection['name_collision_matches'],
+                        )
+                );
+        }
+
+        /*
+         * Similaridad no es error ni duplicación.
+         *
+         * Sin autorización explícita se interrumpe la operación antes de
+         * generar UUID o persistir cualquier Profile. El productor puede
+         * mostrar la advertencia y, si el operador decide continuar, repetir
+         * la adopción con allow_similar=true.
+         */
+        if (
+                ! empty( $inspection['similar'] )
+                && ! $allow_similar
+        ) {
+
+                if ( $transaction_started ) {
+                        $wpdb->query( 'ROLLBACK' );
+                        $transaction_started = false;
+                }
+
+                $release_lock();
+
+                return array(
+                        'accepted'             => false,
+                        'confirmation_required' => true,
+                        'warnings'             => array(
+                                array(
+                                        'code'    => 'bitacora_profile_similar',
+                                        'message' => 'Existe al menos un Profile estructuralmente similar.',
+                                        'matches' => $inspection['similar_matches'],
+                                ),
+                        ),
                 );
         }
 
@@ -749,13 +825,26 @@ function bitacora_adopt_profile_candidate( $candidate ) {
          */
         $release_lock();
 
-        return array(
+        $result = array(
                 'accepted' => true,
                 'profile'  => array(
                         'id'    => $profile_id,
                         'label' => $label,
                 ),
         );
+
+        if ( ! empty( $inspection['similar_matches'] ) ) {
+
+                $result['warnings'] = array(
+                        array(
+                                'code'    => 'bitacora_profile_similar',
+                                'message' => 'Existe al menos un Profile estructuralmente similar.',
+                                'matches' => $inspection['similar_matches'],
+                        ),
+                );
+        }
+
+        return $result;
 }
 
 
@@ -947,21 +1036,257 @@ function bitacora_profile_library_contains( $profile_id ) {
 
 
 /**
- * Comprueba si un candidato presume duplicación con un Perfil existente.
+ * Normaliza texto para comparaciones de identidad humana/similitud.
  *
- * Reglas:
- * - mismo label, ignorando mayúsculas/minúsculas y espacios exteriores; o
- * - misma cantidad y mismos nombres de secciones complementarias,
- *   ignorando orden, mayúsculas/minúsculas y espacios exteriores.
- *
- * No genera identidad ni modifica la biblioteca.
+ * Conserva acentos. Sólo elimina espacios exteriores y neutraliza case.
  */
-function bitacora_check_profile_candidate_duplicate( $candidate ) {
+function bitacora_normalize_profile_comparison_text( $value ) {
+
+        $value = trim( (string) $value );
+
+        if ( function_exists( 'mb_strtolower' ) ) {
+                return mb_strtolower( $value, 'UTF-8' );
+        }
+
+        return strtolower( $value );
+}
+
+
+/**
+ * Construye la representación canónica comparable de una definición.
+ *
+ * Incluye exclusivamente propiedades pertenecientes al contrato Profile.
+ * Excluye id, label, role y cualquier dato runtime/WordPress.
+ *
+ * La clave técnica de sections/classes se deriva del slug, ya que el slug
+ * constituye la identidad estructural materializada.
+ */
+function bitacora_get_canonical_profile_definition( $definition ) {
+
+        $prepared = bitacora_prepare_profile_definition( $definition );
+
+        if ( is_wp_error( $prepared ) ) {
+                return $prepared;
+        }
+
+        $core_keys = array(
+                'name',
+                'singular',
+                'plural',
+                'subtitle',
+                'new_label',
+                'feature_file',
+                'feature_location',
+                'feature_comments',
+        );
+
+        $section_keys = array(
+                'name',
+                'slug',
+                'singular',
+                'plural',
+                'subtitle',
+                'new_label',
+                'order',
+                'area',
+                'state',
+                'feature_file',
+                'feature_location',
+                'feature_comments',
+        );
+
+        $class_keys = array(
+                'name',
+                'slug',
+                'scope',
+                'scope_id',
+                'order',
+                'state',
+        );
+
+        /*
+         * Core: comparar valores efectivos.
+         *
+         * Un override omitido y el mismo valor expresado explícitamente
+         * representan la misma estructura funcional.
+         */
+        $core_effective = array_replace(
+                bitacora_get_default_core_section_definition(),
+                $prepared['core']
+        );
+
+        $core = array();
+
+        foreach ( $core_keys as $key ) {
+
+                if ( ! array_key_exists( $key, $core_effective ) ) {
+                        continue;
+                }
+
+                $value = $core_effective[ $key ];
+
+                if (
+                        in_array(
+                                $key,
+                                array(
+                                        'feature_file',
+                                        'feature_location',
+                                        'feature_comments',
+                                ),
+                                true
+                        )
+                ) {
+                        $value = (bool) $value;
+                } else {
+                        $value = trim( (string) $value );
+                }
+
+                $core[ $key ] = $value;
+        }
+
+        $sections = array();
+
+        foreach ( $prepared['sections'] as $section ) {
+
+                if (
+                        ! is_array( $section )
+                        || empty( $section['slug'] )
+                ) {
+                        continue;
+                }
+
+                $canonical = array();
+
+                foreach ( $section_keys as $key ) {
+
+                        if ( ! array_key_exists( $key, $section ) ) {
+
+                                /*
+                                 * Compatibilidad funcional ya aplicada por
+                                 * bitacora_load_profile().
+                                 */
+                                if ( 'feature_comments' === $key ) {
+                                        $canonical[ $key ] = false;
+                                }
+
+                                continue;
+                        }
+
+                        $value = $section[ $key ];
+
+                        if (
+                                in_array(
+                                        $key,
+                                        array(
+                                                'feature_file',
+                                                'feature_location',
+                                                'feature_comments',
+                                        ),
+                                        true
+                                )
+                        ) {
+                                $value = (bool) $value;
+                        } elseif ( 'order' === $key ) {
+                                $value = (int) $value;
+                        } elseif ( 'slug' === $key ) {
+                                $value = sanitize_title( (string) $value );
+                        } else {
+                                $value = trim( (string) $value );
+                        }
+
+                        $canonical[ $key ] = $value;
+                }
+
+                $slug = sanitize_title(
+                        (string) $section['slug']
+                );
+
+                $sections[ $slug ] = $canonical;
+        }
+
+        ksort( $sections, SORT_STRING );
+
+        $classes = array();
+
+        foreach ( $prepared['classes'] as $class ) {
+
+                if (
+                        ! is_array( $class )
+                        || empty( $class['slug'] )
+                ) {
+                        continue;
+                }
+
+                $canonical = array();
+
+                foreach ( $class_keys as $key ) {
+
+                        if ( ! array_key_exists( $key, $class ) ) {
+                                continue;
+                        }
+
+                        $value = $class[ $key ];
+
+                        if ( 'order' === $key ) {
+                                $value = (int) $value;
+                        } elseif (
+                                'slug' === $key
+                                || 'scope_id' === $key
+                        ) {
+                                $value = sanitize_title(
+                                        (string) $value
+                                );
+                        } else {
+                                $value = trim( (string) $value );
+                        }
+
+                        $canonical[ $key ] = $value;
+                }
+
+                $slug = sanitize_title(
+                        (string) $class['slug']
+                );
+
+                $classes[ $slug ] = $canonical;
+        }
+
+        ksort( $classes, SORT_STRING );
+
+        return array(
+                'core'     => $core,
+                'sections' => $sections,
+                'classes'  => $classes,
+        );
+}
+
+
+/**
+ * Inspecciona la relación entre un candidato válido y la biblioteca.
+ *
+ * Resultados independientes:
+ *
+ * - duplicate:
+ *   mismo label normalizado + misma definición canónica.
+ *
+ * - name_collision:
+ *   mismo label normalizado + definición diferente.
+ *
+ * - similar:
+ *   label diferente + misma cantidad y mismos nombres normalizados
+ *   de secciones complementarias, ignorando orden.
+ *
+ * La similitud es informativa y nunca impide la adopción.
+ */
+function bitacora_inspect_profile_candidate( $candidate ) {
 
         $report = array(
-                'duplicate' => false,
-                'matches'   => array(),
-                'errors'    => array(),
+                'duplicate'              => false,
+                'duplicate_matches'      => array(),
+                'name_collision'         => false,
+                'name_collision_matches' => array(),
+                'similar'                => false,
+                'similar_matches'        => array(),
+                'errors'                 => array(),
         );
 
         $validation = bitacora_validate_profile_candidate( $candidate );
@@ -976,28 +1301,41 @@ function bitacora_check_profile_candidate_duplicate( $candidate ) {
                 return $report;
         }
 
-        $normalize_text = static function ( $value ) {
+        $candidate_definition =
+                bitacora_get_canonical_profile_definition(
+                        $candidate['definition']
+                );
 
-                $value = trim( (string) $value );
+        if ( is_wp_error( $candidate_definition ) ) {
 
-                if ( function_exists( 'mb_strtolower' ) ) {
-                        return mb_strtolower( $value, 'UTF-8' );
-                }
+                $report['errors'][] =
+                        $candidate_definition->get_error_message();
 
-                return strtolower( $value );
-        };
+                return $report;
+        }
 
-        $candidate_label = $normalize_text(
-                sanitize_text_field( (string) $candidate['label'] )
-        );
+        $candidate_label =
+                bitacora_normalize_profile_comparison_text(
+                        sanitize_text_field(
+                                (string) $candidate['label']
+                        )
+                );
 
         $candidate_section_names = array();
 
-        foreach ( $candidate['definition']['sections'] as $section ) {
+        foreach ( $candidate_definition['sections'] as $section ) {
 
-                $candidate_section_names[] = $normalize_text(
-                        $section['name']
-                );
+                if (
+                        ! isset( $section['name'] )
+                        || '' === trim( (string) $section['name'] )
+                ) {
+                        continue;
+                }
+
+                $candidate_section_names[] =
+                        bitacora_normalize_profile_comparison_text(
+                                $section['name']
+                        );
         }
 
         sort(
@@ -1005,67 +1343,166 @@ function bitacora_check_profile_candidate_duplicate( $candidate ) {
                 SORT_STRING
         );
 
-        foreach ( bitacora_get_profile_library() as $profile ) {
-
-                $reasons = array();
+        foreach ( bitacora_get_profile_library() as $library_profile ) {
 
                 if (
-                        $candidate_label === $normalize_text(
-                                $profile['label']
-                        )
+                        ! isset( $library_profile['id'] )
+                        || ! is_string( $library_profile['id'] )
                 ) {
-                        $reasons[] = 'label';
+                        continue;
+                }
+
+                $profile = bitacora_load_profile(
+                        $library_profile['id']
+                );
+
+                if ( ! is_array( $profile ) ) {
+
+                        $report['errors'][] = sprintf(
+                                'No se pudo resolver el Profile "%s" durante la comparación.',
+                                (string) $library_profile['id']
+                        );
+
+                        continue;
+                }
+
+                $profile_definition =
+                        bitacora_get_canonical_profile_definition(
+                                array(
+                                        'core' => isset( $profile['core'] )
+                                                && is_array( $profile['core'] )
+                                                        ? $profile['core']
+                                                        : array(),
+
+                                        'sections' => isset( $profile['sections'] )
+                                                && is_array( $profile['sections'] )
+                                                        ? $profile['sections']
+                                                        : array(),
+
+                                        'classes' => isset( $profile['classes'] )
+                                                && is_array( $profile['classes'] )
+                                                        ? $profile['classes']
+                                                        : array(),
+                                )
+                        );
+
+                if ( is_wp_error( $profile_definition ) ) {
+
+                        $report['errors'][] = sprintf(
+                                'No se pudo canonicalizar el Profile "%s": %s',
+                                (string) $library_profile['id'],
+                                $profile_definition->get_error_message()
+                        );
+
+                        continue;
+                }
+
+                $profile_label =
+                        bitacora_normalize_profile_comparison_text(
+                                isset( $profile['label'] )
+                                        ? $profile['label']
+                                        : ''
+                        );
+
+                $label_equal = (
+                        $candidate_label === $profile_label
+                );
+
+                $definition_equal = (
+                        $candidate_definition === $profile_definition
+                );
+
+                $match = array(
+                        'id'    => (string) $profile['id'],
+                        'label' => isset( $profile['label'] )
+                                ? (string) $profile['label']
+                                : '',
+                );
+
+                if ( $label_equal && $definition_equal ) {
+
+                        $report['duplicate_matches'][] = $match;
+                        continue;
+                }
+
+                if ( $label_equal ) {
+
+                        $report['name_collision_matches'][] = $match;
+                        continue;
                 }
 
                 $profile_section_names = array();
-                $sections_comparable   = true;
 
-                foreach ( $profile['sections'] as $section ) {
+                foreach ( $profile_definition['sections'] as $section ) {
 
                         if (
-                                ! is_array( $section )
-                                || ! isset( $section['name'] )
+                                ! isset( $section['name'] )
                                 || '' === trim( (string) $section['name'] )
                         ) {
-                                $sections_comparable = false;
-                                break;
+                                continue;
                         }
 
-                        $profile_section_names[] = $normalize_text(
-                                $section['name']
-                        );
+                        $profile_section_names[] =
+                                bitacora_normalize_profile_comparison_text(
+                                        $section['name']
+                                );
                 }
 
-                if ( $sections_comparable ) {
+                sort(
+                        $profile_section_names,
+                        SORT_STRING
+                );
 
-                        sort(
-                                $profile_section_names,
-                                SORT_STRING
-                        );
-
-                        if (
-                                count( $candidate_section_names )
-                                === count( $profile_section_names )
-                                && $candidate_section_names
-                                === $profile_section_names
-                        ) {
-                                $reasons[] = 'sections';
-                        }
-                }
-
-                if ( ! empty( $reasons ) ) {
-
-                        $report['matches'][] = array(
-                                'id'      => $profile['id'],
-                                'label'   => $profile['label'],
-                                'reasons' => $reasons,
-                        );
+                if (
+                        count( $candidate_section_names )
+                        === count( $profile_section_names )
+                        && $candidate_section_names
+                        === $profile_section_names
+                ) {
+                        $report['similar_matches'][] = $match;
                 }
         }
 
-        $report['duplicate'] = ! empty( $report['matches'] );
+        $report['duplicate'] =
+                ! empty( $report['duplicate_matches'] );
+
+        $report['name_collision'] =
+                ! empty( $report['name_collision_matches'] );
+
+        $report['similar'] =
+                ! empty( $report['similar_matches'] );
 
         return $report;
+}
+
+
+/**
+ * Compatibilidad con la API histórica de comprobación de duplicados.
+ *
+ * Desde 2026-10-10 "duplicate" significa exclusivamente:
+ * mismo label normalizado + misma definición estructural canónica.
+ */
+function bitacora_check_profile_candidate_duplicate( $candidate ) {
+
+        $inspection = bitacora_inspect_profile_candidate(
+                $candidate
+        );
+
+        return array(
+                'duplicate' => ! empty(
+                        $inspection['duplicate']
+                ),
+                'matches'   => isset(
+                        $inspection['duplicate_matches']
+                )
+                        ? $inspection['duplicate_matches']
+                        : array(),
+                'errors'    => isset(
+                        $inspection['errors']
+                )
+                        ? $inspection['errors']
+                        : array(),
+        );
 }
 
 
