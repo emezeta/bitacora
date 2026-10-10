@@ -1344,6 +1344,122 @@ function bitacora_get_instance_structure_snapshot() {
 
 
 /**
+ * Compara un snapshot estructural PRE contra la instancia vigente.
+ *
+ * El snapshot recibido no se considera confiable:
+ * - su definición se valida y canonicaliza nuevamente;
+ * - su fingerprint se recalcula;
+ * - sólo entonces se compara contra un snapshot fresco del runtime.
+ *
+ * matches=false representa drift estructural, no un error.
+ * Un snapshot PRE internamente inconsistente sí produce WP_Error.
+ */
+function bitacora_check_instance_structure_precondition( $pre ) {
+
+        if (
+                ! is_array( $pre )
+                || ! isset( $pre['definition'] )
+                || ! is_array( $pre['definition'] )
+                || ! isset( $pre['fingerprint'] )
+                || ! is_string( $pre['fingerprint'] )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_pre_invalid',
+                        'El snapshot PRE no tiene una forma válida.'
+                );
+        }
+
+        $validation =
+                bitacora_validate_profile_definition(
+                        $pre['definition']
+                );
+
+        if ( empty( $validation['valid'] ) ) {
+                return new WP_Error(
+                        'bitacora_instance_pre_definition_invalid',
+                        'La definición estructural de PRE no es válida.',
+                        isset( $validation['errors'] )
+                                ? $validation['errors']
+                                : array()
+                );
+        }
+
+        $expected_definition =
+                bitacora_get_canonical_profile_definition(
+                        $pre['definition']
+                );
+
+        if ( is_wp_error( $expected_definition ) ) {
+                return $expected_definition;
+        }
+
+        $expected_fingerprint =
+                bitacora_get_profile_definition_fingerprint(
+                        $expected_definition
+                );
+
+        if ( is_wp_error( $expected_fingerprint ) ) {
+                return $expected_fingerprint;
+        }
+
+        $supplied_fingerprint =
+                strtolower(
+                        trim(
+                                $pre['fingerprint']
+                        )
+                );
+
+        if (
+                64 !== strlen( $supplied_fingerprint )
+                || ! ctype_xdigit( $supplied_fingerprint )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_pre_fingerprint_invalid',
+                        'La huella estructural de PRE no es válida.'
+                );
+        }
+
+        if (
+                ! hash_equals(
+                        $expected_fingerprint,
+                        $supplied_fingerprint
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_pre_fingerprint_mismatch',
+                        'La huella de PRE no corresponde a su definición.'
+                );
+        }
+
+        $current =
+                bitacora_get_instance_structure_snapshot();
+
+        if ( is_wp_error( $current ) ) {
+                return $current;
+        }
+
+        $matches =
+                hash_equals(
+                        $expected_fingerprint,
+                        $current['fingerprint']
+                )
+                && $expected_definition
+                        === $current['definition'];
+
+        return array(
+                'matches' => $matches,
+
+                'expected' => array(
+                        'definition'  => $expected_definition,
+                        'fingerprint' => $expected_fingerprint,
+                ),
+
+                'current' => $current,
+        );
+}
+
+
+/**
  * Extrae la estructura vigente de la instancia como definición canónica.
  *
  * La extracción contiene solamente propiedades pertenecientes al contrato
