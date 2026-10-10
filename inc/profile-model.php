@@ -2864,6 +2864,1203 @@ function bitacora_build_instance_structure_reconciliation_plan(
 
 
 /**
+ * Verifica que el caller se encuentre dentro de la sección crítica
+ * de mantenimiento de la instancia.
+ *
+ * @return true|WP_Error
+ */
+function bitacora_check_instance_structure_execution_context(
+        $owner_user_id
+) {
+
+        $owner_user_id = absint(
+                $owner_user_id
+        );
+
+        if ( ! bitacora_is_configured() ) {
+                return new WP_Error(
+                        'bitacora_instance_not_configured',
+                        'Bitácora no tiene una instancia configurada.'
+                );
+        }
+
+        if (
+                'paused'
+                !== bitacora_get_instance_runtime_state()
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_not_paused',
+                        'La reconciliación estructural requiere que la instancia esté en PAUSA.'
+                );
+        }
+
+        $current_owner =
+                bitacora_get_instance_maintenance_owner();
+
+        if (
+                ! $owner_user_id
+                || $owner_user_id !== $current_owner
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_owner_mismatch',
+                        'El usuario no es el responsable actual del mantenimiento.',
+                        array(
+                                'owner_user_id' =>
+                                        $current_owner,
+                        )
+                );
+        }
+
+        $lock_owned =
+                bitacora_instance_maintenance_lock_is_owned();
+
+        if ( is_wp_error( $lock_owned ) ) {
+                return $lock_owned;
+        }
+
+        if ( ! $lock_owned ) {
+                return new WP_Error(
+                        'bitacora_instance_maintenance_lock_required',
+                        'La reconciliación requiere poseer el bloqueo de mantenimiento.'
+                );
+        }
+
+        return true;
+}
+
+
+/**
+ * Escribe y verifica el estado físico de un término existente.
+ *
+ * El campo meta utiliza la forma:
+ *
+ * meta_key => array(
+ *     'exists' => bool,
+ *     'value'  => string|null,
+ * )
+ *
+ * Esto permite restaurar con precisión tanto valores como ausencia de meta.
+ *
+ * @return true|WP_Error
+ */
+function bitacora_write_instance_structure_term_state(
+        $taxonomy,
+        $term_id,
+        $state
+) {
+
+        $term_id = absint(
+                $term_id
+        );
+
+        if (
+                ! $term_id
+                || ! is_array( $state )
+                || ! isset(
+                        $state['name'],
+                        $state['slug'],
+                        $state['meta']
+                )
+                || ! is_array( $state['meta'] )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_term_state_invalid',
+                        'El estado físico del término no es válido.'
+                );
+        }
+
+        $existing = get_term(
+                $term_id,
+                $taxonomy
+        );
+
+        if (
+                ! $existing
+                || is_wp_error( $existing )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_term_missing',
+                        'No se encontró el término estructural esperado.',
+                        array(
+                                'taxonomy' => $taxonomy,
+                                'term_id'  => $term_id,
+                        )
+                );
+        }
+
+        $updated = wp_update_term(
+                $term_id,
+                $taxonomy,
+                array(
+                        'name' =>
+                                (string) $state['name'],
+                        'slug' =>
+                                (string) $state['slug'],
+                )
+        );
+
+        if ( is_wp_error( $updated ) ) {
+                return $updated;
+        }
+
+        foreach (
+                $state['meta']
+                as $meta_key => $meta_state
+        ) {
+
+                if (
+                        ! is_array( $meta_state )
+                        || ! array_key_exists(
+                                'exists',
+                                $meta_state
+                        )
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_term_meta_state_invalid',
+                                'El estado de termmeta no es válido.',
+                                array(
+                                        'taxonomy' => $taxonomy,
+                                        'term_id'  => $term_id,
+                                        'meta_key' => $meta_key,
+                                )
+                        );
+                }
+
+                if ( $meta_state['exists'] ) {
+
+                        update_term_meta(
+                                $term_id,
+                                $meta_key,
+                                (string) $meta_state['value']
+                        );
+
+                        if (
+                                ! metadata_exists(
+                                        'term',
+                                        $term_id,
+                                        $meta_key
+                                )
+                                || (string) get_term_meta(
+                                        $term_id,
+                                        $meta_key,
+                                        true
+                                )
+                                        !== (string) $meta_state['value']
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_term_meta_not_written',
+                                        'No se pudo escribir termmeta estructural.',
+                                        array(
+                                                'taxonomy' => $taxonomy,
+                                                'term_id'  => $term_id,
+                                                'meta_key' => $meta_key,
+                                        )
+                                );
+                        }
+
+                } else {
+
+                        delete_term_meta(
+                                $term_id,
+                                $meta_key
+                        );
+
+                        if (
+                                metadata_exists(
+                                        'term',
+                                        $term_id,
+                                        $meta_key
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_term_meta_not_deleted',
+                                        'No se pudo retirar termmeta estructural.',
+                                        array(
+                                                'taxonomy' => $taxonomy,
+                                                'term_id'  => $term_id,
+                                                'meta_key' => $meta_key,
+                                        )
+                                );
+                        }
+                }
+        }
+
+        clean_term_cache(
+                $term_id,
+                $taxonomy
+        );
+
+        $verified = get_term(
+                $term_id,
+                $taxonomy
+        );
+
+        if (
+                ! $verified
+                || is_wp_error( $verified )
+                || (string) $verified->name
+                        !== (string) $state['name']
+                || (string) $verified->slug
+                        !== (string) $state['slug']
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_term_state_not_verified',
+                        'El término estructural no quedó en el estado esperado.',
+                        array(
+                                'taxonomy' => $taxonomy,
+                                'term_id'  => $term_id,
+                        )
+                );
+        }
+
+        return true;
+}
+
+
+/**
+ * Convierte el estado "after" del planner al formato físico verificable.
+ *
+ * Las claves administradas que existían en before pero desaparecen en after
+ * se expresan explícitamente como exists=false.
+ */
+function bitacora_build_instance_structure_term_target_state(
+        $before,
+        $after
+) {
+
+        $state = array(
+                'term_id' =>
+                        isset( $after['term_id'] )
+                                ? $after['term_id']
+                                : null,
+
+                'name' =>
+                        (string) $after['name'],
+
+                'slug' =>
+                        (string) $after['slug'],
+
+                'meta' =>
+                        array(),
+        );
+
+        $keys = array();
+
+        if (
+                is_array( $before )
+                && isset( $before['meta'] )
+                && is_array( $before['meta'] )
+        ) {
+                $keys = array_merge(
+                        $keys,
+                        array_keys(
+                                $before['meta']
+                        )
+                );
+        }
+
+        if (
+                isset( $after['meta'] )
+                && is_array( $after['meta'] )
+        ) {
+                $keys = array_merge(
+                        $keys,
+                        array_keys(
+                                $after['meta']
+                        )
+                );
+        }
+
+        $keys = array_values(
+                array_unique( $keys )
+        );
+
+        sort(
+                $keys,
+                SORT_STRING
+        );
+
+        foreach ( $keys as $meta_key ) {
+
+                if (
+                        isset( $after['meta'] )
+                        && array_key_exists(
+                                $meta_key,
+                                $after['meta']
+                        )
+                ) {
+                        $state['meta'][ $meta_key ] =
+                                array(
+                                        'exists' => true,
+                                        'value'  =>
+                                                (string) $after['meta'][ $meta_key ],
+                                );
+
+                } else {
+
+                        $state['meta'][ $meta_key ] =
+                                array(
+                                        'exists' => false,
+                                        'value'  => null,
+                                );
+                }
+        }
+
+        return $state;
+}
+
+
+/**
+ * Escribe y verifica el estado físico de una página existente.
+ *
+ * @return true|WP_Error
+ */
+function bitacora_write_instance_structure_page_state(
+        $post_id,
+        $state
+) {
+
+        $post_id = absint(
+                $post_id
+        );
+
+        if (
+                ! $post_id
+                || ! is_array( $state )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_page_state_invalid',
+                        'El estado físico de la página no es válido.'
+                );
+        }
+
+        $existing = get_post(
+                $post_id
+        );
+
+        if (
+                ! $existing instanceof WP_Post
+                || 'page' !== $existing->post_type
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_page_missing',
+                        'No se encontró la página estructural esperada.',
+                        array(
+                                'post_id' => $post_id,
+                        )
+                );
+        }
+
+        $result = wp_update_post(
+                array(
+                        'ID'           => $post_id,
+                        'post_name'    =>
+                                (string) $state['post_name'],
+                        'post_title'   =>
+                                (string) $state['post_title'],
+                        'post_content' =>
+                                (string) $state['post_content'],
+                        'post_status'  =>
+                                (string) $state['post_status'],
+                ),
+                true
+        );
+
+        if ( is_wp_error( $result ) ) {
+                return $result;
+        }
+
+        clean_post_cache(
+                $post_id
+        );
+
+        $verified = get_post(
+                $post_id
+        );
+
+        if (
+                ! $verified instanceof WP_Post
+                || 'page' !== $verified->post_type
+                || (string) $verified->post_name
+                        !== (string) $state['post_name']
+                || (string) $verified->post_title
+                        !== (string) $state['post_title']
+                || (string) $verified->post_content
+                        !== (string) $state['post_content']
+                || (string) $verified->post_status
+                        !== (string) $state['post_status']
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_page_state_not_verified',
+                        'La página estructural no quedó en el estado esperado.',
+                        array(
+                                'post_id' => $post_id,
+                        )
+                );
+        }
+
+        return true;
+}
+
+
+/**
+ * Ejecuta un plan físico previamente validado.
+ *
+ * Requiere:
+ * - instancia PAUSED;
+ * - owner coincidente;
+ * - advisory lock poseído por la conexión actual;
+ * - CURRENT todavía equivalente al PRE del plan.
+ *
+ * No cambia ACTIVE/PAUSED y no libera el lock.
+ *
+ * En caso de fallo devuelve el journal parcial dentro del WP_Error para que
+ * el caller pueda recuperar en orden inverso.
+ *
+ * @return array|WP_Error
+ */
+function bitacora_execute_instance_structure_reconciliation_plan(
+        $plan,
+        $owner_user_id
+) {
+
+        $context =
+                bitacora_check_instance_structure_execution_context(
+                        $owner_user_id
+                );
+
+        if ( is_wp_error( $context ) ) {
+                return $context;
+        }
+
+        if (
+                ! is_array( $plan )
+                || ! isset(
+                        $plan['pre_fingerprint'],
+                        $plan['proposal_fingerprint'],
+                        $plan['actions']
+                )
+                || ! is_array( $plan['actions'] )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_plan_invalid',
+                        'El plan de reconciliación no es válido.'
+                );
+        }
+
+        $current =
+                bitacora_get_instance_structure_snapshot();
+
+        if ( is_wp_error( $current ) ) {
+                return $current;
+        }
+
+        if (
+                (string) $current['fingerprint']
+                !== (string) $plan['pre_fingerprint']
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_plan_stale',
+                        'La estructura viva cambió después de construir el plan.',
+                        array(
+                                'expected' =>
+                                        $plan['pre_fingerprint'],
+                                'current' =>
+                                        $current['fingerprint'],
+                        )
+                );
+        }
+
+        $journal = array(
+                'pre_fingerprint' =>
+                        (string) $plan['pre_fingerprint'],
+
+                'proposal_fingerprint' =>
+                        (string) $plan['proposal_fingerprint'],
+
+                'actions' =>
+                        array(),
+        );
+
+        $fail = static function (
+                $error,
+                $action
+        ) use ( &$journal ) {
+
+                if ( ! is_wp_error( $error ) ) {
+                        $error = new WP_Error(
+                                'bitacora_instance_structure_apply_action_failed',
+                                (string) $error
+                        );
+                }
+
+                return new WP_Error(
+                        'bitacora_instance_structure_apply_failed',
+                        'Falló la aplicación del plan estructural.',
+                        array(
+                                'cause_code' =>
+                                        $error->get_error_code(),
+                                'cause_message' =>
+                                        $error->get_error_message(),
+                                'cause_data' =>
+                                        $error->get_error_data(),
+                                'failed_action' =>
+                                        $action,
+                                'journal' =>
+                                        $journal,
+                        )
+                );
+        };
+
+        foreach (
+                $plan['actions']
+                as $index => $action
+        ) {
+
+                if (
+                        ! is_array( $action )
+                        || empty( $action['type'] )
+                        || empty( $action['identity'] )
+                ) {
+                        return $fail(
+                                new WP_Error(
+                                        'bitacora_instance_structure_action_invalid',
+                                        'El plan contiene una acción inválida.'
+                                ),
+                                $action
+                        );
+                }
+
+                $expected_sequence =
+                        $index + 1;
+
+                if (
+                        ! isset( $action['sequence'] )
+                        || (int) $action['sequence']
+                                !== $expected_sequence
+                ) {
+                        return $fail(
+                                new WP_Error(
+                                        'bitacora_instance_structure_sequence_invalid',
+                                        'La secuencia del plan no es válida.'
+                                ),
+                                $action
+                        );
+                }
+
+                $entry = $action;
+
+                switch ( $action['type'] ) {
+
+                        case 'section.update':
+                        case 'class.update':
+
+                                $taxonomy =
+                                        'section.update'
+                                        === $action['type']
+                                                ? 'bitacora_section'
+                                                : 'bitacora_class';
+
+                                $term_id =
+                                        absint(
+                                                $action['target']['term_id']
+                                        );
+
+                                $term = get_term(
+                                        $term_id,
+                                        $taxonomy
+                                );
+
+                                if (
+                                        ! $term
+                                        || is_wp_error( $term )
+                                        || (string) $term->slug
+                                                !== (string) $action['identity']
+                                ) {
+                                        return $fail(
+                                                new WP_Error(
+                                                        'bitacora_instance_structure_update_target_mismatch',
+                                                        'El término a modificar no coincide con la identidad planificada.'
+                                                ),
+                                                $action
+                                        );
+                                }
+
+                                $target_state =
+                                        bitacora_build_instance_structure_term_target_state(
+                                                $action['before'],
+                                                $action['after']
+                                        );
+
+                                $written =
+                                        bitacora_write_instance_structure_term_state(
+                                                $taxonomy,
+                                                $term_id,
+                                                $target_state
+                                        );
+
+                                if ( is_wp_error( $written ) ) {
+                                        return $fail(
+                                                $written,
+                                                $action
+                                        );
+                                }
+
+                                $entry['applied_target'] =
+                                        array(
+                                                'taxonomy' =>
+                                                        $taxonomy,
+                                                'term_id' =>
+                                                        $term_id,
+                                        );
+
+                                break;
+
+
+                        case 'section.create':
+                        case 'class.create':
+
+                                $taxonomy =
+                                        'section.create'
+                                        === $action['type']
+                                                ? 'bitacora_section'
+                                                : 'bitacora_class';
+
+                                $existing =
+                                        get_term_by(
+                                                'slug',
+                                                $action['identity'],
+                                                $taxonomy
+                                        );
+
+                                if (
+                                        $existing
+                                        && ! is_wp_error( $existing )
+                                ) {
+                                        return $fail(
+                                                new WP_Error(
+                                                        'bitacora_instance_structure_create_conflict',
+                                                        'La identidad nueva ya existe físicamente.',
+                                                        array(
+                                                                'taxonomy' =>
+                                                                        $taxonomy,
+                                                                'slug' =>
+                                                                        $action['identity'],
+                                                                'term_id' =>
+                                                                        (int) $existing->term_id,
+                                                        )
+                                                ),
+                                                $action
+                                        );
+                                }
+
+                                $inserted =
+                                        wp_insert_term(
+                                                (string) $action['after']['name'],
+                                                $taxonomy,
+                                                array(
+                                                        'slug' =>
+                                                                (string) $action['after']['slug'],
+                                                )
+                                        );
+
+                                if ( is_wp_error( $inserted ) ) {
+                                        return $fail(
+                                                $inserted,
+                                                $action
+                                        );
+                                }
+
+                                $term_id =
+                                        (int) $inserted['term_id'];
+
+                                $target_state =
+                                        bitacora_build_instance_structure_term_target_state(
+                                                null,
+                                                $action['after']
+                                        );
+
+                                $target_state['term_id'] =
+                                        $term_id;
+
+                                $written =
+                                        bitacora_write_instance_structure_term_state(
+                                                $taxonomy,
+                                                $term_id,
+                                                $target_state
+                                        );
+
+                                if ( is_wp_error( $written ) ) {
+
+                                        wp_delete_term(
+                                                $term_id,
+                                                $taxonomy
+                                        );
+
+                                        return $fail(
+                                                $written,
+                                                $action
+                                        );
+                                }
+
+                                $entry['applied_target'] =
+                                        array(
+                                                'taxonomy' =>
+                                                        $taxonomy,
+                                                'term_id' =>
+                                                        $term_id,
+                                        );
+
+                                break;
+
+
+                        case 'page.update':
+
+                                $post_id =
+                                        absint(
+                                                $action['target']['post_id']
+                                        );
+
+                                $page = get_post(
+                                        $post_id
+                                );
+
+                                if (
+                                        ! $page instanceof WP_Post
+                                        || 'page' !== $page->post_type
+                                        || (string) $page->post_name
+                                                !== (string) $action['identity']
+                                ) {
+                                        return $fail(
+                                                new WP_Error(
+                                                        'bitacora_instance_page_update_target_mismatch',
+                                                        'La página a modificar no coincide con la identidad planificada.'
+                                                ),
+                                                $action
+                                        );
+                                }
+
+                                $written =
+                                        bitacora_write_instance_structure_page_state(
+                                                $post_id,
+                                                $action['after']
+                                        );
+
+                                if ( is_wp_error( $written ) ) {
+                                        return $fail(
+                                                $written,
+                                                $action
+                                        );
+                                }
+
+                                $entry['applied_target'] =
+                                        array(
+                                                'post_type' =>
+                                                        'page',
+                                                'post_id' =>
+                                                        $post_id,
+                                        );
+
+                                break;
+
+
+                        case 'page.create':
+
+                                $existing =
+                                        get_page_by_path(
+                                                $action['identity'],
+                                                OBJECT,
+                                                'page'
+                                        );
+
+                                if ( $existing ) {
+                                        return $fail(
+                                                new WP_Error(
+                                                        'bitacora_instance_page_create_conflict',
+                                                        'El slug de la página nueva ya está ocupado.',
+                                                        array(
+                                                                'slug' =>
+                                                                        $action['identity'],
+                                                                'post_id' =>
+                                                                        (int) $existing->ID,
+                                                        )
+                                                ),
+                                                $action
+                                        );
+                                }
+
+                                $post_id =
+                                        wp_insert_post(
+                                                array(
+                                                        'post_type' =>
+                                                                'page',
+                                                        'post_name' =>
+                                                                (string) $action['after']['post_name'],
+                                                        'post_title' =>
+                                                                (string) $action['after']['post_title'],
+                                                        'post_content' =>
+                                                                (string) $action['after']['post_content'],
+                                                        'post_status' =>
+                                                                (string) $action['after']['post_status'],
+                                                ),
+                                                true
+                                        );
+
+                                if ( is_wp_error( $post_id ) ) {
+                                        return $fail(
+                                                $post_id,
+                                                $action
+                                        );
+                                }
+
+                                $post_id =
+                                        (int) $post_id;
+
+                                $written =
+                                        bitacora_write_instance_structure_page_state(
+                                                $post_id,
+                                                array_merge(
+                                                        $action['after'],
+                                                        array(
+                                                                'post_id' =>
+                                                                        $post_id,
+                                                        )
+                                                )
+                                        );
+
+                                if ( is_wp_error( $written ) ) {
+
+                                        wp_delete_post(
+                                                $post_id,
+                                                true
+                                        );
+
+                                        return $fail(
+                                                $written,
+                                                $action
+                                        );
+                                }
+
+                                $entry['applied_target'] =
+                                        array(
+                                                'post_type' =>
+                                                        'page',
+                                                'post_id' =>
+                                                        $post_id,
+                                        );
+
+                                break;
+
+
+                        default:
+
+                                return $fail(
+                                        new WP_Error(
+                                                'bitacora_instance_structure_action_not_supported',
+                                                sprintf(
+                                                        'La acción "%s" no está soportada.',
+                                                        (string) $action['type']
+                                                )
+                                        ),
+                                        $action
+                                );
+                }
+
+                $journal['actions'][] =
+                        $entry;
+        }
+
+        $journal['action_count'] =
+                count(
+                        $journal['actions']
+                );
+
+        return $journal;
+}
+
+
+/**
+ * Revierte, en orden inverso, las acciones efectivamente ejecutadas.
+ *
+ * Sólo elimina objetos que fueron creados por este journal.
+ * Los objetos pertenecientes a PRE se restauran sobre sus mismos IDs.
+ *
+ * @return array|WP_Error
+ */
+function bitacora_rollback_instance_structure_reconciliation_journal(
+        $journal,
+        $owner_user_id
+) {
+
+        $context =
+                bitacora_check_instance_structure_execution_context(
+                        $owner_user_id
+                );
+
+        if ( is_wp_error( $context ) ) {
+                return $context;
+        }
+
+        if (
+                ! is_array( $journal )
+                || ! isset( $journal['actions'] )
+                || ! is_array( $journal['actions'] )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_journal_invalid',
+                        'El journal de reconciliación no es válido.'
+                );
+        }
+
+        $errors = array();
+        $rolled_back = 0;
+
+        $actions =
+                array_reverse(
+                        $journal['actions']
+                );
+
+        foreach ( $actions as $action ) {
+
+                $type = isset( $action['type'] )
+                        ? (string) $action['type']
+                        : '';
+
+                $identity = isset( $action['identity'] )
+                        ? (string) $action['identity']
+                        : '';
+
+                $error = null;
+
+                switch ( $type ) {
+
+                        case 'section.update':
+                        case 'class.update':
+
+                                $taxonomy =
+                                        'section.update' === $type
+                                                ? 'bitacora_section'
+                                                : 'bitacora_class';
+
+                                $term_id =
+                                        absint(
+                                                $action['applied_target']['term_id']
+                                        );
+
+                                $term = get_term(
+                                        $term_id,
+                                        $taxonomy
+                                );
+
+                                if (
+                                        ! $term
+                                        || is_wp_error( $term )
+                                        || (string) $term->slug
+                                                !== $identity
+                                ) {
+                                        $error = new WP_Error(
+                                                'bitacora_instance_structure_rollback_target_mismatch',
+                                                'No se encontró el término que debe restaurarse.'
+                                        );
+                                        break;
+                                }
+
+                                $written =
+                                        bitacora_write_instance_structure_term_state(
+                                                $taxonomy,
+                                                $term_id,
+                                                $action['rollback']['state']
+                                        );
+
+                                if ( is_wp_error( $written ) ) {
+                                        $error = $written;
+                                }
+
+                                break;
+
+
+                        case 'section.create':
+                        case 'class.create':
+
+                                $taxonomy =
+                                        'section.create' === $type
+                                                ? 'bitacora_section'
+                                                : 'bitacora_class';
+
+                                $term_id =
+                                        absint(
+                                                $action['applied_target']['term_id']
+                                        );
+
+                                $term = get_term(
+                                        $term_id,
+                                        $taxonomy
+                                );
+
+                                if (
+                                        ! $term
+                                        || is_wp_error( $term )
+                                        || (string) $term->slug
+                                                !== $identity
+                                ) {
+                                        $error = new WP_Error(
+                                                'bitacora_instance_structure_created_term_mismatch',
+                                                'El término creado ya no coincide con el journal.'
+                                        );
+                                        break;
+                                }
+
+                                $deleted =
+                                        wp_delete_term(
+                                                $term_id,
+                                                $taxonomy
+                                        );
+
+                                if (
+                                        is_wp_error( $deleted )
+                                        || false === $deleted
+                                ) {
+                                        $error = is_wp_error( $deleted )
+                                                ? $deleted
+                                                : new WP_Error(
+                                                        'bitacora_instance_structure_created_term_not_deleted',
+                                                        'No se pudo eliminar el término creado durante APPLY.'
+                                                );
+                                }
+
+                                break;
+
+
+                        case 'page.update':
+
+                                $post_id =
+                                        absint(
+                                                $action['applied_target']['post_id']
+                                        );
+
+                                $page = get_post(
+                                        $post_id
+                                );
+
+                                if (
+                                        ! $page instanceof WP_Post
+                                        || 'page' !== $page->post_type
+                                ) {
+                                        $error = new WP_Error(
+                                                'bitacora_instance_page_rollback_target_missing',
+                                                'No se encontró la página que debe restaurarse.'
+                                        );
+                                        break;
+                                }
+
+                                $written =
+                                        bitacora_write_instance_structure_page_state(
+                                                $post_id,
+                                                $action['rollback']['state']
+                                        );
+
+                                if ( is_wp_error( $written ) ) {
+                                        $error = $written;
+                                }
+
+                                break;
+
+
+                        case 'page.create':
+
+                                $post_id =
+                                        absint(
+                                                $action['applied_target']['post_id']
+                                        );
+
+                                $page = get_post(
+                                        $post_id
+                                );
+
+                                if (
+                                        ! $page instanceof WP_Post
+                                        || 'page' !== $page->post_type
+                                        || (string) $page->post_name
+                                                !== $identity
+                                ) {
+                                        $error = new WP_Error(
+                                                'bitacora_instance_created_page_mismatch',
+                                                'La página creada ya no coincide con el journal.'
+                                        );
+                                        break;
+                                }
+
+                                $deleted =
+                                        wp_delete_post(
+                                                $post_id,
+                                                true
+                                        );
+
+                                if ( ! $deleted ) {
+                                        $error = new WP_Error(
+                                                'bitacora_instance_created_page_not_deleted',
+                                                'No se pudo eliminar la página creada durante APPLY.'
+                                        );
+                                }
+
+                                break;
+
+
+                        default:
+
+                                $error = new WP_Error(
+                                        'bitacora_instance_structure_rollback_action_not_supported',
+                                        sprintf(
+                                                'La acción "%s" no puede revertirse.',
+                                                $type
+                                        )
+                                );
+                }
+
+                if ( is_wp_error( $error ) ) {
+
+                        $errors[] = array(
+                                'type' =>
+                                        $type,
+                                'identity' =>
+                                        $identity,
+                                'code' =>
+                                        $error->get_error_code(),
+                                'message' =>
+                                        $error->get_error_message(),
+                                'data' =>
+                                        $error->get_error_data(),
+                        );
+
+                        continue;
+                }
+
+                $rolled_back++;
+        }
+
+        if ( ! empty( $errors ) ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_rollback_failed',
+                        'La recuperación estructural hacia PRE no pudo completarse.',
+                        array(
+                                'rolled_back' =>
+                                        $rolled_back,
+                                'errors' =>
+                                        $errors,
+                        )
+                );
+        }
+
+        return array(
+                'rolled_back' =>
+                        $rolled_back,
+                'errors' =>
+                        array(),
+        );
+}
+
+
+/**
  * Toma una instantánea puramente estructural de la instancia vigente.
  *
  * La definición es la reconstrucción canónica del runtime y fingerprint es
