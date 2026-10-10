@@ -2137,6 +2137,733 @@ function bitacora_validate_instance_structure_proposal(
 
 
 /**
+ * Construye un plan físico de reconciliación PRE -> PROPUESTA.
+ *
+ * El plan es descriptivo y no modifica runtime.
+ *
+ * Principios:
+ * - vuelve a validar PRE y PROPUESTA contra CURRENT;
+ * - preserva term_id y page_id de toda identidad ya existente;
+ * - sólo genera create para identidades nuevas;
+ * - nunca genera delete para estructura perteneciente a PRE;
+ * - cada update incluye estado físico previo para rollback;
+ * - cada create declara rollback=delete_created.
+ *
+ * Orden:
+ * 1. actualizar secciones existentes;
+ * 2. crear secciones nuevas;
+ * 3. actualizar Tipos existentes;
+ * 4. crear Tipos nuevos;
+ * 5. sincronizar páginas derivadas de secciones.
+ */
+function bitacora_build_instance_structure_reconciliation_plan(
+        $pre,
+        $proposal_definition
+) {
+
+        $validation =
+                bitacora_validate_instance_structure_proposal(
+                        $pre,
+                        $proposal_definition
+                );
+
+        if ( empty( $validation['valid'] ) ) {
+                return new WP_Error(
+                        'bitacora_instance_structure_proposal_rejected',
+                        'La PROPUESTA estructural no puede reconciliarse.',
+                        $validation
+                );
+        }
+
+        $proposal   = $validation['proposal'];
+        $comparison = $validation['comparison'];
+
+        $actions = array();
+
+        /*
+         * Devuelve los termmeta físicos administrados por la definición
+         * estructural de una sección.
+         */
+        $section_meta_keys = array(
+                'singular' =>
+                        'bitacora_section_singular',
+                'plural' =>
+                        'bitacora_section_plural',
+                'subtitle' =>
+                        'bitacora_section_subtitle',
+                'new_label' =>
+                        'bitacora_section_new_label',
+                'order' =>
+                        'bitacora_section_order',
+                'area' =>
+                        'bitacora_section_area',
+                'state' =>
+                        'bitacora_section_state',
+                'feature_file' =>
+                        'bitacora_section_feature_file',
+                'feature_location' =>
+                        'bitacora_section_feature_location',
+                'feature_comments' =>
+                        'bitacora_section_feature_comments',
+        );
+
+        $class_meta_keys = array(
+                'scope' =>
+                        'bitacora_class_scope',
+                'scope_id' =>
+                        'bitacora_class_scope_id',
+                'order' =>
+                        'bitacora_class_order',
+                'state' =>
+                        'bitacora_class_state',
+        );
+
+        $boolean_section_keys = array(
+                'feature_file',
+                'feature_location',
+                'feature_comments',
+        );
+
+        /*
+         * Convierte una entidad canónica a los termmeta físicos que deben
+         * existir después del apply.
+         *
+         * role no pertenece al contrato Profile, pero sí a la
+         * materialización y se agrega explícitamente.
+         */
+        $section_target_meta = static function (
+                $section,
+                $role
+        ) use (
+                $section_meta_keys,
+                $boolean_section_keys
+        ) {
+
+                $meta = array(
+                        'bitacora_section_role' => $role,
+                );
+
+                foreach (
+                        $section_meta_keys
+                        as $property => $meta_key
+                ) {
+
+                        if (
+                                ! array_key_exists(
+                                        $property,
+                                        $section
+                                )
+                        ) {
+                                continue;
+                        }
+
+                        $value = $section[ $property ];
+
+                        if (
+                                in_array(
+                                        $property,
+                                        $boolean_section_keys,
+                                        true
+                                )
+                        ) {
+                                $value = $value ? '1' : '0';
+                        } else {
+                                $value = (string) $value;
+                        }
+
+                        $meta[ $meta_key ] = $value;
+                }
+
+                ksort( $meta, SORT_STRING );
+
+                return $meta;
+        };
+
+        $class_target_meta = static function (
+                $class
+        ) use ( $class_meta_keys ) {
+
+                $meta = array();
+
+                foreach (
+                        $class_meta_keys
+                        as $property => $meta_key
+                ) {
+
+                        if (
+                                ! array_key_exists(
+                                        $property,
+                                        $class
+                                )
+                        ) {
+                                continue;
+                        }
+
+                        $meta[ $meta_key ] =
+                                (string) $class[ $property ];
+                }
+
+                ksort( $meta, SORT_STRING );
+
+                return $meta;
+        };
+
+        /*
+         * Snapshot físico mínimo de un término existente.
+         *
+         * Sólo captura los termmeta que administra el reconciliador.
+         */
+        $get_term_state = static function (
+                $term,
+                $managed_meta_keys
+        ) {
+
+                $state = array(
+                        'term_id' => (int) $term->term_id,
+                        'name'    => (string) $term->name,
+                        'slug'    => (string) $term->slug,
+                        'meta'    => array(),
+                );
+
+                foreach (
+                        $managed_meta_keys
+                        as $meta_key
+                ) {
+
+                        $exists =
+                                metadata_exists(
+                                        'term',
+                                        $term->term_id,
+                                        $meta_key
+                                );
+
+                        $state['meta'][ $meta_key ] = array(
+                                'exists' => $exists,
+                                'value'  => $exists
+                                        ? (string) get_term_meta(
+                                                $term->term_id,
+                                                $meta_key,
+                                                true
+                                        )
+                                        : null,
+                        );
+                }
+
+                ksort( $state['meta'], SORT_STRING );
+
+                return $state;
+        };
+
+        $section_managed_meta_keys =
+                array_values(
+                        array_unique(
+                                array_merge(
+                                        array_values(
+                                                $section_meta_keys
+                                        ),
+                                        array(
+                                                'bitacora_section_role',
+                                        )
+                                )
+                        )
+                );
+
+        sort(
+                $section_managed_meta_keys,
+                SORT_STRING
+        );
+
+        $class_managed_meta_keys =
+                array_values(
+                        $class_meta_keys
+                );
+
+        sort(
+                $class_managed_meta_keys,
+                SORT_STRING
+        );
+
+        /*
+         * Core materializado: identidad fija "notas".
+         */
+        if ( ! empty( $comparison['core']['modified'] ) ) {
+
+                $term = get_term_by(
+                        'slug',
+                        'notas',
+                        'bitacora_section'
+                );
+
+                if (
+                        ! $term
+                        || is_wp_error( $term )
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_core_term_missing',
+                                'No se encontró el término core materializado.'
+                        );
+                }
+
+                $before =
+                        $get_term_state(
+                                $term,
+                                $section_managed_meta_keys
+                        );
+
+                $after = array(
+                        'term_id' => (int) $term->term_id,
+                        'name'    => (string) $proposal['core']['name'],
+                        'slug'    => 'notas',
+                        'meta'    =>
+                                $section_target_meta(
+                                        $proposal['core'],
+                                        'core'
+                                ),
+                );
+
+                $actions[] = array(
+                        'type'     => 'section.update',
+                        'identity' => 'notas',
+                        'target'   => array(
+                                'taxonomy' => 'bitacora_section',
+                                'term_id'  => (int) $term->term_id,
+                        ),
+                        'before'   => $before,
+                        'after'    => $after,
+                        'rollback' => array(
+                                'type'  => 'section.restore',
+                                'state' => $before,
+                        ),
+                );
+        }
+
+        /*
+         * Secciones complementarias existentes.
+         */
+        foreach (
+                $comparison['sections']['modified']
+                as $slug => $modified
+        ) {
+
+                $term = get_term_by(
+                        'slug',
+                        $slug,
+                        'bitacora_section'
+                );
+
+                if (
+                        ! $term
+                        || is_wp_error( $term )
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_section_term_missing',
+                                sprintf(
+                                        'No se encontró la sección materializada "%s".',
+                                        $slug
+                                )
+                        );
+                }
+
+                $before =
+                        $get_term_state(
+                                $term,
+                                $section_managed_meta_keys
+                        );
+
+                $after = array(
+                        'term_id' => (int) $term->term_id,
+                        'name'    =>
+                                (string) $modified['after']['name'],
+                        'slug'    => $slug,
+                        'meta'    =>
+                                $section_target_meta(
+                                        $modified['after'],
+                                        'section'
+                                ),
+                );
+
+                $actions[] = array(
+                        'type'     => 'section.update',
+                        'identity' => $slug,
+                        'target'   => array(
+                                'taxonomy' => 'bitacora_section',
+                                'term_id'  => (int) $term->term_id,
+                        ),
+                        'before'   => $before,
+                        'after'    => $after,
+                        'rollback' => array(
+                                'type'  => 'section.restore',
+                                'state' => $before,
+                        ),
+                );
+        }
+
+        /*
+         * Secciones nuevas.
+         */
+        foreach (
+                $comparison['sections']['added']
+                as $slug => $section
+        ) {
+
+                $existing = get_term_by(
+                        'slug',
+                        $slug,
+                        'bitacora_section'
+                );
+
+                if ( $existing && ! is_wp_error( $existing ) ) {
+                        return new WP_Error(
+                                'bitacora_instance_section_create_conflict',
+                                sprintf(
+                                        'La nueva sección "%s" ya existe físicamente.',
+                                        $slug
+                                ),
+                                array(
+                                        'slug'    => $slug,
+                                        'term_id' =>
+                                                (int) $existing->term_id,
+                                )
+                        );
+                }
+
+                $actions[] = array(
+                        'type'     => 'section.create',
+                        'identity' => $slug,
+                        'target'   => array(
+                                'taxonomy' => 'bitacora_section',
+                                'term_id'  => null,
+                        ),
+                        'before'   => null,
+                        'after'    => array(
+                                'term_id' => null,
+                                'name'    =>
+                                        (string) $section['name'],
+                                'slug'    => $slug,
+                                'meta'    =>
+                                        $section_target_meta(
+                                                $section,
+                                                'section'
+                                        ),
+                        ),
+                        'rollback' => array(
+                                'type' =>
+                                        'section.delete_created',
+                        ),
+                );
+        }
+
+        /*
+         * Tipos existentes.
+         */
+        foreach (
+                $comparison['classes']['modified']
+                as $slug => $modified
+        ) {
+
+                $term = get_term_by(
+                        'slug',
+                        $slug,
+                        'bitacora_class'
+                );
+
+                if (
+                        ! $term
+                        || is_wp_error( $term )
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_class_term_missing',
+                                sprintf(
+                                        'No se encontró el Tipo materializado "%s".',
+                                        $slug
+                                )
+                        );
+                }
+
+                $before =
+                        $get_term_state(
+                                $term,
+                                $class_managed_meta_keys
+                        );
+
+                $after = array(
+                        'term_id' => (int) $term->term_id,
+                        'name'    =>
+                                (string) $modified['after']['name'],
+                        'slug'    => $slug,
+                        'meta'    =>
+                                $class_target_meta(
+                                        $modified['after']
+                                ),
+                );
+
+                $actions[] = array(
+                        'type'     => 'class.update',
+                        'identity' => $slug,
+                        'target'   => array(
+                                'taxonomy' => 'bitacora_class',
+                                'term_id'  => (int) $term->term_id,
+                        ),
+                        'before'   => $before,
+                        'after'    => $after,
+                        'rollback' => array(
+                                'type'  => 'class.restore',
+                                'state' => $before,
+                        ),
+                );
+        }
+
+        /*
+         * Tipos nuevos.
+         */
+        foreach (
+                $comparison['classes']['added']
+                as $slug => $class
+        ) {
+
+                $existing = get_term_by(
+                        'slug',
+                        $slug,
+                        'bitacora_class'
+                );
+
+                if ( $existing && ! is_wp_error( $existing ) ) {
+                        return new WP_Error(
+                                'bitacora_instance_class_create_conflict',
+                                sprintf(
+                                        'El nuevo Tipo "%s" ya existe físicamente.',
+                                        $slug
+                                ),
+                                array(
+                                        'slug'    => $slug,
+                                        'term_id' =>
+                                                (int) $existing->term_id,
+                                )
+                        );
+                }
+
+                $actions[] = array(
+                        'type'     => 'class.create',
+                        'identity' => $slug,
+                        'target'   => array(
+                                'taxonomy' => 'bitacora_class',
+                                'term_id'  => null,
+                        ),
+                        'before'   => null,
+                        'after'    => array(
+                                'term_id' => null,
+                                'name'    =>
+                                        (string) $class['name'],
+                                'slug'    => $slug,
+                                'meta'    =>
+                                        $class_target_meta(
+                                                $class
+                                        ),
+                        ),
+                        'rollback' => array(
+                                'type' =>
+                                        'class.delete_created',
+                        ),
+                );
+        }
+
+        /*
+         * Páginas derivadas.
+         *
+         * Sólo se consideran core + secciones presentes en PROPUESTA.
+         * Una página ya existente nunca se elimina:
+         * - state=active  -> publish;
+         * - otro state   -> draft.
+         *
+         * Si una sección no activa nunca tuvo página, no se crea una
+         * página draft innecesaria.
+         */
+        $proposal_sections = array(
+                'notas' => array_merge(
+                        $proposal['core'],
+                        array(
+                                'slug'  => 'notas',
+                                'state' => 'active',
+                        )
+                ),
+        );
+
+        foreach (
+                $proposal['sections']
+                as $slug => $section
+        ) {
+                $proposal_sections[ $slug ] =
+                        $section;
+        }
+
+        ksort(
+                $proposal_sections,
+                SORT_STRING
+        );
+
+        foreach (
+                $proposal_sections
+                as $slug => $section
+        ) {
+
+                $state = isset( $section['state'] )
+                        ? (string) $section['state']
+                        : 'active';
+
+                $status = 'active' === $state
+                        ? 'publish'
+                        : 'draft';
+
+                $title =
+                        array_key_exists(
+                                'plural',
+                                $section
+                        )
+                                ? (string) $section['plural']
+                                : (string) $section['name'];
+
+                $content = sprintf(
+                        '[bitacora_section slug="%s"]',
+                        $slug
+                );
+
+                $page = get_page_by_path(
+                        $slug,
+                        OBJECT,
+                        'page'
+                );
+
+                /*
+                 * Una sección nueva no puede apropiarse de una página
+                 * WordPress preexistente sólo porque comparte su slug.
+                 *
+                 * Para las secciones que ya pertenecían a PRE, la página
+                 * homónima forma parte de la materialización conocida y
+                 * puede reconciliarse conservando su post_id.
+                 */
+                $is_new_section =
+                        isset(
+                                $comparison['sections']['added'][ $slug ]
+                        );
+
+                if (
+                        $page
+                        && $is_new_section
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_page_create_conflict',
+                                sprintf(
+                                        'La nueva sección "%s" requiere una página cuyo slug ya está ocupado.',
+                                        $slug
+                                ),
+                                array(
+                                        'slug'    => $slug,
+                                        'post_id' => (int) $page->ID,
+                                )
+                        );
+                }
+
+                /*
+                 * Sección no activa sin página previa: no crear nada.
+                 */
+                if (
+                        ! $page
+                        && 'publish' !== $status
+                ) {
+                        continue;
+                }
+
+                if ( ! $page ) {
+
+                        $actions[] = array(
+                                'type'     => 'page.create',
+                                'identity' => $slug,
+                                'target'   => array(
+                                        'post_type' => 'page',
+                                        'post_id'   => null,
+                                ),
+                                'before'   => null,
+                                'after'    => array(
+                                        'post_id'      => null,
+                                        'post_name'    => $slug,
+                                        'post_title'   => $title,
+                                        'post_content' => $content,
+                                        'post_status'  => $status,
+                                ),
+                                'rollback' => array(
+                                        'type' =>
+                                                'page.delete_created',
+                                ),
+                        );
+
+                        continue;
+                }
+
+                $page_before = array(
+                        'post_id'      => (int) $page->ID,
+                        'post_name'    => (string) $page->post_name,
+                        'post_title'   => (string) $page->post_title,
+                        'post_content' => (string) $page->post_content,
+                        'post_status'  => (string) $page->post_status,
+                );
+
+                $page_after = array(
+                        'post_id'      => (int) $page->ID,
+                        'post_name'    => $slug,
+                        'post_title'   => $title,
+                        'post_content' => $content,
+                        'post_status'  => $status,
+                );
+
+                if ( $page_before === $page_after ) {
+                        continue;
+                }
+
+                $actions[] = array(
+                        'type'     => 'page.update',
+                        'identity' => $slug,
+                        'target'   => array(
+                                'post_type' => 'page',
+                                'post_id'   => (int) $page->ID,
+                        ),
+                        'before'   => $page_before,
+                        'after'    => $page_after,
+                        'rollback' => array(
+                                'type'  => 'page.restore',
+                                'state' => $page_before,
+                        ),
+                );
+        }
+
+        /*
+         * Numeración estable útil para journal y diagnóstico.
+         */
+        foreach ( $actions as $index => &$action ) {
+                $action['sequence'] = $index + 1;
+        }
+
+        unset( $action );
+
+        return array(
+                'pre_fingerprint' =>
+                        $pre['fingerprint'],
+
+                'proposal_fingerprint' =>
+                        $validation['proposal_fingerprint'],
+
+                'comparison' =>
+                        $comparison,
+
+                'actions' =>
+                        $actions,
+
+                'action_count' =>
+                        count( $actions ),
+        );
+}
+
+
+/**
  * Toma una instantánea puramente estructural de la instancia vigente.
  *
  * La definición es la reconstrucción canónica del runtime y fingerprint es
