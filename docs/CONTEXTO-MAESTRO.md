@@ -310,6 +310,51 @@ Esa decisión no condiciona el funcionamiento normal de Bitácora Engine.
 
 ---
 
+## Gestión común de Profiles y estructura de instancia
+
+**Decisión 2026-10-10:**
+
+La futura capacidad opcional de gestión debe reutilizar un mismo editor
+estructural para dos fuentes distintas:
+
+```text
+Template / definición de Profile
+        ↓
+editor estructural
+        ↓
+definición reutilizable
+
+Instancia viva
+        ↓
+extraer esqueleto
+        ↓
+editor estructural
+        ↓
+propuesta estructural
+```
+
+El editor pertenece al productor/addon; Bitácora Engine conserva las
+operaciones autoritativas y de seguridad:
+
+```text
+- validar definición
+- adoptar candidato como nuevo Profile
+- extraer estructura de una instancia
+- verificar estructura base
+- aplicar/reconciliar una propuesta sobre una instancia
+- verificar estructura resultante
+- recuperar PRE ante fallo de aplicación
+```
+
+El addon no debe escribir directamente términos, termmeta, páginas ni otras
+representaciones internas de WordPress. Trabaja con la definición estructural;
+el Engine garantiza su traducción al runtime.
+
+La forma de empaquetado físico puede resolverse al implementar, pero la
+responsabilidad funcional queda ubicada fuera del Engine normal de uso.
+
+---
+
 # 6. Contrato de frontera Template → Perfil
 
 Este bloque es una decisión arquitectónica central.
@@ -407,42 +452,101 @@ Perfil aceptado
 
 El `label` del candidato pasa a ser la identidad humana/nombre del Perfil aceptado.
 
-### Presunciones de duplicación
+### Duplicación, nombre y similitud
 
-La adopción se rechaza si se cumple **cualquiera** de estas premisas:
+Se distinguen tres conceptos diferentes.
 
-```text
-1. ya existe en la biblioteca un Perfil con el mismo label
+#### Duplicado exacto
 
-2. ya existe en la biblioteca un Perfil con igual cantidad
-   y los mismos nombres de secciones
-```
-
-En ese caso Bitácora presume que el candidato es un duplicado.
-
-Normalización técnica vigente:
+Un candidato se considera duplicado solamente cuando su definición estructural
+canónica es funcionalmente idéntica a la de un Profile existente.
 
 ```text
-label
-    trim
-    comparación case-insensitive
-    el candidato se normaliza de forma consistente con persistencia
-
-nombres de secciones complementarias
-    trim
-    comparación case-insensitive
-    orden irrelevante
-    misma cantidad
-    Bitácora core section (`notas`) excluida
-
-acentos
-    no se eliminan
-    `Catalogos` != `Catálogos`
+misma definición completa
+    → REJECT
 ```
 
-Una Template presuntamente duplicada puede seguir existiendo en el productor y puede
-exportarse como Template. Lo único que no acepta es la promoción a un nuevo Perfil dentro
-de esa biblioteca.
+La comparación debe abarcar todas las propiedades pertenecientes al contrato
+vigente del Profile. Si existe una diferencia estructural válida, no se trata
+de un duplicado exacto.
+
+#### Nombre de Profile
+
+El `label` es la identidad humana del Profile y debe ser único dentro de la
+biblioteca.
+
+```text
+mismo label + definición diferente
+    → no es duplicado
+    → exigir otro nombre antes de continuar
+```
+
+No deben existir dos Profiles distintos que resulten indistinguibles para el
+operador por compartir el mismo nombre.
+
+La normalización del `label` mantiene:
+
+```text
+trim
+comparación case-insensitive
+normalización consistente con persistencia
+```
+
+#### Similitud
+
+Una definición diferente puede resultar muy parecida a un Profile existente.
+
+Como criterio inicial de similitud se conserva la señal ya utilizada
+históricamente:
+
+```text
+misma cantidad
++
+mismos nombres de secciones complementarias
+ignorando orden y mayúsculas/minúsculas
+```
+
+La Bitácora core section (`notas`) queda excluida de esa comparación.
+
+Los acentos no se eliminan:
+
+```text
+Catalogos != Catálogos
+```
+
+La similitud **no provoca REJECT**.
+
+Debe producir solamente una advertencia al productor/operador, por ejemplo:
+
+```text
+Existe un Profile similar al que se está guardando: <Nombre>.
+
+Se sugiere verificar o comparar ambos Profiles antes de continuar.
+```
+
+La comparación ofrecida por la interfaz puede ser deliberadamente light:
+su objetivo es permitir percibir la similitud, no sustituir una revisión
+exhaustiva por parte del Supervisor o Administrador.
+
+Resumen:
+
+```text
+duplicado exacto
+    → REJECT
+
+mismo nombre
+    → exigir otro label
+
+similar
+    → ADVERTIR
+    → operador decide
+
+diferente
+    → puede ser un nuevo Profile
+```
+
+Una Template puede seguir existiendo y exportándose con independencia del
+resultado de estas comprobaciones.
 
 ## C03 — Invocación de la adopción
 
@@ -1412,74 +1516,143 @@ complete la separación con el Constructor.
 
 ---
 
-# 15. Instancia EN PAUSA — fuera del contrato Template/Perfil
+# 15. Modificación estructural de instancia y PAUSA breve
 
-**Estado al 2026-10-01: PENDIENTE DE ANÁLISIS FUNCIONAL Y DE INTERFAZ.**
+**Estado al 2026-10-10: CONTRATO FUNCIONAL DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN.**
 
-La decisión general permanece vigente: PAUSA pertenece al ciclo de vida de la instancia y no
-convierte la instancia en un Profile editable ni reintroduce el antiguo editor de Profiles.
+La modificación estructural de una instancia viva no se realiza normalmente
+mientras la instancia está detenida.
 
-Como línea principal de análisis de UX debe evaluarse una interfaz que **simule o represente la
-Bitácora tal como la ve el usuario**, permitiendo editar sobre esa representación las etiquetas,
-orden, organización y capacidades admitidas. La alternativa debe compararse con formularios de
-configuración abstractos antes de elegir implementación.
+La instancia permanece **EN USO** durante la preparación y edición de la nueva
+estructura. `EN PAUSA` queda reducido a una ventana crítica breve destinada
+exclusivamente a aplicar una propuesta ya terminada y validada.
 
-La interfaz no puede alterar las invariantes de conservación de historia definidas para PAUSA.
+Principio:
 
-`EN PAUSA` pertenece al ciclo operativo de la instancia y **no forma parte del Contrato de
-Frontera**.
+> **PAUSA no es un modo de edición. Es la interrupción breve y exclusiva del
+> servicio necesaria para aplicar de forma segura una modificación estructural
+> previamente preparada.**
 
-Objetivo:
+Flujo objetivo:
 
 ```text
-EN USO
-    ↓
-PAUSAR / EDICIÓN LIGHT
-    ↓
-modificaciones controladas
-    ↓
-REANUDAR
-    ↓
-EN USO
+INSTANCIA EN USO
+        ↓
+1. EXTRAER PRE
+   fotografía del esqueleto estructural vigente
+        ↓
+2. EDITAR COPIA
+   la instancia continúa funcionando normalmente
+        ↓
+3. VALIDAR PROPUESTA
+   validar definición canónica
+   comparar nuevamente estructura viva contra PRE
+        ↓
+4. PAUSA BREVE
+   bloquear uso normal de la instancia
+   adquirir exclusividad de mantenimiento
+        ↓
+5. APLICAR / RECONCILIAR
+        ↓
+6. EXTRAER Y VALIDAR POST
+        ↓
+7. REANUDAR
+        ↓
+INSTANCIA EN USO
 ```
 
-Las modificaciones “calientes” deben ser **aditivas o conservativas**.
+## 15.1 Esqueleto de instancia
 
-Regla:
+Bitácora debe poder reconstruir desde una instancia viva una definición
+estructural equivalente a la definición canónica de Profile correspondiente
+a su estado actual.
 
-> **Nunca romper referencias existentes ni destruir historia.**
-
-Ejemplos permitidos:
+La extracción incluye exclusivamente propiedades pertenecientes al contrato
+estructural vigente:
 
 ```text
-- agregar sección
-- agregar Tipo
-- renombrar sección
-- renombrar Tipo
-- reordenar secciones
+core
+sections
+classes
+```
+
+No forman parte del esqueleto:
+
+```text
+bitacora_item
+contenido de entradas
+comentarios
+adjuntos
+imágenes
+videos
+biblioteca de medios
+autores
+fechas de contenido
+IDs WordPress
+term_id
+post_id
+attachment_id
+configured_at
+estado active|paused
+datos operativos de la instancia
+```
+
+Si una instancia acaba de ser creada y todavía no sufrió modificaciones
+estructurales:
+
+```text
+Profile P
+    ↓
+materializar
+    ↓
+extraer esqueleto E
+
+E ≡ definición estructural de P
+```
+
+Después de modificaciones estructurales:
+
+```text
+E ≡ definición original
+    + modificaciones acumuladas de la instancia
+```
+
+No es necesario reproducir el historial de cambios para reconstruir el estado
+actual.
+
+## 15.2 Modificaciones permitidas
+
+La edición trabaja sobre una copia del esqueleto, no directamente sobre la
+estructura viva.
+
+Secciones complementarias:
+
+```text
+- alta
+- ocultar / mostrar
+- modificar nombre y etiquetas
+- modificar orden
 - mover main ↔ more
-- cambiar labels de la Bitácora core section
-- cambiar features para uso futuro
-- eventualmente ocultar/inhibir elementos según reglas a definir
+- activar / desactivar features
 ```
 
-No permitido:
+Tipos:
 
 ```text
-- eliminar un Tipo usado por entradas
-- eliminar una sección con contenido
-- romper scope_id existentes
-- borrar comentarios históricos al desactivar comentarios
-- borrar adjuntos históricos al desactivar archivos
-- cualquier cambio que deje referencias huérfanas
+- alta
+- ocultar / mostrar
+- modificar nombre
+- modificar orden
 ```
 
-Coherencia con `core_overrides`:
+Bitácora core section:
 
-Los atributos de presentación/features de la Bitácora core section que un Perfil puede
-configurar inicialmente deben poder ser candidatos a modificación durante PAUSA.
+```text
+- modificar etiquetas permitidas
+- activar / desactivar features
+```
 
-Las invariantes estructurales siguen reservadas al Engine:
+No se modifica su identidad estructural:
 
 ```text
 slug=notas
@@ -1487,46 +1660,337 @@ role=core
 area=main
 state=active
 order=0
-existencia
+existencia obligatoria
 ```
 
-Desactivar una feature afecta el uso futuro, no destruye historia.
+No se permite eliminar estructura histórica de una instancia viva.
 
----
+Ocultar sustituye la necesidad de eliminar:
+
+```text
+VISIBLE
+OCULTO
+```
+
+Ocultar una Sección o Tipo:
+
+```text
+- lo retira del uso normal futuro
+- conserva identidad y relaciones
+- conserva todo contenido histórico asociado
+- no modifica el estado interno de otros objetos
+- puede revertirse mediante MOSTRAR
+```
+
+Una Sección oculta no aparece en navegación ni admite nuevas entradas, pero su
+historia sigue resolviendo búsquedas, relaciones y referencias válidas.
+
+Un Tipo oculto deja de ofrecerse para nuevas entradas pero continúa
+identificando correctamente las entradas históricas que lo utilizaron.
+
+PAUSA y edición estructural no pueden eliminar, agregar ni modificar contenido
+de usuario. El agregado permitido es **estructura**, no contenido.
+
+## 15.3 Features
+
+Features vigentes:
+
+```text
+file
+location
+comments
+```
+
+Su modificación afecta el uso futuro.
+
+```text
+OFF → ON
+    habilita la capacidad para operaciones futuras
+
+ON → OFF
+    deja de ofrecerla para nuevas operaciones
+    conserva todos los datos históricos existentes
+```
+
+No se introducen combinaciones especiales ni dependencias preventivas entre
+features.
+
+## 15.4 Identidad técnica
+
+Para objetos existentes:
+
+```text
+slug
+scope
+scope_id
+identidades WordPress
+```
+
+permanecen estables.
+
+Los nombres y etiquetas visibles pueden cambiar sin recrear el objeto.
+
+Las altas reciben una identidad técnica nueva generada/determinada por
+Bitácora. El operador no necesita editar slugs manualmente.
+
+## 15.5 Validación previa y huella PRE
+
+Antes de aplicar una propuesta deben cumplirse dos comprobaciones distintas:
+
+```text
+A. la PROPUESTA es una definición estructural válida
+
+B. la estructura viva continúa siendo equivalente a PRE
+```
+
+Para B puede utilizarse una huella determinista de la definición normalizada,
+por ejemplo SHA-256.
+
+Las operaciones normales de contenido ocurridas durante la preparación
+—nuevas entradas, comentarios o adjuntos— no alteran la huella estructural y
+no invalidan la propuesta.
+
+Si la estructura cambió desde PRE:
+
+```text
+NO APLICAR
+volver a extraer
+revisar/rebasar la propuesta
+```
+
+## 15.6 PAUSA como zona crítica
+
+Sólo el momento de aplicación requiere retirar temporalmente la instancia del
+servicio.
+
+Durante esa ventana:
+
+```text
+- no hay navegación normal
+- no hay consultas
+- no hay búsquedas
+- no hay lectura de entradas
+- no hay creación o edición
+- no hay comentarios
+- no deben operar enlaces compartibles de la instancia
+- no debe existir acceso ordinario a datos/contenidos de la instancia
+```
+
+El bloqueo debe realizarse mediante un guard central y no mediante una matriz
+de excepciones pantalla por pantalla.
+
+El acceso directo a archivos físicos mediante URLs públicas requiere una
+solución técnica específica; invalidar sesiones o bloquear WordPress no basta
+por sí solo si el webserver sirve el archivo directamente.
+
+## 15.7 Autoridad y exclusividad
+
+Se prevé un rol **Administrador Bitácora**:
+
+```text
+Administrador Bitácora
+    = Supervisor Bitácora
+    + autoridad de mantenimiento estructural
+```
+
+El rol nativo `administrator` de WordPress conserva su autoridad habitual y
+también debe poseer las capabilities gestionadas por Bitácora.
+
+Al comenzar la ventana de PAUSA se registra el usuario que adquiere el
+mantenimiento.
+
+Durante esa ventana no deben existir dos operadores concurrentes sobre la
+estructura.
+
+La pérdida de conexión o de sesión no altera el estado de la instancia. La
+recuperación normal de credenciales WordPress permite al mismo usuario volver
+a autenticarse.
+
+## 15.8 Aplicación y verificación
+
+La aplicación no vuelve a sembrar la instancia desde cero.
+
+Debe **reconciliar** la estructura existente con la PROPUESTA:
+
+```text
+objeto existente
+    → conservar identidad técnica
+    → modificar solamente propiedades permitidas
+
+objeto nuevo
+    → materializar agregado
+
+objeto histórico ausente de la propuesta
+    → no eliminar
+```
+
+El éxito requiere:
+
+```text
+POST extraído
+    ≡
+PROPUESTA validada
+```
+
+Sólo entonces:
+
+```text
+PAUSED → ACTIVE
+```
+
+## 15.9 Fallo de aplicación y recuperación PRE
+
+Ante un error:
+
+```text
+1. registrar error y estado alcanzado
+2. reconciliar nuevamente hacia PRE
+3. extraer estructura resultante
+4. validar
+5. comprobar resultado ≡ PRE
+```
+
+Si la recuperación resulta correcta:
+
+```text
+volver a ACTIVE
+corregir PROPUESTA mientras Bitácora funciona
+validar nuevamente
+intentar otra aplicación
+```
+
+La recuperación de PRE conserva las identidades técnicas existentes.
+
+Puede eliminar exclusivamente artefactos estructurales que hayan sido creados
+por el intento fallido y que nunca llegaron a quedar disponibles para uso
+normal.
+
+Sólo si falla también la recuperación hacia PRE:
+
+```text
+Bitácora permanece PAUSED
+el operador mantiene exclusividad
+se requiere diagnóstico/recuperación
+```
+
+## 15.10 Registro documental de mantenimiento
+
+El registro tiene finalidad exclusivamente forense/documental.
+
+No es:
+
+```text
+- undo
+- sistema de versiones
+- mecanismo de ejecución
+- rollback lógico de usuario
+```
+
+Puede conservarse en filesystem como expediente pequeño asociado a la
+instancia.
+
+Contenido mínimo:
+
+```text
+PRE.json
+    estructura inicial
+
+PROPUESTA.json
+    estructura aprobada para aplicar
+
+POST.json
+    estructura obtenida
+
+RESUMEN / diferencias
+    cambios PRE → PROPUESTA
+
+errores de aplicación
+    cuando existan
+```
+
+Los archivos pueden incorporar hashes SHA-256 para detectar alteraciones
+accidentales.
+
+El expediente permanece asociado documentalmente a la instancia y puede
+incorporarse al Respaldo Documental final.
+
+## 15.11 Editor común y addon
+
+La edición estructural no requiere un segundo editor específico para PAUSA.
+
+El futuro addon de gestión puede utilizar el mismo editor para:
+
+```text
+Template / Profile
+        y
+esqueleto extraído de instancia viva
+```
+
+La diferencia está en el destino.
+
+```text
+definición editada
+    ├── adoptar como NUEVO PROFILE
+    │       → nuevo UUID
+    │
+    └── aplicar a ESTA INSTANCIA
+            → conserva configured_profile
+            → conserva identidad histórica del Profile de origen
+```
+
+Modificar una instancia no modifica el Profile que la originó.
+
+Si el esqueleto de una instancia se guarda como definición reutilizable, se
+crea siempre un **nuevo Profile**, con nueva identidad generada por el Engine.
+
+No se introduce un concepto obligatorio de Profile sucesor, padre/hijo o
+versionado de Profiles.
 
 # 16. Organización `main|more`
 
-`main|more` es principalmente organización visual de secciones complementarias.
+`main|more` describe organización visual, no jerarquía semántica.
+
+Implementación actual:
+
+```text
+main
+    dashboard principal
+
+more
+    segundo dashboard / expansión de espacio
+```
 
 La Bitácora core section permanece siempre en `main`.
 
-En una instancia, durante PAUSA, debe poder:
+Para las Secciones complementarias puede modificarse:
 
 ```text
-- mover una sección complementaria main ↔ more
-- reordenar
-- agregar secciones
-- ocultar secciones existentes respetando la preservación histórica
+area = main | more
+order
 ```
 
-Ocultar una sección no elimina ni invalida su contenido.
+Por ahora se mantienen solamente estos dos dashboards.
 
-Una sección oculta:
+No se implementan niveles anidados de `more` ni una paginación generalizada
+preventiva. Si un caso real necesitara más espacio, podrá evaluarse entonces
+un tercer dashboard.
 
-```text
-- queda excluida de la interfaz normal de navegación
-- no admite nuevas entradas
-- conserva todas sus entradas y relaciones
-- conserva imágenes, adjuntos, comentarios y demás elementos asociados
-- mantiene válidas las referencias existentes hacia sus entradas o recursos
-- puede aportar resultados a búsquedas multisección
-- sigue siendo accesible mediante búsquedas, referencias u otros mecanismos válidos
-```
+La cantidad práctica de Secciones que hoy caben cómodamente en los dos
+dashboards es una restricción de presentación, no una invariante del contrato
+estructural.
 
-El ocultamiento permite retirar una sección del uso corriente sin destruir historia ni
-romper referencias cuando su eliminación no es admisible.
+`area` tampoco debe reutilizarse para expresar permisos o privacidad.
 
----
+La privacidad pertenece a las entradas y es una dimensión independiente de la
+ubicación visual de una Sección.
+
+Del mismo modo, una futura forma alternativa de presentar una Sección
+—por ejemplo una vista de un artefacto externo— no debe obligar a redefinir
+`main|more`.
+
+La modificación de `area` y `order` se prepara sobre el esqueleto mientras la
+instancia permanece EN USO y se materializa durante la breve zona crítica de
+aplicación.
 
 # 17. Identidad técnica y etiqueta visible
 
@@ -1667,6 +2131,53 @@ Engine.
 
 Una restauración exacta, si alguna vez se implementa, será otra operación y no debe
 confundirse con creación, promoción o exportación.
+
+---
+
+## Extracción estructural desde una instancia viva
+
+Una instancia viva puede actuar como fuente de una definición estructural
+reutilizable.
+
+```text
+instancia viva
+    ↓
+extraer esqueleto actual
+    ↓
+definición canónica
+    ↓
+opcionalmente editar
+    ↓
+Template / candidato
+    ↓
+adopción
+    ↓
+NUEVO PROFILE
+```
+
+La extracción refleja la estructura vigente de la instancia, incluidas las
+modificaciones estructurales acumuladas, pero excluye completamente contenido
+y datos de usuario.
+
+Aplicar esa definición nuevamente a la misma instancia:
+
+```text
+- no crea Profile
+- no genera UUID
+- conserva configured_profile
+```
+
+Convertirla en una definición reutilizable y adoptarla:
+
+```text
+- crea un Profile nuevo
+- genera un UUID nuevo
+- no modifica el Profile de origen
+```
+
+El nuevo Profile puede resultar una mejora práctica derivada de experiencia
+real de uso, pero el Engine no necesita modelar genealogía ni herencia entre
+Profiles.
 
 ---
 
@@ -1918,8 +2429,9 @@ feature_comments
 - REJECT → no existe Perfil
 - UUID asignado exclusivamente por Engine
 - label aporta identidad humana
-- presunción de duplicado por label
-- presunción de duplicado por cantidad+nombres de secciones
+- duplicado exacto sólo por equivalencia de definición estructural canónica
+- label de Profile único; una colisión de nombre exige elegir otro
+- similitud estructural produce advertencia, no rechazo
 - Engine no administra candidatos rechazados
 - Engine no administra “Perfiles incompletos”
 ```
@@ -2021,22 +2533,22 @@ adopta.
 | ID | Estado | Asunto |
 |---|---|---|
 | P01 | CERRADO | C01–C04 formalizados y reflejados en el pipeline Candidate → Profile |
-| P02 | CERRADO | Normalización de duplicados definida e implementada |
+| P02 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Sustituir presunción de duplicado por: duplicado exacto; label único; similitud como advertencia |
 | P03 | CERRADO | Entrada PHP de PROMOCIÓN implementada sobre adopción autoritativa común |
 | P04 | CERRADO | Adopción stored protegida por lock + transacción + rollback; REJECT sin Profile residual |
 | P05 | CERRADO | Library limitada a Profiles aceptados; autoría legacy retirada del Engine |
-| P06 | PENDIENTE DE ANÁLISIS | Decidir forma física futura del Constructor: plugin/addon/módulo/integración externa |
+| P06 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Gestión opcional mediante addon/productor con editor común de Templates/Profiles y esqueleto de instancia |
 | P07 | CERRADO | `Cerrar Bitácora` separado de `Usar Perfil`; commit `cd8197a` |
 | P08 | CERRADO | Warning/guard destructivo reutilizado y ampliado con período real de instancia |
 | P09 | CERRADO | `EN USO`/`DISPONIBLE` retirados como estados técnicos de Profile; `DISPONIBLE` queda sólo como UI contextual |
 | P10 | CERRADO | `Usar este perfil` sólo se ofrece y opera desde instalación neutra |
 | P11 | DECIDIDO / IMPLEMENTAR | Separar identidad técnica y etiqueta visible en editor/runtime |
-| P12 | PENDIENTE DE ANÁLISIS | Definir alcance, transición, invariantes y UX de EN PAUSA / edición conservativa |
+| P12 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Modificación estructural preparada en ACTIVE; PAUSA breve sólo para aplicar/verificar/recuperar |
 | P13 | DECIDIDO / IMPLEMENTAR | Ocultar Sección preserva historia, excluye navegación normal e impide nuevas entradas; mantiene referencias y búsqueda multisección |
-| P14 | PENDIENTE DE ANÁLISIS | Semántica exacta de ocultar Tipo |
+| P14 | CERRADO | Ocultar Tipo lo retira del uso futuro sin alterar identidad, relaciones ni historia; MOSTRAR revierte la decisión |
 | P15 | DECIDIDO / IMPLEMENTAR | Exportar Profile como Template externo; no existe “importar Perfil” |
 | P16 | CERRADO | CREACIÓN desde Template externo implementada reutilizando la adopción autoritativa |
-| P17 | PENDIENTE DE ANÁLISIS | Evaluar si alguna vez hace falta Perfil sucesor |
+| P17 | CERRADO | No se requiere Perfil sucesor: aplicar a instancia conserva origen; reutilizar esqueleto crea un Profile nuevo |
 | P18 | DECIDIDO / PROBAR | Primera puesta en uso desde instalación neutra |
 | P19 | DECIDIDO / PROBAR | Usuario `use_bitacora_profiles=yes`, `manage_bitacora_profiles=no` |
 | P20 | DECIDIDO / PROBAR | Regresión final/fresh 0.3.0 en BITA |
@@ -2046,7 +2558,7 @@ adopta.
 | P24 | OBSERVACIÓN | Shortcuts/referencias entre entradas |
 | P25 | OBSERVACIÓN | Diferencia visual menor frontend/wp-admin |
 | P26 | CERRADO | Ciclo completo Template → CREACIÓN → adopción → Library → catálogo → DELETE verificado en KOOPITA |
-| P27 | CERRADO | PROMOCIÓN verificada: ACCEPT + REJECT por label duplicado + REJECT por composición de secciones |
+| P27 | CERRADO | Pipeline PROMOCIÓN verificado; los casos históricos de duplicación deberán actualizarse al nuevo criterio exacto |
 | P28 | CERRADO | RESPALDO DOCUMENTAL v1: collector + ZIP + descarga UI + prueba con entrada, comentarios y attachment físico |
 
 ---
@@ -2061,22 +2573,16 @@ Engine si esa UI está destinada a convertirse en Constructor.
 
 Prioridades actuales:
 
-```text
-1. analizar y cerrar contrato funcional de EN PAUSA
-2. definir UX de edición conservativa de instancia
-3. evaluar interfaz simulada de Bitácora vs formulario abstracto
-4. implementar PAUSA una vez cerrado su contrato
-5. verificar permisos reales use_bitacora_profiles / manage_bitacora_profiles
-6. no regresión de los cuatro bundled
-7. BITA fresh
-8. idempotencia
-9. release 0.3.0
-```
-
-Las pruebas específicas del Constructor se definirán después de cerrar su frontera y forma
-de integración.
-
----
+1. implementar el nuevo criterio de duplicado exacto, label único y similitud como advertencia;
+2. implementar extracción `instancia → definición canónica`;
+3. verificar round-trip sobre KOOPITA:
+   `Profile P → instancia sin cambios → esqueleto E`, con `E ≡ P`;
+4. definir/comprobar comparación determinista y huella estructural PRE;
+5. implementar reconciliación segura `PRE → PROPUESTA → POST`, incluida recuperación hacia PRE;
+6. incorporar rol/capability de Administrador Bitácora y guard operativo de la PAUSA breve;
+7. resolver bloqueo efectivo de enlaces compartibles y acceso directo a medios durante PAUSA;
+8. construir el addon/editor estructural común cuando las primitivas del Engine estén cerradas;
+9. ejecutar regresión bundled, BITA fresh, idempotencia y cierre de 0.3.0.
 
 # 26. Convenciones operativas de terminal
 
@@ -2121,71 +2627,89 @@ No confundir bloques clásicos con bloques `cacli`.
 
 # 27. Punto de reentrada recomendado
 
-Estado de reentrada al 2026-10-01:
+Estado conceptual al 2026-10-10:
 
 ```text
-Candidate → Profile
-    CERRADO
+La modificación estructural de una instancia ya no se diseña como
+una sesión larga de edición dentro de EN PAUSA.
 
-Usar Perfil / instalación neutra
-    CERRADO
-
-Cerrar Bitácora
-    CERRADO
-
-bitacora_configured_at
-    CERRADO
-
-RESPALDO DOCUMENTAL v1
-    CERRADO Y PROBADO CON CONTENIDO REAL
-
-EN PAUSA
-    PRÓXIMO BLOQUE DE ANÁLISIS
+ACTIVE
+    ↓
+extraer PRE
+    ↓
+editar PROPUESTA
+    ↓
+validar
+    ↓
+verificar instancia viva == PRE
+    ↓
+PAUSA breve
+    ↓
+aplicar / reconciliar
+    ↓
+verificar POST
+    ↓
+ACTIVE
 ```
 
-Retomar desde **EN PAUSA**, sin modificar todavía código runtime.
-
-Preguntas que deben cerrarse antes de implementar:
+Ante fallo de aplicación:
 
 ```text
-1. transición exacta:
-       EN USO → EN PAUSA → EN USO
+registrar
+    ↓
+reconciliar hacia PRE
+    ↓
+si resultado == PRE
+    → ACTIVE
+    → corregir propuesta con la instancia funcionando
 
-2. qué operaciones quedan bloqueadas durante PAUSA
-
-3. qué modificaciones estructurales se permiten
-
-4. invariantes de historia:
-       no romper referencias
-       no destruir contenido existente
-       no eliminar estructuras usadas
-
-5. semántica de:
-       renombrar
-       reordenar
-       reorganizar main|more
-       agregar secciones
-       agregar Tipos
-       deshabilitar para uso futuro
-       features
-
-6. semántica exacta de ocultar/deshabilitar Tipo
-
-7. tratamiento de la sección core Bitácora
-
-8. UX:
-       evaluar una representación simulada de la propia Bitácora
-       con etiquetas y elementos editables
-       frente a un formulario abstracto de configuración
-
-9. distinguir siempre:
-       editar INSTANCIA en PAUSA
-       de
-       construir/editar TEMPLATE
+si también falla recuperación
+    → permanecer PAUSED
+    → diagnóstico
 ```
 
-Principio rector:
+El editor estructural pertenece al futuro addon/productor y puede operar sobre:
 
-> PAUSA permite evolucionar de forma controlada una instancia con historia. No reabre la autoría
-> de Profiles dentro del Engine y no debe convertir la configuración runtime en un Constructor
-> encubierto.
+```text
+- Template / definición de Profile
+- esqueleto extraído de instancia viva
+```
+
+Bitácora Engine conserva:
+
+```text
+- definición canónica
+- validación
+- adopción
+- extracción de estructura
+- comparación/huella
+- reconciliación
+- PAUSA técnica
+- verificación
+- recuperación PRE
+```
+
+Próximo paso técnico recomendado:
+
+```text
+1. actualizar implementación de duplicación:
+       exacto    → REJECT
+       label     → exigir nombre distinto
+       similar   → warning
+
+2. implementar:
+       bitacora_get_instance_profile_definition()
+   o nombre equivalente
+
+3. probar:
+       Profile Eventos
+           ↓
+       instancia KOOPITA
+           ↓
+       extracción
+           ↓
+       equivalencia funcional con la definición de origen
+```
+
+No tocar todavía la interfaz del addon ni implementar una PAUSA completa antes
+de demostrar esta correspondencia.
