@@ -562,8 +562,9 @@ function bitacora_register_instance_editor_admin_page() {
  * Primera vertical:
  * - parte siempre desde PRE;
  * - conserva todas las identidades existentes;
- * - nunca acepta cambios de slug;
- * - no implementa altas ni eliminaciones todavía;
+ * - nunca acepta cambios de slug sobre identidades PRE;
+ * - permite agregar nuevas Secciones y Tipos;
+ * - nunca elimina identidades pertenecientes a PRE;
  * - permite editar presentación, orden, área, estado, features y
  *   scope_id de Tipos.
  *
@@ -740,6 +741,289 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
         }
 
         /*
+         * Secciones nuevas.
+         *
+         * Hay dos fuentes:
+         *
+         * 1. filas ya incorporadas a una PROPUESTA anterior y que vuelven
+         *    en instance[sections][slug];
+         * 2. la fila explícita instance[new_section].
+         *
+         * En ambos casos el slug nace una única vez y luego pasa a ser
+         * identidad técnica inmutable durante el resto de la edición.
+         */
+        $build_new_section =
+                static function (
+                        $row,
+                        $slug
+                ) {
+
+                        if ( ! is_array( $row ) ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_invalid',
+                                        'La nueva sección no tiene una definición válida.'
+                                );
+                        }
+
+                        $slug =
+                                sanitize_title(
+                                        (string) $slug
+                                );
+
+                        $name =
+                                isset( $row['name'] )
+                                        ? sanitize_text_field(
+                                                (string) $row['name']
+                                        )
+                                        : '';
+
+                        if (
+                                '' === $slug
+                                || '' === $name
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_invalid',
+                                        'La nueva sección requiere nombre y slug.'
+                                );
+                        }
+
+                        $area =
+                                isset( $row['area'] )
+                                        ? sanitize_key(
+                                                (string) $row['area']
+                                        )
+                                        : 'more';
+
+                        if (
+                                ! in_array(
+                                        $area,
+                                        array(
+                                                'main',
+                                                'more',
+                                        ),
+                                        true
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_area_invalid',
+                                        'El área de la nueva sección no es válida.'
+                                );
+                        }
+
+                        $state =
+                                isset( $row['state'] )
+                                        ? sanitize_key(
+                                                (string) $row['state']
+                                        )
+                                        : 'active';
+
+                        if (
+                                ! in_array(
+                                        $state,
+                                        array(
+                                                'active',
+                                                'hidden',
+                                                'archived',
+                                        ),
+                                        true
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_state_invalid',
+                                        'El estado de la nueva sección no es válido.'
+                                );
+                        }
+
+                        $section = array(
+                                'name' =>
+                                        $name,
+
+                                'slug' =>
+                                        $slug,
+
+                                'order' =>
+                                        isset( $row['order'] )
+                                                ? (int) $row['order']
+                                                : 0,
+
+                                'area' =>
+                                        $area,
+
+                                'state' =>
+                                        $state,
+
+                                'feature_file' =>
+                                        ! empty(
+                                                $row['feature_file']
+                                        ),
+
+                                'feature_location' =>
+                                        ! empty(
+                                                $row['feature_location']
+                                        ),
+
+                                'feature_comments' =>
+                                        ! empty(
+                                                $row['feature_comments']
+                                        ),
+                        );
+
+                        foreach (
+                                array(
+                                        'singular',
+                                        'plural',
+                                        'subtitle',
+                                        'new_label',
+                                )
+                                as $key
+                        ) {
+                                if (
+                                        ! array_key_exists(
+                                                $key,
+                                                $row
+                                        )
+                                ) {
+                                        continue;
+                                }
+
+                                $value =
+                                        sanitize_text_field(
+                                                (string) $row[ $key ]
+                                        );
+
+                                if ( '' !== $value ) {
+                                        $section[ $key ] =
+                                                $value;
+                                }
+                        }
+
+                        return $section;
+                };
+
+
+        if (
+                isset( $input['sections'] )
+                && is_array(
+                        $input['sections']
+                )
+        ) {
+                foreach (
+                        $input['sections']
+                        as $input_slug => $row
+                ) {
+                        $slug =
+                                sanitize_title(
+                                        (string) $input_slug
+                                );
+
+                        if (
+                                '' === $slug
+                                || isset(
+                                        $pre['sections'][ $slug ]
+                                )
+                                || ! is_array( $row )
+                                || empty( $row['_present'] )
+                        ) {
+                                continue;
+                        }
+
+                        $section =
+                                $build_new_section(
+                                        $row,
+                                        $slug
+                                );
+
+                        if ( is_wp_error( $section ) ) {
+                                return $section;
+                        }
+
+                        if (
+                                isset(
+                                        $proposal['sections'][ $slug ]
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_duplicate',
+                                        'La nueva sección utiliza un slug que ya pertenece a la PROPUESTA.'
+                                );
+                        }
+
+                        $proposal['sections'][ $slug ] =
+                                $section;
+                }
+        }
+
+
+        if (
+                isset( $input['new_section'] )
+                && is_array(
+                        $input['new_section']
+                )
+        ) {
+                $row =
+                        $input['new_section'];
+
+                $name =
+                        isset( $row['name'] )
+                                ? trim(
+                                        sanitize_text_field(
+                                                (string) $row['name']
+                                        )
+                                )
+                                : '';
+
+                $slug =
+                        isset( $row['slug'] )
+                                ? sanitize_title(
+                                        (string) $row['slug']
+                                )
+                                : '';
+
+                /*
+                 * Fila completamente vacía: no hay alta solicitada.
+                 */
+                if (
+                        '' !== $name
+                        || '' !== $slug
+                ) {
+                        if (
+                                '' === $name
+                                || '' === $slug
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_invalid',
+                                        'La nueva sección requiere nombre y slug.'
+                                );
+                        }
+
+                        if (
+                                isset(
+                                        $proposal['sections'][ $slug ]
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_section_duplicate',
+                                        'La nueva sección utiliza un slug que ya pertenece a la PROPUESTA.'
+                                );
+                        }
+
+                        $section =
+                                $build_new_section(
+                                        $row,
+                                        $slug
+                                );
+
+                        if ( is_wp_error( $section ) ) {
+                                return $section;
+                        }
+
+                        $proposal['sections'][ $slug ] =
+                                $section;
+                }
+        }
+
+
+        /*
          * Tipos existentes.
          *
          * scope permanece reservado a "section".
@@ -796,6 +1080,222 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
                 $proposal['classes'][ $slug ]['scope'] =
                         'section';
         }
+
+        /*
+         * Tipos nuevos.
+         *
+         * Igual que con Secciones, las filas que ya pertenecen a una
+         * PROPUESTA previa vuelven por instance[classes][slug].
+         */
+        $build_new_class =
+                static function (
+                        $row,
+                        $slug
+                ) {
+
+                        if ( ! is_array( $row ) ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_invalid',
+                                        'El nuevo Tipo no tiene una definición válida.'
+                                );
+                        }
+
+                        $slug =
+                                sanitize_title(
+                                        (string) $slug
+                                );
+
+                        $name =
+                                isset( $row['name'] )
+                                        ? sanitize_text_field(
+                                                (string) $row['name']
+                                        )
+                                        : '';
+
+                        $scope_id =
+                                isset( $row['scope_id'] )
+                                        ? sanitize_title(
+                                                (string) $row['scope_id']
+                                        )
+                                        : '';
+
+                        if (
+                                '' === $slug
+                                || '' === $name
+                                || '' === $scope_id
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_invalid',
+                                        'El nuevo Tipo requiere nombre, slug y sección.'
+                                );
+                        }
+
+                        $state =
+                                isset( $row['state'] )
+                                        ? sanitize_key(
+                                                (string) $row['state']
+                                        )
+                                        : 'active';
+
+                        if (
+                                ! in_array(
+                                        $state,
+                                        array(
+                                                'active',
+                                                'hidden',
+                                                'archived',
+                                        ),
+                                        true
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_state_invalid',
+                                        'El estado del nuevo Tipo no es válido.'
+                                );
+                        }
+
+                        return array(
+                                'name' =>
+                                        $name,
+
+                                'slug' =>
+                                        $slug,
+
+                                'scope' =>
+                                        'section',
+
+                                'scope_id' =>
+                                        $scope_id,
+
+                                'order' =>
+                                        isset( $row['order'] )
+                                                ? (int) $row['order']
+                                                : 0,
+
+                                'state' =>
+                                        $state,
+                        );
+                };
+
+
+        if (
+                isset( $input['classes'] )
+                && is_array(
+                        $input['classes']
+                )
+        ) {
+                foreach (
+                        $input['classes']
+                        as $input_slug => $row
+                ) {
+                        $slug =
+                                sanitize_title(
+                                        (string) $input_slug
+                                );
+
+                        if (
+                                '' === $slug
+                                || isset(
+                                        $pre['classes'][ $slug ]
+                                )
+                                || ! is_array( $row )
+                                || empty( $row['_present'] )
+                        ) {
+                                continue;
+                        }
+
+                        $class =
+                                $build_new_class(
+                                        $row,
+                                        $slug
+                                );
+
+                        if ( is_wp_error( $class ) ) {
+                                return $class;
+                        }
+
+                        if (
+                                isset(
+                                        $proposal['classes'][ $slug ]
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_duplicate',
+                                        'El nuevo Tipo utiliza un slug que ya pertenece a la PROPUESTA.'
+                                );
+                        }
+
+                        $proposal['classes'][ $slug ] =
+                                $class;
+                }
+        }
+
+
+        if (
+                isset( $input['new_class'] )
+                && is_array(
+                        $input['new_class']
+                )
+        ) {
+                $row =
+                        $input['new_class'];
+
+                $name =
+                        isset( $row['name'] )
+                                ? trim(
+                                        sanitize_text_field(
+                                                (string) $row['name']
+                                        )
+                                )
+                                : '';
+
+                $slug =
+                        isset( $row['slug'] )
+                                ? sanitize_title(
+                                        (string) $row['slug']
+                                )
+                                : '';
+
+                if (
+                        '' !== $name
+                        || '' !== $slug
+                ) {
+                        if (
+                                '' === $name
+                                || '' === $slug
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_invalid',
+                                        'El nuevo Tipo requiere nombre y slug.'
+                                );
+                        }
+
+                        if (
+                                isset(
+                                        $proposal['classes'][ $slug ]
+                                )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_duplicate',
+                                        'El nuevo Tipo utiliza un slug que ya pertenece a la PROPUESTA.'
+                                );
+                        }
+
+                        $class =
+                                $build_new_class(
+                                        $row,
+                                        $slug
+                                );
+
+                        if ( is_wp_error( $class ) ) {
+                                return $class;
+                        }
+
+                        $proposal['classes'][ $slug ] =
+                                $class;
+                }
+        }
+
 
         return bitacora_get_canonical_profile_definition(
                 $proposal
@@ -2034,6 +2534,261 @@ function bitacora_render_instance_editor_admin_page() {
                                         <?php endforeach; ?>
                                 </tbody>
                         </table>
+
+                        <h2>Agregar sección</h2>
+
+                        <p>
+                                La nueva sección nace con un slug técnico que,
+                                una vez incorporado a la PROPUESTA, queda fijo.
+                        </p>
+
+                        <table class="form-table">
+                                <tbody>
+                                        <tr>
+                                                <th scope="row">
+                                                        Nombre
+                                                </th>
+                                                <td>
+                                                        <input
+                                                                type="text"
+                                                                class="regular-text"
+                                                                name="instance[new_section][name]"
+                                                                value=""
+                                                        >
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Slug
+                                                </th>
+                                                <td>
+                                                        <input
+                                                                type="text"
+                                                                class="regular-text"
+                                                                name="instance[new_section][slug]"
+                                                                value=""
+                                                                placeholder="nueva-seccion"
+                                                        >
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Orden
+                                                </th>
+                                                <td>
+                                                        <input
+                                                                type="number"
+                                                                name="instance[new_section][order]"
+                                                                value="100"
+                                                        >
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Área
+                                                </th>
+                                                <td>
+                                                        <select
+                                                                name="instance[new_section][area]"
+                                                        >
+                                                                <option value="main">
+                                                                        Principal
+                                                                </option>
+                                                                <option
+                                                                        value="more"
+                                                                        selected
+                                                                >
+                                                                        Más
+                                                                </option>
+                                                        </select>
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Estado
+                                                </th>
+                                                <td>
+                                                        <select
+                                                                name="instance[new_section][state]"
+                                                        >
+                                                                <option
+                                                                        value="active"
+                                                                        selected
+                                                                >
+                                                                        Activa
+                                                                </option>
+                                                                <option value="hidden">
+                                                                        Oculta
+                                                                </option>
+                                                                <option value="archived">
+                                                                        Archivada
+                                                                </option>
+                                                        </select>
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Features
+                                                </th>
+                                                <td>
+                                                        <label
+                                                                style="margin-right:20px"
+                                                        >
+                                                                <input
+                                                                        type="checkbox"
+                                                                        name="instance[new_section][feature_file]"
+                                                                        value="1"
+                                                                >
+                                                                Archivo
+                                                        </label>
+
+                                                        <label
+                                                                style="margin-right:20px"
+                                                        >
+                                                                <input
+                                                                        type="checkbox"
+                                                                        name="instance[new_section][feature_location]"
+                                                                        value="1"
+                                                                >
+                                                                Ubicación
+                                                        </label>
+
+                                                        <label>
+                                                                <input
+                                                                        type="checkbox"
+                                                                        name="instance[new_section][feature_comments]"
+                                                                        value="1"
+                                                                >
+                                                                Comentarios
+                                                        </label>
+                                                </td>
+                                        </tr>
+                                </tbody>
+                        </table>
+
+
+                        <h2>Agregar Tipo</h2>
+
+                        <p>
+                                El nuevo Tipo puede asociarse a cualquier
+                                sección que ya forme parte de la PROPUESTA.
+                                Si acabás de crear una sección, primero
+                                previsualizala; en la siguiente vista ya
+                                aparecerá en esta lista.
+                        </p>
+
+                        <table class="form-table">
+                                <tbody>
+                                        <tr>
+                                                <th scope="row">
+                                                        Nombre
+                                                </th>
+                                                <td>
+                                                        <input
+                                                                type="text"
+                                                                class="regular-text"
+                                                                name="instance[new_class][name]"
+                                                                value=""
+                                                        >
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Slug
+                                                </th>
+                                                <td>
+                                                        <input
+                                                                type="text"
+                                                                class="regular-text"
+                                                                name="instance[new_class][slug]"
+                                                                value=""
+                                                                placeholder="seccion-tipo"
+                                                        >
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Sección
+                                                </th>
+                                                <td>
+                                                        <select
+                                                                name="instance[new_class][scope_id]"
+                                                        >
+                                                                <?php
+                                                                foreach (
+                                                                        $scope_options
+                                                                        as $scope_slug => $scope_label
+                                                                ) :
+                                                                        ?>
+                                                                        <option
+                                                                                value="<?php
+                                                                                echo esc_attr(
+                                                                                        $scope_slug
+                                                                                );
+                                                                                ?>"
+                                                                        >
+                                                                                <?php
+                                                                                echo esc_html(
+                                                                                        $scope_label
+                                                                                );
+                                                                                ?>
+                                                                                (<?php
+                                                                                echo esc_html(
+                                                                                        $scope_slug
+                                                                                );
+                                                                                ?>)
+                                                                        </option>
+                                                                <?php endforeach; ?>
+                                                        </select>
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Orden
+                                                </th>
+                                                <td>
+                                                        <input
+                                                                type="number"
+                                                                name="instance[new_class][order]"
+                                                                value="100"
+                                                        >
+                                                </td>
+                                        </tr>
+
+                                        <tr>
+                                                <th scope="row">
+                                                        Estado
+                                                </th>
+                                                <td>
+                                                        <select
+                                                                name="instance[new_class][state]"
+                                                        >
+                                                                <option
+                                                                        value="active"
+                                                                        selected
+                                                                >
+                                                                        Activo
+                                                                </option>
+                                                                <option value="hidden">
+                                                                        Oculto
+                                                                </option>
+                                                                <option value="archived">
+                                                                        Archivado
+                                                                </option>
+                                                        </select>
+                                                </td>
+                                        </tr>
+                                </tbody>
+                        </table>
+
 
                         <p class="submit">
                                 <?php
