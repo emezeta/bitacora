@@ -3492,6 +3492,22 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                                 $action['after']
                                         );
 
+                                $entry['applied_target'] =
+                                        array(
+                                                'taxonomy' =>
+                                                        $taxonomy,
+                                                'term_id' =>
+                                                        $term_id,
+                                        );
+
+                                /*
+                                 * Desde este punto la acción puede dejar una
+                                 * mutación parcial. Debe estar completa en el
+                                 * journal antes de iniciar la escritura.
+                                 */
+                                $journal['actions'][] =
+                                        $entry;
+
                                 $written =
                                         bitacora_write_instance_structure_term_state(
                                                 $taxonomy,
@@ -3505,14 +3521,6 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                                 $action
                                         );
                                 }
-
-                                $entry['applied_target'] =
-                                        array(
-                                                'taxonomy' =>
-                                                        $taxonomy,
-                                                'term_id' =>
-                                                        $term_id,
-                                        );
 
                                 break;
 
@@ -3574,6 +3582,22 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                 $term_id =
                                         (int) $inserted['term_id'];
 
+                                $entry['applied_target'] =
+                                        array(
+                                                'taxonomy' =>
+                                                        $taxonomy,
+                                                'term_id' =>
+                                                        $term_id,
+                                        );
+
+                                /*
+                                 * El término ya existe físicamente.
+                                 * El rollback central debe conocer su ID desde
+                                 * este instante.
+                                 */
+                                $journal['actions'][] =
+                                        $entry;
+
                                 $target_state =
                                         bitacora_build_instance_structure_term_target_state(
                                                 null,
@@ -3591,25 +3615,11 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                         );
 
                                 if ( is_wp_error( $written ) ) {
-
-                                        wp_delete_term(
-                                                $term_id,
-                                                $taxonomy
-                                        );
-
                                         return $fail(
                                                 $written,
                                                 $action
                                         );
                                 }
-
-                                $entry['applied_target'] =
-                                        array(
-                                                'taxonomy' =>
-                                                        $taxonomy,
-                                                'term_id' =>
-                                                        $term_id,
-                                        );
 
                                 break;
 
@@ -3640,6 +3650,21 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                         );
                                 }
 
+                                $entry['applied_target'] =
+                                        array(
+                                                'post_type' =>
+                                                        'page',
+                                                'post_id' =>
+                                                        $post_id,
+                                        );
+
+                                /*
+                                 * La actualización puede haber modificado la
+                                 * página antes de detectar un fallo posterior.
+                                 */
+                                $journal['actions'][] =
+                                        $entry;
+
                                 $written =
                                         bitacora_write_instance_structure_page_state(
                                                 $post_id,
@@ -3652,14 +3677,6 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                                 $action
                                         );
                                 }
-
-                                $entry['applied_target'] =
-                                        array(
-                                                'post_type' =>
-                                                        'page',
-                                                'post_id' =>
-                                                        $post_id,
-                                        );
 
                                 break;
 
@@ -3716,6 +3733,22 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                 $post_id =
                                         (int) $post_id;
 
+                                $entry['applied_target'] =
+                                        array(
+                                                'post_type' =>
+                                                        'page',
+                                                'post_id' =>
+                                                        $post_id,
+                                        );
+
+                                /*
+                                 * La página ya existe físicamente.
+                                 * Registrar su ID antes de cualquier operación
+                                 * posterior que pueda fallar.
+                                 */
+                                $journal['actions'][] =
+                                        $entry;
+
                                 $written =
                                         bitacora_write_instance_structure_page_state(
                                                 $post_id,
@@ -3729,25 +3762,11 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                         );
 
                                 if ( is_wp_error( $written ) ) {
-
-                                        wp_delete_post(
-                                                $post_id,
-                                                true
-                                        );
-
                                         return $fail(
                                                 $written,
                                                 $action
                                         );
                                 }
-
-                                $entry['applied_target'] =
-                                        array(
-                                                'post_type' =>
-                                                        'page',
-                                                'post_id' =>
-                                                        $post_id,
-                                        );
 
                                 break;
 
@@ -3765,9 +3784,6 @@ function bitacora_execute_instance_structure_reconciliation_plan(
                                         $action
                                 );
                 }
-
-                $journal['actions'][] =
-                        $entry;
         }
 
         $journal['action_count'] =
