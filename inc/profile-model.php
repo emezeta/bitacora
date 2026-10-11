@@ -4240,6 +4240,1247 @@ function bitacora_check_instance_structure_precondition( $pre ) {
 
 
 /**
+ * Reconcilia de forma completa una PROPUESTA estructural contra PRE.
+ *
+ * El orquestador es dueño de toda la ventana crítica:
+ *
+ * 1. construye y valida el plan mientras la instancia está ACTIVE;
+ * 2. adquiere el advisory lock;
+ * 3. publica PAUSED fuera de cualquier transacción;
+ * 4. vuelve a comprobar PRE;
+ * 5. inicia la transacción estructural;
+ * 6. vuelve a comprobar PRE dentro de la transacción;
+ * 7. ejecuta APPLY;
+ * 8. verifica POST;
+ * 9. confirma COMMIT;
+ * 10. verifica POST ya confirmado;
+ * 11. devuelve la instancia a ACTIVE;
+ * 12. libera el advisory lock.
+ *
+ * Si APPLY o la verificación previa al COMMIT fallan, intenta primero
+ * rollback lógico mediante el journal. Si ese rollback no puede verificarse,
+ * ROLLBACK SQL sigue siendo la red de seguridad de la transacción original.
+ *
+ * Si no puede demostrar PRE o POST de forma exacta, la instancia permanece
+ * PAUSED. Nunca publica ACTIVE sobre un estado estructural incierto.
+ *
+ * @return array|WP_Error
+ */
+function bitacora_reconcile_instance_structure(
+        $pre,
+        $proposal_definition,
+        $owner_user_id,
+        $options = array()
+) {
+        global $wpdb;
+
+        $owner_user_id =
+                absint(
+                        $owner_user_id
+                );
+
+        if ( ! $owner_user_id ) {
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_owner_required',
+                        'Debe indicarse el usuario responsable de la reconciliación.'
+                );
+        }
+
+        $owner =
+                get_user_by(
+                        'id',
+                        $owner_user_id
+                );
+
+        if ( ! $owner instanceof WP_User ) {
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_owner_invalid',
+                        'El usuario responsable de la reconciliación no existe.'
+                );
+        }
+
+        $options =
+                wp_parse_args(
+                        $options,
+                        array(
+                                'lock_timeout' => 10,
+                        )
+                );
+
+        $lock_timeout =
+                max(
+                        0,
+                        (int) $options['lock_timeout']
+                );
+
+        $initial_state =
+                bitacora_get_instance_runtime_state();
+
+        if ( 'active' !== $initial_state ) {
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_requires_active',
+                        'La reconciliación estructural sólo puede iniciarse desde ACTIVE.',
+                        array(
+                                'runtime_state' =>
+                                        $initial_state,
+                                'owner_user_id' =>
+                                        bitacora_get_instance_maintenance_owner(),
+                        )
+                );
+        }
+
+        /*
+         * El planner vuelve a validar PRE, política de evolución,
+         * uso histórico y PROPUESTA contra CURRENT.
+         */
+        $plan =
+                bitacora_build_instance_structure_reconciliation_plan(
+                        $pre,
+                        $proposal_definition
+                );
+
+        if ( is_wp_error( $plan ) ) {
+                return $plan;
+        }
+
+        $pre_definition =
+                isset( $pre['definition'] )
+                && is_array( $pre['definition'] )
+                        ? bitacora_get_canonical_profile_definition(
+                                $pre['definition']
+                        )
+                        : new WP_Error(
+                                'bitacora_instance_pre_invalid',
+                                'PRE no contiene una definición estructural válida.'
+                        );
+
+        if ( is_wp_error( $pre_definition ) ) {
+                return $pre_definition;
+        }
+
+        $proposal =
+                bitacora_get_canonical_profile_definition(
+                        $proposal_definition
+                );
+
+        if ( is_wp_error( $proposal ) ) {
+                return $proposal;
+        }
+
+        $snapshot_matches =
+                static function (
+                        $snapshot,
+                        $definition,
+                        $fingerprint
+                ) {
+
+                        return (
+                                is_array( $snapshot )
+                                && isset(
+                                        $snapshot['definition'],
+                                        $snapshot['fingerprint']
+                                )
+                                && is_array(
+                                        $snapshot['definition']
+                                )
+                                && is_string(
+                                        $snapshot['fingerprint']
+                                )
+                                && hash_equals(
+                                        (string) $fingerprint,
+                                        (string) $snapshot['fingerprint']
+                                )
+                                && $definition
+                                        === $snapshot['definition']
+                        );
+                };
+
+        /*
+         * Un plan realmente vacío no necesita PAUSA.
+         */
+        if ( empty( $plan['actions'] ) ) {
+
+                $current =
+                        bitacora_get_instance_structure_snapshot();
+
+                if ( is_wp_error( $current ) ) {
+                        return $current;
+                }
+
+                if (
+                        ! $snapshot_matches(
+                                $current,
+                                $proposal,
+                                $plan['proposal_fingerprint']
+                        )
+                ) {
+                        return new WP_Error(
+                                'bitacora_instance_reconciliation_noop_mismatch',
+                                'El plan quedó vacío pero CURRENT no coincide con la PROPUESTA.',
+                                array(
+                                        'current' =>
+                                                $current,
+                                        'proposal_fingerprint' =>
+                                                $plan['proposal_fingerprint'],
+                                )
+                        );
+                }
+
+                return array(
+                        'changed' =>
+                                false,
+                        'action_count' =>
+                                0,
+                        'pre_fingerprint' =>
+                                (string) $plan['pre_fingerprint'],
+                        'post_fingerprint' =>
+                                (string) $current['fingerprint'],
+                        'runtime_state' =>
+                                bitacora_get_instance_runtime_state(),
+                );
+        }
+
+        $lock =
+                bitacora_acquire_instance_maintenance_lock(
+                        $lock_timeout
+                );
+
+        if ( is_wp_error( $lock ) ) {
+                return $lock;
+        }
+
+        $lock_held = true;
+
+        $release_lock =
+                static function () use (
+                        &$lock_held
+                ) {
+
+                        if ( ! $lock_held ) {
+                                return true;
+                        }
+
+                        $released =
+                                bitacora_release_instance_maintenance_lock();
+
+                        if ( true === $released ) {
+                                $lock_held = false;
+                        }
+
+                        return $released;
+                };
+
+        /*
+         * Mientras esperábamos el advisory lock otro mantenimiento pudo
+         * haber terminado dejando PAUSED para recuperación manual.
+         *
+         * No apropiarse silenciosamente de ese estado.
+         */
+        if (
+                'active'
+                !== bitacora_get_instance_runtime_state()
+        ) {
+                $state =
+                        bitacora_get_instance_runtime_state();
+
+                $maintenance_owner =
+                        bitacora_get_instance_maintenance_owner();
+
+                $released =
+                        $release_lock();
+
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_not_active_after_lock',
+                        'La instancia dejó de estar ACTIVE antes de iniciar la PAUSA.',
+                        array(
+                                'runtime_state' =>
+                                        $state,
+                                'owner_user_id' =>
+                                        $maintenance_owner,
+                                'lock_release' =>
+                                        is_wp_error( $released )
+                                                ? array(
+                                                        'code' =>
+                                                                $released->get_error_code(),
+                                                        'message' =>
+                                                                $released->get_error_message(),
+                                                )
+                                                : true,
+                        )
+                );
+        }
+
+        /*
+         * PAUSED se persiste todavía en autocommit.
+         *
+         * De este modo otras conexiones conocen la ventana de mantenimiento
+         * antes de que empiece la transacción que ocultará APPLY.
+         */
+        $paused =
+                bitacora_pause_instance_for_maintenance(
+                        $owner_user_id
+                );
+
+        if ( is_wp_error( $paused ) ) {
+                $released =
+                        $release_lock();
+
+                if ( is_wp_error( $released ) ) {
+                        return new WP_Error(
+                                'bitacora_instance_reconciliation_pause_cleanup_failed',
+                                'No se pudo iniciar la PAUSA ni liberar el advisory lock.',
+                                array(
+                                        'pause_error' =>
+                                                array(
+                                                        'code' =>
+                                                                $paused->get_error_code(),
+                                                        'message' =>
+                                                                $paused->get_error_message(),
+                                                        'data' =>
+                                                                $paused->get_error_data(),
+                                                ),
+                                        'release_error' =>
+                                                array(
+                                                        'code' =>
+                                                                $released->get_error_code(),
+                                                        'message' =>
+                                                                $released->get_error_message(),
+                                                        'data' =>
+                                                                $released->get_error_data(),
+                                                ),
+                                )
+                        );
+                }
+
+                return $paused;
+        }
+
+        $transaction_active = false;
+
+        /*
+         * Aborta una etapa donde todavía no existe APPLY que recuperar.
+         *
+         * Si había una transacción abierta, ROLLBACK SQL es suficiente.
+         */
+        $abort_without_apply =
+                static function (
+                        $cause
+                ) use (
+                        &$transaction_active,
+                        $wpdb,
+                        $owner_user_id,
+                        $release_lock
+                ) {
+
+                        if ( ! is_wp_error( $cause ) ) {
+                                $cause =
+                                        new WP_Error(
+                                                'bitacora_instance_reconciliation_aborted',
+                                                (string) $cause
+                                        );
+                        }
+
+                        $sql_rollback = null;
+
+                        if ( $transaction_active ) {
+                                $sql_rollback =
+                                        $wpdb->query(
+                                                'ROLLBACK'
+                                        );
+
+                                $transaction_active = false;
+
+                                wp_cache_flush();
+                        }
+
+                        $resumed =
+                                bitacora_resume_instance_from_maintenance(
+                                        $owner_user_id
+                                );
+
+                        $released =
+                                $release_lock();
+
+                        if (
+                                is_wp_error( $resumed )
+                                || is_wp_error( $released )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_reconciliation_abort_cleanup_failed',
+                                        'La reconciliación se abortó antes de APPLY, pero la limpieza operativa no pudo completarse.',
+                                        array(
+                                                'cause' =>
+                                                        array(
+                                                                'code' =>
+                                                                        $cause->get_error_code(),
+                                                                'message' =>
+                                                                        $cause->get_error_message(),
+                                                                'data' =>
+                                                                        $cause->get_error_data(),
+                                                        ),
+                                                'sql_rollback' =>
+                                                        $sql_rollback,
+                                                'resume_error' =>
+                                                        is_wp_error( $resumed )
+                                                                ? array(
+                                                                        'code' =>
+                                                                                $resumed->get_error_code(),
+                                                                        'message' =>
+                                                                                $resumed->get_error_message(),
+                                                                        'data' =>
+                                                                                $resumed->get_error_data(),
+                                                                )
+                                                                : null,
+                                                'release_error' =>
+                                                        is_wp_error( $released )
+                                                                ? array(
+                                                                        'code' =>
+                                                                                $released->get_error_code(),
+                                                                        'message' =>
+                                                                                $released->get_error_message(),
+                                                                        'data' =>
+                                                                                $released->get_error_data(),
+                                                                )
+                                                                : null,
+                                                'runtime_state' =>
+                                                        bitacora_get_instance_runtime_state(),
+                                                'owner_user_id' =>
+                                                        bitacora_get_instance_maintenance_owner(),
+                                        )
+                                );
+                        }
+
+                        return $cause;
+                };
+
+        /*
+         * Recupera PRE tras un APPLY iniciado.
+         *
+         * Si transaction_active pertenece al APPLY original:
+         * - primero intenta rollback lógico + COMMIT de la recuperación;
+         * - si no logra verificar PRE, ROLLBACK SQL devuelve toda la
+         *   transacción original al punto de partida.
+         *
+         * Esta misma rutina puede recibir una transacción compensatoria
+         * iniciada después de un COMMIT ya confirmado.
+         */
+        $recover_pre =
+                static function (
+                        $cause,
+                        $journal,
+                        $phase,
+                        $original_apply_transaction
+                ) use (
+                        &$transaction_active,
+                        $wpdb,
+                        $owner_user_id,
+                        $pre_definition,
+                        $plan,
+                        $snapshot_matches,
+                        $release_lock
+                ) {
+
+                        if ( ! is_wp_error( $cause ) ) {
+                                $cause =
+                                        new WP_Error(
+                                                'bitacora_instance_reconciliation_failed',
+                                                (string) $cause
+                                        );
+                        }
+
+                        $recovery = array(
+                                'phase' =>
+                                        (string) $phase,
+                                'logical_rollback' =>
+                                        null,
+                                'logical_pre_verified' =>
+                                        false,
+                                'recovery_commit' =>
+                                        null,
+                                'sql_rollback' =>
+                                        null,
+                                'sql_pre_verified' =>
+                                        false,
+                                'method' =>
+                                        '',
+                        );
+
+                        /*
+                         * Primer intento: journal reversible.
+                         */
+                        if (
+                                $transaction_active
+                                && is_array( $journal )
+                        ) {
+                                $logical =
+                                        bitacora_rollback_instance_structure_reconciliation_journal(
+                                                $journal,
+                                                $owner_user_id
+                                        );
+
+                                if ( is_wp_error( $logical ) ) {
+                                        $recovery['logical_rollback'] =
+                                                array(
+                                                        'code' =>
+                                                                $logical->get_error_code(),
+                                                        'message' =>
+                                                                $logical->get_error_message(),
+                                                        'data' =>
+                                                                $logical->get_error_data(),
+                                                );
+                                } else {
+                                        $recovery['logical_rollback'] =
+                                                $logical;
+
+                                        wp_cache_flush();
+
+                                        $logical_snapshot =
+                                                bitacora_get_instance_structure_snapshot();
+
+                                        $logical_matches =
+                                                ! is_wp_error(
+                                                        $logical_snapshot
+                                                )
+                                                && $snapshot_matches(
+                                                        $logical_snapshot,
+                                                        $pre_definition,
+                                                        $plan['pre_fingerprint']
+                                                );
+
+                                        $recovery['logical_pre_verified'] =
+                                                $logical_matches;
+
+                                        if ( $logical_matches ) {
+
+                                                $committed =
+                                                        $wpdb->query(
+                                                                'COMMIT'
+                                                        );
+
+                                                $recovery['recovery_commit'] =
+                                                        $committed;
+
+                                                if ( false !== $committed ) {
+
+                                                        $transaction_active =
+                                                                false;
+
+                                                        wp_cache_flush();
+
+                                                        $confirmed =
+                                                                bitacora_get_instance_structure_snapshot();
+
+                                                        if (
+                                                                ! is_wp_error(
+                                                                        $confirmed
+                                                                )
+                                                                && $snapshot_matches(
+                                                                        $confirmed,
+                                                                        $pre_definition,
+                                                                        $plan['pre_fingerprint']
+                                                                )
+                                                        ) {
+                                                                $recovery['method'] =
+                                                                        'journal';
+
+                                                                $resumed =
+                                                                        bitacora_resume_instance_from_maintenance(
+                                                                                $owner_user_id
+                                                                        );
+
+                                                                $released =
+                                                                        $release_lock();
+
+                                                                if (
+                                                                        ! is_wp_error( $resumed )
+                                                                        && ! is_wp_error( $released )
+                                                                ) {
+                                                                        return new WP_Error(
+                                                                                'bitacora_instance_reconciliation_failed',
+                                                                                'La reconciliación no se completó; PRE fue restaurado y la instancia volvió a ACTIVE.',
+                                                                                array(
+                                                                                        'recovered' =>
+                                                                                                true,
+                                                                                        'recovery' =>
+                                                                                                $recovery,
+                                                                                        'cause' =>
+                                                                                                array(
+                                                                                                        'code' =>
+                                                                                                                $cause->get_error_code(),
+                                                                                                        'message' =>
+                                                                                                                $cause->get_error_message(),
+                                                                                                        'data' =>
+                                                                                                                $cause->get_error_data(),
+                                                                                                ),
+                                                                                        'runtime_state' =>
+                                                                                                bitacora_get_instance_runtime_state(),
+                                                                                )
+                                                                        );
+                                                                }
+
+                                                                return new WP_Error(
+                                                                        'bitacora_instance_reconciliation_recovery_cleanup_failed',
+                                                                        'PRE fue restaurado, pero no pudo completarse la salida de mantenimiento.',
+                                                                        array(
+                                                                                'recovered' =>
+                                                                                        true,
+                                                                                'recovery' =>
+                                                                                        $recovery,
+                                                                                'resume_error' =>
+                                                                                        is_wp_error( $resumed )
+                                                                                                ? array(
+                                                                                                        'code' =>
+                                                                                                                $resumed->get_error_code(),
+                                                                                                        'message' =>
+                                                                                                                $resumed->get_error_message(),
+                                                                                                        'data' =>
+                                                                                                                $resumed->get_error_data(),
+                                                                                                )
+                                                                                                : null,
+                                                                                'release_error' =>
+                                                                                        is_wp_error( $released )
+                                                                                                ? array(
+                                                                                                        'code' =>
+                                                                                                                $released->get_error_code(),
+                                                                                                        'message' =>
+                                                                                                                $released->get_error_message(),
+                                                                                                        'data' =>
+                                                                                                                $released->get_error_data(),
+                                                                                                )
+                                                                                                : null,
+                                                                                'runtime_state' =>
+                                                                                        bitacora_get_instance_runtime_state(),
+                                                                        )
+                                                                );
+                                                        }
+                                                }
+                                        }
+                                }
+                        }
+
+                        /*
+                         * Si seguimos dentro de la transacción original de
+                         * APPLY, ROLLBACK SQL es la segunda red de seguridad.
+                         *
+                         * No se utiliza como "éxito" de una transacción
+                         * compensatoria posterior al COMMIT, porque allí sólo
+                         * nos devolvería al POST defectuoso.
+                         */
+                        if (
+                                $transaction_active
+                                && $original_apply_transaction
+                        ) {
+                                $sql_rollback =
+                                        $wpdb->query(
+                                                'ROLLBACK'
+                                        );
+
+                                $recovery['sql_rollback'] =
+                                        $sql_rollback;
+
+                                $transaction_active =
+                                        false;
+
+                                wp_cache_flush();
+
+                                $sql_snapshot =
+                                        bitacora_get_instance_structure_snapshot();
+
+                                $sql_matches =
+                                        ! is_wp_error(
+                                                $sql_snapshot
+                                        )
+                                        && $snapshot_matches(
+                                                $sql_snapshot,
+                                                $pre_definition,
+                                                $plan['pre_fingerprint']
+                                        );
+
+                                $recovery['sql_pre_verified'] =
+                                        $sql_matches;
+
+                                if ( $sql_matches ) {
+
+                                        $recovery['method'] =
+                                                'sql_rollback';
+
+                                        $resumed =
+                                                bitacora_resume_instance_from_maintenance(
+                                                        $owner_user_id
+                                                );
+
+                                        $released =
+                                                $release_lock();
+
+                                        if (
+                                                ! is_wp_error( $resumed )
+                                                && ! is_wp_error( $released )
+                                        ) {
+                                                return new WP_Error(
+                                                        'bitacora_instance_reconciliation_failed',
+                                                        'La reconciliación no se completó; PRE fue restaurado por ROLLBACK SQL y la instancia volvió a ACTIVE.',
+                                                        array(
+                                                                'recovered' =>
+                                                                        true,
+                                                                'recovery' =>
+                                                                        $recovery,
+                                                                'cause' =>
+                                                                        array(
+                                                                                'code' =>
+                                                                                        $cause->get_error_code(),
+                                                                                'message' =>
+                                                                                        $cause->get_error_message(),
+                                                                                'data' =>
+                                                                                        $cause->get_error_data(),
+                                                                        ),
+                                                                'runtime_state' =>
+                                                                        bitacora_get_instance_runtime_state(),
+                                                        )
+                                                );
+                                        }
+
+                                        return new WP_Error(
+                                                'bitacora_instance_reconciliation_recovery_cleanup_failed',
+                                                'PRE fue restaurado por ROLLBACK SQL, pero no pudo completarse la salida de mantenimiento.',
+                                                array(
+                                                        'recovered' =>
+                                                                true,
+                                                        'recovery' =>
+                                                                $recovery,
+                                                        'resume_error' =>
+                                                                is_wp_error( $resumed )
+                                                                        ? array(
+                                                                                'code' =>
+                                                                                        $resumed->get_error_code(),
+                                                                                'message' =>
+                                                                                        $resumed->get_error_message(),
+                                                                                'data' =>
+                                                                                        $resumed->get_error_data(),
+                                                                        )
+                                                                        : null,
+                                                        'release_error' =>
+                                                                is_wp_error( $released )
+                                                                        ? array(
+                                                                                'code' =>
+                                                                                        $released->get_error_code(),
+                                                                                'message' =>
+                                                                                        $released->get_error_message(),
+                                                                                'data' =>
+                                                                                        $released->get_error_data(),
+                                                                        )
+                                                                        : null,
+                                                        'runtime_state' =>
+                                                                bitacora_get_instance_runtime_state(),
+                                                )
+                                        );
+                                }
+                        }
+
+                        /*
+                         * Una transacción compensatoria fallida debe
+                         * descartarse, pero ello no constituye recuperación.
+                         */
+                        if ( $transaction_active ) {
+                                $wpdb->query(
+                                        'ROLLBACK'
+                                );
+
+                                $transaction_active =
+                                        false;
+
+                                wp_cache_flush();
+                        }
+
+                        /*
+                         * No demostrar PRE => no publicar ACTIVE.
+                         */
+                        $released =
+                                $release_lock();
+
+                        return new WP_Error(
+                                'bitacora_instance_reconciliation_recovery_failed',
+                                'No fue posible demostrar una recuperación estructural exacta hacia PRE. La instancia permanece PAUSED.',
+                                array(
+                                        'recovered' =>
+                                                false,
+                                        'cause' =>
+                                                array(
+                                                        'code' =>
+                                                                $cause->get_error_code(),
+                                                        'message' =>
+                                                                $cause->get_error_message(),
+                                                        'data' =>
+                                                                $cause->get_error_data(),
+                                                ),
+                                        'recovery' =>
+                                                $recovery,
+                                        'release_error' =>
+                                                is_wp_error( $released )
+                                                        ? array(
+                                                                'code' =>
+                                                                        $released->get_error_code(),
+                                                                'message' =>
+                                                                        $released->get_error_message(),
+                                                                'data' =>
+                                                                        $released->get_error_data(),
+                                                        )
+                                                        : null,
+                                        'runtime_state' =>
+                                                bitacora_get_instance_runtime_state(),
+                                        'owner_user_id' =>
+                                                bitacora_get_instance_maintenance_owner(),
+                                )
+                        );
+                };
+
+        /*
+         * Recheck PRE con PAUSED ya visible, todavía fuera de la
+         * transacción estructural.
+         */
+        wp_cache_flush();
+
+        $precheck =
+                bitacora_check_instance_structure_precondition(
+                        $pre
+                );
+
+        if ( is_wp_error( $precheck ) ) {
+                return $abort_without_apply(
+                        $precheck
+                );
+        }
+
+        if ( empty( $precheck['matches'] ) ) {
+                return $abort_without_apply(
+                        new WP_Error(
+                                'bitacora_instance_structure_precondition_changed',
+                                'CURRENT dejó de coincidir con PRE después de adquirir la PAUSA.',
+                                $precheck
+                        )
+                );
+        }
+
+        /*
+         * PAUSED ya fue confirmado y es visible desde otras conexiones.
+         * Sólo ahora comienza la transacción que ocultará APPLY.
+         */
+        $started =
+                $wpdb->query(
+                        'START TRANSACTION'
+                );
+
+        if ( false === $started ) {
+                return $abort_without_apply(
+                        new WP_Error(
+                                'bitacora_instance_reconciliation_transaction_not_started',
+                                'No se pudo iniciar la transacción de reconciliación.'
+                        )
+                );
+        }
+
+        $transaction_active = true;
+
+        /*
+         * Segundo recheck PRE ya dentro de la sección crítica SQL.
+         */
+        wp_cache_flush();
+
+        $inside_precheck =
+                bitacora_check_instance_structure_precondition(
+                        $pre
+                );
+
+        if ( is_wp_error( $inside_precheck ) ) {
+                return $abort_without_apply(
+                        $inside_precheck
+                );
+        }
+
+        if ( empty( $inside_precheck['matches'] ) ) {
+                return $abort_without_apply(
+                        new WP_Error(
+                                'bitacora_instance_structure_precondition_changed',
+                                'CURRENT dejó de coincidir con PRE dentro de la transacción.',
+                                $inside_precheck
+                        )
+                );
+        }
+
+        /*
+         * APPLY físico.
+         */
+        $journal =
+                bitacora_execute_instance_structure_reconciliation_plan(
+                        $plan,
+                        $owner_user_id
+                );
+
+        if ( is_wp_error( $journal ) ) {
+
+                $error_data =
+                        $journal->get_error_data();
+
+                $partial_journal =
+                        is_array( $error_data )
+                        && isset( $error_data['journal'] )
+                        && is_array( $error_data['journal'] )
+                                ? $error_data['journal']
+                                : null;
+
+                return $recover_pre(
+                        $journal,
+                        $partial_journal,
+                        'apply',
+                        true
+                );
+        }
+
+        /*
+         * POST debe ser exacto antes del COMMIT.
+         */
+        wp_cache_flush();
+
+        $post =
+                bitacora_get_instance_structure_snapshot();
+
+        if (
+                is_wp_error( $post )
+                || ! $snapshot_matches(
+                        $post,
+                        $proposal,
+                        $plan['proposal_fingerprint']
+                )
+        ) {
+                $verification_error =
+                        is_wp_error( $post )
+                                ? $post
+                                : new WP_Error(
+                                        'bitacora_instance_reconciliation_post_mismatch',
+                                        'POST no coincide exactamente con la PROPUESTA antes del COMMIT.',
+                                        array(
+                                                'current' =>
+                                                        $post,
+                                                'proposal_fingerprint' =>
+                                                        $plan['proposal_fingerprint'],
+                                        )
+                                );
+
+                return $recover_pre(
+                        $verification_error,
+                        $journal,
+                        'pre_commit_verification',
+                        true
+                );
+        }
+
+        /*
+         * Confirmar la estructura.
+         */
+        $committed =
+                $wpdb->query(
+                        'COMMIT'
+                );
+
+        if ( false === $committed ) {
+
+                /*
+                 * Estado transaccional incierto:
+                 * intentar primero ROLLBACK y observar qué quedó realmente.
+                 */
+                $wpdb->query(
+                        'ROLLBACK'
+                );
+
+                $transaction_active =
+                        false;
+
+                wp_cache_flush();
+
+                $after_failed_commit =
+                        bitacora_get_instance_structure_snapshot();
+
+                if (
+                        ! is_wp_error( $after_failed_commit )
+                        && $snapshot_matches(
+                                $after_failed_commit,
+                                $pre_definition,
+                                $plan['pre_fingerprint']
+                        )
+                ) {
+                        $resumed =
+                                bitacora_resume_instance_from_maintenance(
+                                        $owner_user_id
+                                );
+
+                        $released =
+                                $release_lock();
+
+                        if (
+                                ! is_wp_error( $resumed )
+                                && ! is_wp_error( $released )
+                        ) {
+                                return new WP_Error(
+                                        'bitacora_instance_reconciliation_commit_failed',
+                                        'COMMIT falló, pero PRE quedó restaurado y la instancia volvió a ACTIVE.',
+                                        array(
+                                                'recovered' =>
+                                                        true,
+                                                'runtime_state' =>
+                                                        bitacora_get_instance_runtime_state(),
+                                        )
+                                );
+                        }
+                }
+
+                /*
+                 * Si el COMMIT pudo haberse aplicado realmente y vemos POST,
+                 * intentar una compensación journal -> PRE en una transacción
+                 * nueva. Durante todo este tiempo PAUSED sigue visible.
+                 */
+                if (
+                        ! is_wp_error( $after_failed_commit )
+                        && $snapshot_matches(
+                                $after_failed_commit,
+                                $proposal,
+                                $plan['proposal_fingerprint']
+                        )
+                ) {
+                        $recovery_started =
+                                $wpdb->query(
+                                        'START TRANSACTION'
+                                );
+
+                        if ( false !== $recovery_started ) {
+                                $transaction_active =
+                                        true;
+
+                                return $recover_pre(
+                                        new WP_Error(
+                                                'bitacora_instance_reconciliation_commit_failed',
+                                                'COMMIT devolvió error después de APPLY.'
+                                        ),
+                                        $journal,
+                                        'commit_uncertain',
+                                        false
+                                );
+                        }
+                }
+
+                $released =
+                        $release_lock();
+
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_commit_uncertain',
+                        'COMMIT devolvió error y no pudo demostrarse PRE ni POST de forma segura. La instancia permanece PAUSED.',
+                        array(
+                                'recovered' =>
+                                        false,
+                                'current' =>
+                                        is_wp_error( $after_failed_commit )
+                                                ? array(
+                                                        'code' =>
+                                                                $after_failed_commit->get_error_code(),
+                                                        'message' =>
+                                                                $after_failed_commit->get_error_message(),
+                                                        'data' =>
+                                                                $after_failed_commit->get_error_data(),
+                                                )
+                                                : $after_failed_commit,
+                                'release_error' =>
+                                        is_wp_error( $released )
+                                                ? array(
+                                                        'code' =>
+                                                                $released->get_error_code(),
+                                                        'message' =>
+                                                                $released->get_error_message(),
+                                                        'data' =>
+                                                                $released->get_error_data(),
+                                                )
+                                                : null,
+                                'runtime_state' =>
+                                        bitacora_get_instance_runtime_state(),
+                        )
+                );
+        }
+
+        $transaction_active = false;
+
+        /*
+         * Verificación posterior al COMMIT.
+         */
+        wp_cache_flush();
+
+        $confirmed =
+                bitacora_get_instance_structure_snapshot();
+
+        if (
+                is_wp_error( $confirmed )
+                || ! $snapshot_matches(
+                        $confirmed,
+                        $proposal,
+                        $plan['proposal_fingerprint']
+                )
+        ) {
+                $verification_error =
+                        is_wp_error( $confirmed )
+                                ? $confirmed
+                                : new WP_Error(
+                                        'bitacora_instance_reconciliation_committed_post_mismatch',
+                                        'POST confirmado no coincide exactamente con la PROPUESTA.',
+                                        array(
+                                                'current' =>
+                                                        $confirmed,
+                                                'proposal_fingerprint' =>
+                                                        $plan['proposal_fingerprint'],
+                                        )
+                                );
+
+                /*
+                 * El APPLY ya fue confirmado.
+                 * Recuperar PRE requiere una transacción compensatoria nueva.
+                 */
+                $recovery_started =
+                        $wpdb->query(
+                                'START TRANSACTION'
+                        );
+
+                if ( false === $recovery_started ) {
+                        $released =
+                                $release_lock();
+
+                        return new WP_Error(
+                                'bitacora_instance_reconciliation_committed_recovery_not_started',
+                                'POST confirmado no pudo verificarse y no fue posible iniciar recuperación. La instancia permanece PAUSED.',
+                                array(
+                                        'cause' =>
+                                                array(
+                                                        'code' =>
+                                                                $verification_error->get_error_code(),
+                                                        'message' =>
+                                                                $verification_error->get_error_message(),
+                                                        'data' =>
+                                                                $verification_error->get_error_data(),
+                                                ),
+                                        'release_error' =>
+                                                is_wp_error( $released )
+                                                        ? array(
+                                                                'code' =>
+                                                                        $released->get_error_code(),
+                                                                'message' =>
+                                                                        $released->get_error_message(),
+                                                                'data' =>
+                                                                        $released->get_error_data(),
+                                                        )
+                                                        : null,
+                                )
+                        );
+                }
+
+                $transaction_active =
+                        true;
+
+                return $recover_pre(
+                        $verification_error,
+                        $journal,
+                        'post_commit_verification',
+                        false
+                );
+        }
+
+        /*
+         * Sólo un POST confirmado puede volver a ACTIVE.
+         */
+        $resumed =
+                bitacora_resume_instance_from_maintenance(
+                        $owner_user_id
+                );
+
+        if ( is_wp_error( $resumed ) ) {
+
+                $released =
+                        $release_lock();
+
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_resume_failed',
+                        'POST fue confirmado, pero no pudo devolverse la instancia a ACTIVE.',
+                        array(
+                                'applied' =>
+                                        true,
+                                'post_fingerprint' =>
+                                        $confirmed['fingerprint'],
+                                'resume_error' =>
+                                        array(
+                                                'code' =>
+                                                        $resumed->get_error_code(),
+                                                'message' =>
+                                                        $resumed->get_error_message(),
+                                                'data' =>
+                                                        $resumed->get_error_data(),
+                                        ),
+                                'release_error' =>
+                                        is_wp_error( $released )
+                                                ? array(
+                                                        'code' =>
+                                                                $released->get_error_code(),
+                                                        'message' =>
+                                                                $released->get_error_message(),
+                                                        'data' =>
+                                                                $released->get_error_data(),
+                                                )
+                                                : null,
+                                'runtime_state' =>
+                                        bitacora_get_instance_runtime_state(),
+                        )
+                );
+        }
+
+        $released =
+                $release_lock();
+
+        if ( is_wp_error( $released ) ) {
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_lock_release_failed',
+                        'La reconciliación fue confirmada y la instancia está ACTIVE, pero no pudo liberarse explícitamente el advisory lock.',
+                        array(
+                                'applied' =>
+                                        true,
+                                'runtime_state' =>
+                                        bitacora_get_instance_runtime_state(),
+                                'post_fingerprint' =>
+                                        $confirmed['fingerprint'],
+                                'release_error' =>
+                                        array(
+                                                'code' =>
+                                                        $released->get_error_code(),
+                                                'message' =>
+                                                        $released->get_error_message(),
+                                                'data' =>
+                                                        $released->get_error_data(),
+                                        ),
+                        )
+                );
+        }
+
+        return array(
+                'changed' =>
+                        true,
+                'action_count' =>
+                        count(
+                                $plan['actions']
+                        ),
+                'pre_fingerprint' =>
+                        (string) $plan['pre_fingerprint'],
+                'post_fingerprint' =>
+                        (string) $confirmed['fingerprint'],
+                'runtime_state' =>
+                        bitacora_get_instance_runtime_state(),
+                'owner_user_id' =>
+                        bitacora_get_instance_maintenance_owner(),
+        );
+}
+
+
+/**
  * Extrae la estructura vigente de la instancia como definición canónica.
  *
  * La extracción contiene solamente propiedades pertenecientes al contrato
