@@ -1304,10 +1304,152 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
 
 
 /**
+ * Aplica desde administración una PROPUESTA previamente revisada.
+ *
+ * Dos fingerprints atan la intención del operador:
+ *
+ * - PRE debe seguir coincidiendo con CURRENT;
+ * - la PROPUESTA reconstruida desde el formulario debe coincidir
+ *   exactamente con la PROPUESTA que fue previsualizada.
+ *
+ * El helper no implementa la sección crítica. Esa responsabilidad sigue
+ * perteneciendo exclusivamente a bitacora_reconcile_instance_structure().
+ *
+ * @return array|WP_Error
+ */
+function bitacora_apply_instance_structure_from_admin_input(
+        $input,
+        $expected_pre_fingerprint,
+        $reviewed_proposal_fingerprint,
+        $owner_user_id
+) {
+
+        if (
+                ! current_user_can(
+                        'maintain_bitacora_instance'
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_editor_apply_forbidden',
+                        'No tenés permisos para aplicar cambios estructurales.'
+                );
+        }
+
+        $owner_user_id =
+                absint(
+                        $owner_user_id
+                );
+
+        if (
+                ! $owner_user_id
+                || get_current_user_id()
+                        !== $owner_user_id
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_editor_apply_owner_mismatch',
+                        'El usuario responsable no coincide con el usuario actual.'
+                );
+        }
+
+        $snapshot =
+                bitacora_get_instance_structure_snapshot();
+
+        if ( is_wp_error( $snapshot ) ) {
+                return $snapshot;
+        }
+
+        $expected_pre_fingerprint =
+                trim(
+                        (string) $expected_pre_fingerprint
+                );
+
+        if (
+                ''
+                === $expected_pre_fingerprint
+                || ! hash_equals(
+                        (string) $snapshot['fingerprint'],
+                        $expected_pre_fingerprint
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_editor_pre_changed',
+                        'La estructura de la instancia cambió desde la vista previa. Previsualizá nuevamente antes de aplicar.',
+                        array(
+                                'expected_fingerprint' =>
+                                        $expected_pre_fingerprint,
+
+                                'current_fingerprint' =>
+                                        isset(
+                                                $snapshot['fingerprint']
+                                        )
+                                                ? (string)
+                                                  $snapshot['fingerprint']
+                                                : '',
+                        )
+                );
+        }
+
+        $proposal =
+                bitacora_build_instance_structure_proposal_from_admin_input(
+                        $input,
+                        $snapshot['definition']
+                );
+
+        if ( is_wp_error( $proposal ) ) {
+                return $proposal;
+        }
+
+        $proposal_fingerprint =
+                bitacora_get_profile_definition_fingerprint(
+                        $proposal
+                );
+
+        if ( is_wp_error( $proposal_fingerprint ) ) {
+                return $proposal_fingerprint;
+        }
+
+        $reviewed_proposal_fingerprint =
+                trim(
+                        (string)
+                        $reviewed_proposal_fingerprint
+                );
+
+        if (
+                ''
+                === $reviewed_proposal_fingerprint
+                || ! hash_equals(
+                        (string) $proposal_fingerprint,
+                        $reviewed_proposal_fingerprint
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_editor_proposal_changed',
+                        'La PROPUESTA cambió después de la vista previa. Previsualizá nuevamente antes de aplicar.',
+                        array(
+                                'reviewed_proposal_fingerprint' =>
+                                        $reviewed_proposal_fingerprint,
+
+                                'current_proposal_fingerprint' =>
+                                        (string)
+                                        $proposal_fingerprint,
+                        )
+                );
+        }
+
+        return bitacora_reconcile_instance_structure(
+                $snapshot,
+                $proposal,
+                $owner_user_id
+        );
+}
+
+
+/**
  * Render del editor estructural de la instancia.
  *
- * Esta primera vertical sólo prepara y previsualiza PROPUESTA.
- * No ejecuta reconciliación ni entra en PAUSED.
+ * La pantalla construye PROPUESTA, exige vista previa exacta y sólo entonces
+ * permite APPLY. La sección crítica y la PAUSA siguen encapsuladas dentro
+ * del orquestador estructural.
  */
 function bitacora_render_instance_editor_admin_page() {
 
@@ -1401,6 +1543,22 @@ function bitacora_render_instance_editor_admin_page() {
 
         $preview = null;
         $preview_errors = array();
+        $apply_result = null;
+
+        $reviewed_proposal_fingerprint =
+                isset(
+                        $_POST[
+                                'reviewed_proposal_fingerprint'
+                        ]
+                )
+                        ? sanitize_text_field(
+                                wp_unslash(
+                                        $_POST[
+                                                'reviewed_proposal_fingerprint'
+                                        ]
+                                )
+                        )
+                        : '';
 
         $request_method =
                 isset( $_SERVER['REQUEST_METHOD'] )
@@ -1422,10 +1580,17 @@ function bitacora_render_instance_editor_admin_page() {
 
         if (
                 'POST' === $request_method
-                && 'preview' === $editor_action
+                && in_array(
+                        $editor_action,
+                        array(
+                                'preview',
+                                'apply',
+                        ),
+                        true
+                )
         ) {
                 check_admin_referer(
-                        'bitacora_preview_instance_structure',
+                        'bitacora_edit_instance_structure',
                         'bitacora_instance_editor_nonce'
                 );
 
@@ -1438,26 +1603,142 @@ function bitacora_render_instance_editor_admin_page() {
                                 )
                                 : '';
 
-                if (
-                        ''
-                        === $expected_fingerprint
-                        || ! hash_equals(
-                                (string) $snapshot['fingerprint'],
-                                (string) $expected_fingerprint
+                $input =
+                        isset( $_POST['instance'] )
+                        && is_array(
+                                $_POST['instance']
                         )
-                ) {
-                        $preview_errors[] =
-                                'La estructura de la instancia cambió desde que abriste el editor. Volvé a cargarla antes de continuar.';
-                } else {
-                        $input =
-                                isset( $_POST['instance'] )
-                                && is_array(
+                                ? wp_unslash(
                                         $_POST['instance']
                                 )
-                                        ? wp_unslash(
-                                                $_POST['instance']
-                                        )
-                                        : array();
+                                : array();
+
+                /*
+                 * PREVIEW
+                 */
+                if ( 'preview' === $editor_action ) {
+
+                        if (
+                                ''
+                                === $expected_fingerprint
+                                || ! hash_equals(
+                                        (string)
+                                        $snapshot['fingerprint'],
+                                        (string)
+                                        $expected_fingerprint
+                                )
+                        ) {
+                                $preview_errors[] =
+                                        'La estructura de la instancia cambió desde que abriste el editor. Volvé a cargarla antes de continuar.';
+                        } else {
+                                $proposal =
+                                        bitacora_build_instance_structure_proposal_from_admin_input(
+                                                $input,
+                                                $snapshot['definition']
+                                        );
+
+                                if ( is_wp_error( $proposal ) ) {
+                                        $preview_errors[] =
+                                                $proposal->get_error_message();
+                                } else {
+                                        $form_definition =
+                                                $proposal;
+
+                                        $validation =
+                                                bitacora_validate_instance_structure_proposal(
+                                                        $snapshot,
+                                                        $proposal
+                                                );
+
+                                        if (
+                                                empty(
+                                                        $validation['valid']
+                                                )
+                                        ) {
+
+                                                foreach (
+                                                        isset(
+                                                                $validation[
+                                                                        'errors'
+                                                                ]
+                                                        )
+                                                                ? $validation[
+                                                                        'errors'
+                                                                ]
+                                                                : array()
+                                                        as $error
+                                                ) {
+                                                        if (
+                                                                is_array(
+                                                                        $error
+                                                                )
+                                                                && isset(
+                                                                        $error[
+                                                                                'message'
+                                                                        ]
+                                                                )
+                                                        ) {
+                                                                $preview_errors[] =
+                                                                        (string)
+                                                                        $error[
+                                                                                'message'
+                                                                        ];
+                                                        } elseif (
+                                                                is_string(
+                                                                        $error
+                                                                )
+                                                        ) {
+                                                                $preview_errors[] =
+                                                                        $error;
+                                                        }
+                                                }
+
+                                                if (
+                                                        empty(
+                                                                $preview_errors
+                                                        )
+                                                ) {
+                                                        $preview_errors[] =
+                                                                'La propuesta estructural no es válida.';
+                                                }
+
+                                        } else {
+                                                $plan =
+                                                        bitacora_build_instance_structure_reconciliation_plan(
+                                                                $snapshot,
+                                                                $proposal
+                                                        );
+
+                                                if (
+                                                        is_wp_error(
+                                                                $plan
+                                                        )
+                                                ) {
+                                                        $preview_errors[] =
+                                                                $plan->get_error_message();
+                                                } else {
+                                                        $preview =
+                                                                $plan;
+
+                                                        $reviewed_proposal_fingerprint =
+                                                                (string)
+                                                                $plan[
+                                                                        'proposal_fingerprint'
+                                                                ];
+                                                }
+                                        }
+                                }
+                        }
+                }
+
+
+                /*
+                 * APPLY
+                 *
+                 * El checkbox es intención humana de UI. Los fingerprints,
+                 * capability y orquestador constituyen la frontera real.
+                 */
+                if ( 'apply' === $editor_action ) {
 
                         $proposal =
                                 bitacora_build_instance_structure_proposal_from_admin_input(
@@ -1472,69 +1753,130 @@ function bitacora_render_instance_editor_admin_page() {
                                 $form_definition =
                                         $proposal;
 
-                                $validation =
-                                        bitacora_validate_instance_structure_proposal(
-                                                $snapshot,
-                                                $proposal
-                                        );
-
-                                if ( empty( $validation['valid'] ) ) {
-
-                                        foreach (
-                                                isset(
-                                                        $validation['errors']
-                                                )
-                                                        ? $validation['errors']
-                                                        : array()
-                                                as $error
-                                        ) {
-                                                if (
-                                                        is_array( $error )
-                                                        && isset(
-                                                                $error[
-                                                                        'message'
-                                                                ]
-                                                        )
-                                                ) {
-                                                        $preview_errors[] =
-                                                                (string)
-                                                                $error[
-                                                                        'message'
-                                                                ];
-                                                } elseif (
-                                                        is_string( $error )
-                                                ) {
-                                                        $preview_errors[] =
-                                                                $error;
-                                                }
-                                        }
-
-                                        if (
-                                                empty(
-                                                        $preview_errors
-                                                )
-                                        ) {
-                                                $preview_errors[] =
-                                                        'La propuesta estructural no es válida.';
-                                        }
-
+                                if (
+                                        empty(
+                                                $_POST[
+                                                        'confirm_apply'
+                                                ]
+                                        )
+                                ) {
+                                        $preview_errors[] =
+                                                'Confirmá explícitamente la aplicación de los cambios.';
                                 } else {
-                                        $plan =
-                                                bitacora_build_instance_structure_reconciliation_plan(
-                                                        $snapshot,
-                                                        $proposal
+                                        $apply_result =
+                                                bitacora_apply_instance_structure_from_admin_input(
+                                                        $input,
+                                                        $expected_fingerprint,
+                                                        $reviewed_proposal_fingerprint,
+                                                        get_current_user_id()
                                                 );
 
-                                        if ( is_wp_error( $plan ) ) {
+                                        if (
+                                                is_wp_error(
+                                                        $apply_result
+                                                )
+                                        ) {
                                                 $preview_errors[] =
-                                                        $plan->get_error_message();
+                                                        $apply_result->get_error_message();
+
+                                                $apply_result =
+                                                        null;
                                         } else {
-                                                $preview = $plan;
+                                                $snapshot =
+                                                        bitacora_get_instance_structure_snapshot();
+
+                                                if (
+                                                        is_wp_error(
+                                                                $snapshot
+                                                        )
+                                                ) {
+                                                        wp_die(
+                                                                esc_html(
+                                                                        $snapshot->get_error_message()
+                                                                )
+                                                        );
+                                                }
+
+                                                $form_definition =
+                                                        $snapshot[
+                                                                'definition'
+                                                        ];
+
+                                                $reviewed_proposal_fingerprint =
+                                                        '';
+
+                                                $preview =
+                                                        null;
                                         }
                                 }
                         }
                 }
         }
+
+
+        /*
+         * Un fallo recuperable vuelve ACTIVE.
+         *
+         * Si el orquestador dejó PAUSED porque no pudo demostrar PRE/POST,
+         * no seguimos ofreciendo controles estructurales en esta respuesta.
+         */
+        $runtime_after_request =
+                bitacora_get_instance_runtime_state();
+
+        if ( 'active' !== $runtime_after_request ) {
+                ?>
+                <div class="wrap bitacora-instance-editor">
+                        <h1>Editar instancia</h1>
+
+                        <div class="notice notice-error inline">
+                                <p>
+                                        <strong>
+                                                La instancia permanece
+                                                <?php
+                                                echo esc_html(
+                                                        strtoupper(
+                                                                $runtime_after_request
+                                                        )
+                                                );
+                                                ?>.
+                                        </strong>
+                                </p>
+
+                                <?php
+                                foreach (
+                                        $preview_errors
+                                        as $message
+                                ) :
+                                        ?>
+                                        <p>
+                                                <?php
+                                                echo esc_html(
+                                                        $message
+                                                );
+                                                ?>
+                                        </p>
+                                <?php endforeach; ?>
+
+                                <p>
+                                        No se ofrecen nuevas operaciones
+                                        estructurales hasta verificar y
+                                        recuperar el estado de mantenimiento.
+                                </p>
+                        </div>
+
+                        <p>
+                                <a
+                                        href="<?php echo esc_url(
+                                                bitacora_get_profiles_admin_url()
+                                        ); ?>"
+                                        class="button button-secondary"
+                                >Volver a Perfiles</a>
+                        </p>
+                </div>
+                <?php
+                return;
+        }
+
 
         $section_states = array(
                 'active'   => 'Activa',
@@ -1697,6 +2039,21 @@ function bitacora_render_instance_editor_admin_page() {
                         );
                         ?></code>
                 </p>
+
+                <?php if ( is_array( $apply_result ) ) : ?>
+
+                        <div class="notice notice-success inline">
+                                <p>
+                                        <strong>
+                                                Cambios estructurales aplicados.
+                                        </strong>
+                                        La instancia volvió a ACTIVE y la
+                                        estructura resultante fue verificada
+                                        por el Engine.
+                                </p>
+                        </div>
+
+                <?php endif; ?>
 
                 <?php if ( ! empty( $preview_errors ) ) : ?>
 
@@ -1896,21 +2253,25 @@ function bitacora_render_instance_editor_admin_page() {
                 >
                         <input
                                 type="hidden"
-                                name="bitacora_instance_editor_action"
-                                value="preview"
-                        >
-
-                        <input
-                                type="hidden"
                                 name="pre_fingerprint"
                                 value="<?php echo esc_attr(
                                         $snapshot['fingerprint']
                                 ); ?>"
                         >
 
+                        <?php if ( '' !== $reviewed_proposal_fingerprint ) : ?>
+                                <input
+                                        type="hidden"
+                                        name="reviewed_proposal_fingerprint"
+                                        value="<?php echo esc_attr(
+                                                $reviewed_proposal_fingerprint
+                                        ); ?>"
+                                >
+                        <?php endif; ?>
+
                         <?php
                         wp_nonce_field(
-                                'bitacora_preview_instance_structure',
+                                'bitacora_edit_instance_structure',
                                 'bitacora_instance_editor_nonce'
                         );
                         ?>
@@ -2790,29 +3151,85 @@ function bitacora_render_instance_editor_admin_page() {
                         </table>
 
 
-                        <p class="submit">
-                                <?php
-                                submit_button(
-                                        'PREVISUALIZAR CAMBIOS',
-                                        'primary',
-                                        'submit',
-                                        false
-                                );
+                        <?php
+                        if (
+                                is_array( $preview )
+                                && ! empty(
+                                        $preview['action_count']
+                                )
+                        ) :
                                 ?>
+                                <div class="notice notice-warning inline">
+                                        <p>
+                                                <strong>
+                                                        Revisá la vista previa
+                                                        antes de aplicar.
+                                                </strong>
+                                        </p>
+
+                                        <p>
+                                                APPLY ejecutará exactamente
+                                                la PROPUESTA cuyo fingerprint
+                                                fue revisado. Si modificás
+                                                cualquier campo, el Engine
+                                                exigirá una nueva vista previa.
+                                        </p>
+
+                                        <p>
+                                                <label>
+                                                        <input
+                                                                type="checkbox"
+                                                                name="confirm_apply"
+                                                                value="1"
+                                                        >
+                                                        Confirmo que revisé
+                                                        estos cambios y deseo
+                                                        aplicarlos.
+                                                </label>
+                                        </p>
+                                </div>
+                        <?php endif; ?>
+
+                        <p class="submit">
+                                <button
+                                        type="submit"
+                                        class="button button-primary"
+                                        name="bitacora_instance_editor_action"
+                                        value="preview"
+                                >PREVISUALIZAR CAMBIOS</button>
+
+                                <?php
+                                if (
+                                        is_array( $preview )
+                                        && ! empty(
+                                                $preview['action_count']
+                                        )
+                                ) :
+                                        ?>
+                                        <button
+                                                type="submit"
+                                                class="button button-secondary"
+                                                name="bitacora_instance_editor_action"
+                                                value="apply"
+                                                style="margin-left:8px;"
+                                        >APLICAR CAMBIOS</button>
+                                <?php endif; ?>
 
                                 <a
                                         class="button button-secondary"
                                         href="<?php echo esc_url(
                                                 bitacora_get_profiles_admin_url()
                                         ); ?>"
+                                        style="margin-left:8px;"
                                 >Cancelar</a>
                         </p>
                 </form>
 
                 <p>
                         <em>
-                                Esta etapa sólo construye PROPUESTA y plan.
-                                APPLY todavía no está expuesto por la UI.
+                                APPLY sólo se habilita después de una
+                                vista previa válida y ejecuta exactamente
+                                la PROPUESTA revisada.
                         </em>
                 </p>
         </div>
