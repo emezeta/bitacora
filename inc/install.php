@@ -529,6 +529,491 @@ function bitacora_resume_instance_from_maintenance(
 
 
 /**
+ * Indica si el request actual puede modificar el runtime mientras Bitácora
+ * se encuentra en mantenimiento.
+ *
+ * ACTIVE:
+ *     escritura normal permitida.
+ *
+ * PAUSED:
+ *     sólo puede escribir la conexión MySQL que posee el advisory lock
+ *     bitacora_instance_maintenance.
+ *
+ * Esto permite que APPLY / ROLLBACK utilicen las APIs normales de WordPress,
+ * pero bloquea requests concurrentes o posteriores que no forman parte de
+ * la sección crítica.
+ */
+function bitacora_instance_runtime_mutation_is_allowed() {
+
+        if (
+                'paused'
+                !== bitacora_get_instance_runtime_state()
+        ) {
+                return true;
+        }
+
+        $owned =
+                bitacora_instance_maintenance_lock_is_owned();
+
+        return true === $owned;
+}
+
+
+/**
+ * Durante PAUSED retira las capabilities de escritura ordinaria.
+ *
+ * manage_bitacora_profiles se conserva deliberadamente para que la futura
+ * UI de mantenimiento siga siendo accesible.
+ */
+add_filter(
+        'user_has_cap',
+        'bitacora_block_runtime_write_capabilities_during_maintenance',
+        999,
+        4
+);
+
+function bitacora_block_runtime_write_capabilities_during_maintenance(
+        $allcaps,
+        $caps,
+        $args,
+        $user
+) {
+
+        if (
+                bitacora_instance_runtime_mutation_is_allowed()
+        ) {
+                return $allcaps;
+        }
+
+        $blocked = array(
+                /*
+                 * bitacora_item.
+                 */
+                'edit_bitacora_contents',
+                'publish_bitacora_contents',
+                'edit_published_bitacora_contents',
+                'edit_private_bitacora_contents',
+                'edit_others_bitacora_contents',
+                'delete_bitacora_contents',
+                'delete_published_bitacora_contents',
+                'delete_private_bitacora_contents',
+                'delete_others_bitacora_contents',
+
+                /*
+                 * Media.
+                 */
+                'upload_files',
+
+                /*
+                 * Comentarios.
+                 */
+                'moderate_comments',
+
+                /*
+                 * Páginas.
+                 *
+                 * Las páginas materializadas de sección forman parte del
+                 * runtime estructural. Durante la breve PAUSA se bloquea
+                 * toda escritura de páginas para evitar colisiones.
+                 */
+                'edit_pages',
+                'edit_others_pages',
+                'publish_pages',
+                'edit_published_pages',
+                'edit_private_pages',
+                'delete_pages',
+                'delete_others_pages',
+                'delete_published_pages',
+                'delete_private_pages',
+
+                /*
+                 * Usar/Cerrar Profile modifica la instancia materializada.
+                 */
+                'use_bitacora_profiles',
+        );
+
+        foreach ( $blocked as $capability ) {
+                $allcaps[ $capability ] = false;
+        }
+
+        return $allcaps;
+}
+
+
+/**
+ * Defensa por objeto para posts, attachments y comentarios existentes.
+ */
+add_filter(
+        'map_meta_cap',
+        'bitacora_block_runtime_object_capabilities_during_maintenance',
+        999,
+        4
+);
+
+function bitacora_block_runtime_object_capabilities_during_maintenance(
+        $caps,
+        $cap,
+        $user_id,
+        $args
+) {
+
+        if (
+                bitacora_instance_runtime_mutation_is_allowed()
+        ) {
+                return $caps;
+        }
+
+        if (
+                in_array(
+                        $cap,
+                        array(
+                                'edit_post',
+                                'delete_post',
+                        ),
+                        true
+                )
+                && ! empty( $args[0] )
+        ) {
+
+                $post = get_post(
+                        absint( $args[0] )
+                );
+
+                if (
+                        $post instanceof WP_Post
+                        && in_array(
+                                $post->post_type,
+                                array(
+                                        'bitacora_item',
+                                        'attachment',
+                                        'page',
+                                ),
+                                true
+                        )
+                ) {
+                        return array(
+                                'do_not_allow',
+                        );
+                }
+        }
+
+        if (
+                in_array(
+                        $cap,
+                        array(
+                                'edit_comment',
+                                'delete_comment',
+                        ),
+                        true
+                )
+                && ! empty( $args[0] )
+        ) {
+
+                $comment = get_comment(
+                        absint( $args[0] )
+                );
+
+                if ( $comment instanceof WP_Comment ) {
+
+                        $post = get_post(
+                                $comment->comment_post_ID
+                        );
+
+                        if (
+                                $post instanceof WP_Post
+                                && 'bitacora_item'
+                                        === $post->post_type
+                        ) {
+                                return array(
+                                        'do_not_allow',
+                                );
+                        }
+                }
+        }
+
+        return $caps;
+}
+
+
+/**
+ * Última barrera antes de wp_insert_post()/wp_update_post().
+ *
+ * Cierra la pequeña ventana en la que un request pudo haber superado una
+ * comprobación de capabilities justo antes de que otro request activara
+ * PAUSED.
+ *
+ * APPLY / ROLLBACK pasan porque poseen el advisory lock.
+ */
+add_filter(
+        'wp_insert_post_data',
+        'bitacora_guard_runtime_post_write_during_maintenance',
+        999,
+        4
+);
+
+function bitacora_guard_runtime_post_write_during_maintenance(
+        $data,
+        $postarr,
+        $unsanitized_postarr,
+        $update
+) {
+
+        if (
+                bitacora_instance_runtime_mutation_is_allowed()
+        ) {
+                return $data;
+        }
+
+        $post_type = isset( $data['post_type'] )
+                ? (string) $data['post_type']
+                : '';
+
+        if (
+                ! in_array(
+                        $post_type,
+                        array(
+                                'bitacora_item',
+                                'attachment',
+                                'page',
+                        ),
+                        true
+                )
+        ) {
+                return $data;
+        }
+
+        wp_die(
+                esc_html__(
+                        'Bitácora está temporalmente en mantenimiento. Intentá nuevamente en unos instantes.',
+                        'bitacora'
+                ),
+                esc_html__(
+                        'Bitácora en mantenimiento',
+                        'bitacora'
+                ),
+                array(
+                        'response' => 503,
+                )
+        );
+}
+
+
+/**
+ * Bloquea eliminación física durante PAUSED.
+ *
+ * El executor puede eliminar páginas creadas por un APPLY fallido porque
+ * ejecuta con el advisory lock adquirido.
+ */
+add_filter(
+        'pre_delete_post',
+        'bitacora_guard_runtime_post_delete_during_maintenance',
+        999,
+        3
+);
+
+add_filter(
+        'pre_delete_attachment',
+        'bitacora_guard_runtime_post_delete_during_maintenance',
+        999,
+        3
+);
+
+function bitacora_guard_runtime_post_delete_during_maintenance(
+        $delete,
+        $post,
+        $force_delete = false
+) {
+
+        if (
+                null !== $delete
+                || bitacora_instance_runtime_mutation_is_allowed()
+        ) {
+                return $delete;
+        }
+
+        if (
+                $post instanceof WP_Post
+                && in_array(
+                        $post->post_type,
+                        array(
+                                'bitacora_item',
+                                'attachment',
+                                'page',
+                        ),
+                        true
+                )
+        ) {
+                return false;
+        }
+
+        return $delete;
+}
+
+
+/**
+ * Bloquea trash/untrash durante PAUSED.
+ */
+add_filter(
+        'pre_trash_post',
+        'bitacora_guard_runtime_post_status_transition_during_maintenance',
+        999,
+        3
+);
+
+add_filter(
+        'pre_untrash_post',
+        'bitacora_guard_runtime_post_status_transition_during_maintenance',
+        999,
+        3
+);
+
+function bitacora_guard_runtime_post_status_transition_during_maintenance(
+        $check,
+        $post,
+        $extra = null
+) {
+
+        if (
+                null !== $check
+                || bitacora_instance_runtime_mutation_is_allowed()
+        ) {
+                return $check;
+        }
+
+        if (
+                $post instanceof WP_Post
+                && in_array(
+                        $post->post_type,
+                        array(
+                                'bitacora_item',
+                                'attachment',
+                                'page',
+                        ),
+                        true
+                )
+        ) {
+                return false;
+        }
+
+        return $check;
+}
+
+
+/**
+ * Bloquea creación manual/programática de términos estructurales durante
+ * PAUSED salvo dentro de la conexión que ejecuta mantenimiento.
+ */
+add_filter(
+        'pre_insert_term',
+        'bitacora_guard_runtime_term_insert_during_maintenance',
+        999,
+        2
+);
+
+function bitacora_guard_runtime_term_insert_during_maintenance(
+        $term,
+        $taxonomy
+) {
+
+        if (
+                bitacora_instance_runtime_mutation_is_allowed()
+                || ! in_array(
+                        $taxonomy,
+                        array(
+                                'bitacora_section',
+                                'bitacora_class',
+                        ),
+                        true
+                )
+        ) {
+                return $term;
+        }
+
+        return new WP_Error(
+                'bitacora_instance_runtime_paused',
+                'La estructura de Bitácora no puede modificarse durante la PAUSA.'
+        );
+}
+
+
+/**
+ * Las taxonomías estructurales usan manage_options.
+ *
+ * No se retira manage_options globalmente porque también sostiene tareas
+ * administrativas ajenas a Bitácora. En cambio se bloquean específicamente
+ * sus pantallas mientras la instancia permanece PAUSED.
+ */
+add_action(
+        'admin_init',
+        'bitacora_block_structural_taxonomy_admin_during_maintenance',
+        0
+);
+
+function bitacora_block_structural_taxonomy_admin_during_maintenance() {
+
+        if (
+                bitacora_instance_runtime_mutation_is_allowed()
+        ) {
+                return;
+        }
+
+        $current = isset( $_SERVER['PHP_SELF'] )
+                ? basename(
+                        (string) $_SERVER['PHP_SELF']
+                )
+                : '';
+
+        if (
+                ! in_array(
+                        $current,
+                        array(
+                                'edit-tags.php',
+                                'term.php',
+                        ),
+                        true
+                )
+        ) {
+                return;
+        }
+
+        $taxonomy = isset( $_REQUEST['taxonomy'] )
+                ? sanitize_key(
+                        wp_unslash(
+                                $_REQUEST['taxonomy']
+                        )
+                )
+                : '';
+
+        if (
+                ! in_array(
+                        $taxonomy,
+                        array(
+                                'bitacora_section',
+                                'bitacora_class',
+                        ),
+                        true
+                )
+        ) {
+                return;
+        }
+
+        wp_die(
+                esc_html__(
+                        'La estructura de Bitácora está temporalmente bloqueada por mantenimiento.',
+                        'bitacora'
+                ),
+                esc_html__(
+                        'Bitácora en mantenimiento',
+                        'bitacora'
+                ),
+                array(
+                        'response' => 503,
+                )
+        );
+}
+
+
+/**
  * Comprueba las dependencias funcionales del theme.
  *
  * Devuelve únicamente problemas:

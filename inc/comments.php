@@ -182,6 +182,12 @@ function obras_comments_open_policy(
         return $open;
     }
 
+    if (
+        ! bitacora_instance_runtime_mutation_is_allowed()
+    ) {
+        return false;
+    }
+
     if ( ! is_user_logged_in() ) {
         return false;
     }
@@ -447,6 +453,25 @@ function obras_validate_bitacora_comments(
         )
     ) {
         return $commentdata;
+    }
+
+    if (
+        'bitacora_item' === $post->post_type
+        && ! bitacora_instance_runtime_mutation_is_allowed()
+    ) {
+        wp_die(
+            esc_html__(
+                'Bitácora está temporalmente en mantenimiento. No se pueden agregar comentarios en este momento.',
+                'bitacora'
+            ),
+            esc_html__(
+                'Bitácora en mantenimiento',
+                'bitacora'
+            ),
+            array(
+                'response' => 503,
+            )
+        );
     }
 
     if (
