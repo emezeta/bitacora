@@ -2416,7 +2416,22 @@ function bitacora_build_instance_structure_reconciliation_plan(
                         'slug'    => 'notas',
                         'meta'    =>
                                 $section_target_meta(
-                                        $proposal['core'],
+                                        array_merge(
+                                                $proposal['core'],
+                                                array(
+                                                        /*
+                                                         * Invariantes físicas
+                                                         * reservadas del core.
+                                                         *
+                                                         * No son editables,
+                                                         * pero section.update
+                                                         * debe conservarlas.
+                                                         */
+                                                        'order' => 0,
+                                                        'area'  => 'main',
+                                                        'state' => 'active',
+                                                )
+                                        ),
                                         'core'
                                 ),
                 );
