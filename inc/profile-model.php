@@ -4299,6 +4299,49 @@ function bitacora_reconcile_instance_structure(
                 );
         }
 
+        /*
+         * El owner no es un actor declarativo: debe ser exactamente
+         * el usuario autenticado que inicia la operación.
+         */
+        $current_user_id =
+                get_current_user_id();
+
+        if (
+                ! $current_user_id
+                || $current_user_id !== $owner_user_id
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_owner_mismatch',
+                        'El responsable de la reconciliación debe coincidir con el usuario actual.',
+                        array(
+                                'current_user_id' =>
+                                        $current_user_id,
+                                'owner_user_id' =>
+                                        $owner_user_id,
+                        )
+                );
+        }
+
+        /*
+         * Mantener una instancia viva es una autoridad distinta de
+         * administrar o poner Profiles en uso.
+         */
+        if (
+                ! user_can(
+                        $owner,
+                        'maintain_bitacora_instance'
+                )
+        ) {
+                return new WP_Error(
+                        'bitacora_instance_reconciliation_forbidden',
+                        'El usuario actual no tiene permiso para mantener la estructura de la instancia.',
+                        array(
+                                'owner_user_id' =>
+                                        $owner_user_id,
+                        )
+                );
+        }
+
         $options =
                 wp_parse_args(
                         $options,

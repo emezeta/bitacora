@@ -1148,6 +1148,19 @@ function bitacora_get_managed_profile_capabilities() {
         );
 }
 
+
+/**
+ * Capabilities gestionadas por Bitácora para mantenimiento de instancia.
+ *
+ * Administrar la biblioteca de Profiles y modificar la estructura de una
+ * instancia viva son autoridades distintas.
+ */
+function bitacora_get_managed_instance_capabilities() {
+        return array(
+                'maintain_bitacora_instance',
+        );
+}
+
 /**
  * Crea y sincroniza los roles propios de Bitácora.
  *
@@ -1157,7 +1170,8 @@ function bitacora_get_managed_profile_capabilities() {
  *
  * Supervisor Bitácora:
  * - posee las capacidades del Autor;
- * - además puede gestionar contenido ajeno y leer privados ajenos.
+ * - además puede gestionar contenido ajeno y leer privados ajenos;
+ * - administra Profiles y puede mantener la estructura de la instancia.
  *
  * Administrator recibe todas las capabilities gestionadas por Bitácora,
  * sin alterar sus capacidades administrativas de WordPress.
@@ -1184,6 +1198,7 @@ function bitacora_seed_content_roles() {
                         'read_private_bitacora_contents',
                         'manage_bitacora_profiles',
                         'use_bitacora_profiles',
+                        'maintain_bitacora_instance',
                 )
         );
 
@@ -1200,7 +1215,8 @@ function bitacora_seed_content_roles() {
 
         $managed_caps = array_merge(
                 bitacora_get_managed_content_capabilities(),
-                bitacora_get_managed_profile_capabilities()
+                bitacora_get_managed_profile_capabilities(),
+                bitacora_get_managed_instance_capabilities()
         );
 
         $report = array(
