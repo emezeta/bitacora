@@ -990,9 +990,26 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
                                 '' === $name
                                 || '' === $slug
                         ) {
+                                $fields =
+                                        array();
+
+                                if ( '' === $name ) {
+                                        $fields[] =
+                                                'new_section.name';
+                                }
+
+                                if ( '' === $slug ) {
+                                        $fields[] =
+                                                'new_section.slug';
+                                }
+
                                 return new WP_Error(
                                         'bitacora_instance_editor_new_section_invalid',
-                                        'La nueva sección requiere nombre y slug.'
+                                        'La nueva sección requiere nombre y slug.',
+                                        array(
+                                                'fields' =>
+                                                        $fields,
+                                        )
                                 );
                         }
 
@@ -1003,7 +1020,13 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
                         ) {
                                 return new WP_Error(
                                         'bitacora_instance_editor_new_section_duplicate',
-                                        'La nueva sección utiliza un slug que ya pertenece a la PROPUESTA.'
+                                        'La nueva sección utiliza un slug que ya pertenece a la PROPUESTA.',
+                                        array(
+                                                'fields' =>
+                                                        array(
+                                                                'new_section.slug',
+                                                        ),
+                                        )
                                 );
                         }
 
@@ -1264,9 +1287,26 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
                                 '' === $name
                                 || '' === $slug
                         ) {
+                                $fields =
+                                        array();
+
+                                if ( '' === $name ) {
+                                        $fields[] =
+                                                'new_class.name';
+                                }
+
+                                if ( '' === $slug ) {
+                                        $fields[] =
+                                                'new_class.slug';
+                                }
+
                                 return new WP_Error(
                                         'bitacora_instance_editor_new_class_invalid',
-                                        'El nuevo Tipo requiere nombre y slug.'
+                                        'El nuevo Tipo requiere nombre y slug.',
+                                        array(
+                                                'fields' =>
+                                                        $fields,
+                                        )
                                 );
                         }
 
@@ -1277,9 +1317,40 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
                         ) {
                                 return new WP_Error(
                                         'bitacora_instance_editor_new_class_duplicate',
-                                        'El nuevo Tipo utiliza un slug que ya pertenece a la PROPUESTA.'
+                                        'El nuevo Tipo utiliza un slug que ya pertenece a la PROPUESTA.',
+                                        array(
+                                                'fields' =>
+                                                        array(
+                                                                'new_class.slug',
+                                                        ),
+                                        )
                                 );
                         }
+
+                        $scope_id =
+                                isset( $row['scope_id'] )
+                                        ? sanitize_title(
+                                                (string)
+                                                $row['scope_id']
+                                        )
+                                        : '';
+
+                        if ( '' === $scope_id ) {
+                                return new WP_Error(
+                                        'bitacora_instance_editor_new_class_scope_required',
+                                        sprintf(
+                                                'El nuevo Tipo "%s" no tiene una Sección asignada. Seleccioná una Sección existente o la nueva Sección que estás preparando y volvé a previsualizar. No se aplicó ningún cambio.',
+                                                $name
+                                        ),
+                                        array(
+                                                'fields' =>
+                                                        array(
+                                                                'new_class.scope_id',
+                                                        ),
+                                        )
+                                );
+                        }
+
 
                         $class =
                                 $build_new_class(
@@ -1545,6 +1616,108 @@ function bitacora_render_instance_editor_admin_page() {
         $preview_errors = array();
         $apply_result = null;
 
+        /*
+         * Conserva el POST útil cuando PREVIEW encuentra un error recuperable.
+         * El runtime nunca se reconstruye desde estos valores: sólo sirven
+         * para devolver al operador el formulario que estaba editando.
+         */
+        $form_input = array();
+
+        /*
+         * Campos responsables de errores conocidos del editor.
+         * La validación autoritativa sigue viviendo en el callback/Engine;
+         * esto sólo permite señalar visualmente dónde corregir.
+         */
+        $field_errors = array();
+
+
+        $get_form_input =
+                static function (
+                        $group,
+                        $key,
+                        $default = ''
+                ) use (
+                        &$form_input
+                ) {
+
+                        if (
+                                isset( $form_input[ $group ] )
+                                && is_array(
+                                        $form_input[ $group ]
+                                )
+                                && array_key_exists(
+                                        $key,
+                                        $form_input[ $group ]
+                                )
+                        ) {
+                                return $form_input[
+                                        $group
+                                ][
+                                        $key
+                                ];
+                        }
+
+                        return $default;
+                };
+
+
+        $field_has_error =
+                static function (
+                        $field
+                ) use (
+                        &$field_errors
+                ) {
+
+                        return isset(
+                                $field_errors[ $field ]
+                        );
+                };
+
+
+        $capture_editor_error =
+                static function (
+                        $error
+                ) use (
+                        &$preview_errors,
+                        &$field_errors
+                ) {
+
+                        if ( ! is_wp_error( $error ) ) {
+                                return;
+                        }
+
+                        $preview_errors[] =
+                                $error->get_error_message();
+
+                        $data =
+                                $error->get_error_data();
+
+                        if (
+                                ! is_array( $data )
+                                || empty( $data['fields'] )
+                                || ! is_array(
+                                        $data['fields']
+                                )
+                        ) {
+                                return;
+                        }
+
+                        foreach (
+                                $data['fields']
+                                as $field
+                        ) {
+                                $field =
+                                        (string) $field;
+
+                                if ( '' === $field ) {
+                                        continue;
+                                }
+
+                                $field_errors[ $field ] =
+                                        true;
+                        }
+                };
+
         $reviewed_proposal_fingerprint =
                 isset(
                         $_POST[
@@ -1613,6 +1786,38 @@ function bitacora_render_instance_editor_admin_page() {
                                 )
                                 : array();
 
+
+                $form_input =
+                        $input;
+
+                /*
+                 * Conserva también cambios válidos sobre estructura existente.
+                 * Las filas explícitas de alta se excluyen porque pueden estar
+                 * incompletas; sus datos permanecen en $form_input.
+                 */
+                $display_input =
+                        $input;
+
+                unset(
+                        $display_input['new_section'],
+                        $display_input['new_class']
+                );
+
+                $display_definition =
+                        bitacora_build_instance_structure_proposal_from_admin_input(
+                                $display_input,
+                                $snapshot['definition']
+                        );
+
+                if (
+                        ! is_wp_error(
+                                $display_definition
+                        )
+                ) {
+                        $form_definition =
+                                $display_definition;
+                }
+
                 /*
                  * PREVIEW
                  */
@@ -1638,8 +1843,9 @@ function bitacora_render_instance_editor_admin_page() {
                                         );
 
                                 if ( is_wp_error( $proposal ) ) {
-                                        $preview_errors[] =
-                                                $proposal->get_error_message();
+                                        $capture_editor_error(
+                                                $proposal
+                                        );
                                 } else {
                                         $form_definition =
                                                 $proposal;
@@ -1747,8 +1953,9 @@ function bitacora_render_instance_editor_admin_page() {
                                 );
 
                         if ( is_wp_error( $proposal ) ) {
-                                $preview_errors[] =
-                                        $proposal->get_error_message();
+                                $capture_editor_error(
+                                        $proposal
+                                );
                         } else {
                                 $form_definition =
                                         $proposal;
@@ -1776,8 +1983,9 @@ function bitacora_render_instance_editor_admin_page() {
                                                         $apply_result
                                                 )
                                         ) {
-                                                $preview_errors[] =
-                                                        $apply_result->get_error_message();
+                                                $capture_editor_error(
+                                                        $apply_result
+                                                );
 
                                                 $apply_result =
                                                         null;
@@ -1807,6 +2015,12 @@ function bitacora_render_instance_editor_admin_page() {
 
                                                 $preview =
                                                         null;
+
+                                                $form_input =
+                                                        array();
+
+                                                $field_errors =
+                                                        array();
                                         }
                                 }
                         }
@@ -2242,6 +2456,16 @@ function bitacora_render_instance_editor_admin_page() {
                         .bitacora-instance-editor summary {
                                 cursor: pointer;
                                 font-weight: 600;
+                        }
+
+                        .bitacora-instance-editor .bitacora-editor-warning {
+                                color: #996800;
+                                font-weight: 600;
+                        }
+
+                        .bitacora-instance-editor .bitacora-field-error {
+                                border-color: #d63638 !important;
+                                box-shadow: 0 0 0 1px #d63638;
                         }
                 </style>
 
@@ -2912,9 +3136,32 @@ function bitacora_render_instance_editor_admin_page() {
                                                 <td>
                                                         <input
                                                                 type="text"
-                                                                class="regular-text"
+                                                                class="regular-text<?php
+                                                                echo $field_has_error(
+                                                                        'new_section.name'
+                                                                )
+                                                                        ? ' bitacora-field-error'
+                                                                        : '';
+                                                                ?>"
+                                                                id="bitacora-new-section-name"
                                                                 name="instance[new_section][name]"
-                                                                value=""
+                                                                value="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_section',
+                                                                                'name',
+                                                                                ''
+                                                                        )
+                                                                );
+                                                                ?>"
+                                                                aria-invalid="<?php
+                                                                echo $field_has_error(
+                                                                        'new_section.name'
+                                                                )
+                                                                        ? 'true'
+                                                                        : 'false';
+                                                                ?>"
                                                         >
                                                 </td>
                                         </tr>
@@ -2926,10 +3173,33 @@ function bitacora_render_instance_editor_admin_page() {
                                                 <td>
                                                         <input
                                                                 type="text"
-                                                                class="regular-text"
+                                                                class="regular-text<?php
+                                                                echo $field_has_error(
+                                                                        'new_section.slug'
+                                                                )
+                                                                        ? ' bitacora-field-error'
+                                                                        : '';
+                                                                ?>"
+                                                                id="bitacora-new-section-slug"
                                                                 name="instance[new_section][slug]"
-                                                                value=""
-                                                                placeholder="nueva-seccion"
+                                                                value="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_section',
+                                                                                'slug',
+                                                                                ''
+                                                                        )
+                                                                );
+                                                                ?>"
+                                                                placeholder="Ej.: otra-seccion"
+                                                                aria-invalid="<?php
+                                                                echo $field_has_error(
+                                                                        'new_section.slug'
+                                                                )
+                                                                        ? 'true'
+                                                                        : 'false';
+                                                                ?>"
                                                         >
                                                 </td>
                                         </tr>
@@ -2942,7 +3212,16 @@ function bitacora_render_instance_editor_admin_page() {
                                                         <input
                                                                 type="number"
                                                                 name="instance[new_section][order]"
-                                                                value="100"
+                                                                value="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_section',
+                                                                                'order',
+                                                                                '100'
+                                                                        )
+                                                                );
+                                                                ?>"
                                                         >
                                                 </td>
                                         </tr>
@@ -2955,12 +3234,35 @@ function bitacora_render_instance_editor_admin_page() {
                                                         <select
                                                                 name="instance[new_section][area]"
                                                         >
-                                                                <option value="main">
+                                                                <option
+                                                                        value="main"
+                                                                        <?php
+                                                                        selected(
+                                                                                'main',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_section',
+                                                                                        'area',
+                                                                                        'more'
+                                                                                )
+                                                                        );
+                                                                        ?>
+                                                                >
                                                                         Principal
                                                                 </option>
                                                                 <option
                                                                         value="more"
-                                                                        selected
+                                                                        <?php
+                                                                        selected(
+                                                                                'more',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_section',
+                                                                                        'area',
+                                                                                        'more'
+                                                                                )
+                                                                        );
+                                                                        ?>
                                                                 >
                                                                         Más
                                                                 </option>
@@ -2978,14 +3280,50 @@ function bitacora_render_instance_editor_admin_page() {
                                                         >
                                                                 <option
                                                                         value="active"
-                                                                        selected
+                                                                        <?php
+                                                                        selected(
+                                                                                'active',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_section',
+                                                                                        'state',
+                                                                                        'active'
+                                                                                )
+                                                                        );
+                                                                        ?>
                                                                 >
                                                                         Activa
                                                                 </option>
-                                                                <option value="hidden">
+                                                                <option
+                                                                        value="hidden"
+                                                                        <?php
+                                                                        selected(
+                                                                                'hidden',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_section',
+                                                                                        'state',
+                                                                                        'active'
+                                                                                )
+                                                                        );
+                                                                        ?>
+                                                                >
                                                                         Oculta
                                                                 </option>
-                                                                <option value="archived">
+                                                                <option
+                                                                        value="archived"
+                                                                        <?php
+                                                                        selected(
+                                                                                'archived',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_section',
+                                                                                        'state',
+                                                                                        'active'
+                                                                                )
+                                                                        );
+                                                                        ?>
+                                                                >
                                                                         Archivada
                                                                 </option>
                                                         </select>
@@ -3004,6 +3342,17 @@ function bitacora_render_instance_editor_admin_page() {
                                                                         type="checkbox"
                                                                         name="instance[new_section][feature_file]"
                                                                         value="1"
+                                                                        <?php
+                                                                        checked(
+                                                                                ! empty(
+                                                                                        $form_input[
+                                                                                                'new_section'
+                                                                                        ][
+                                                                                                'feature_file'
+                                                                                        ]
+                                                                                )
+                                                                        );
+                                                                        ?>
                                                                 >
                                                                 Archivo
                                                         </label>
@@ -3015,6 +3364,17 @@ function bitacora_render_instance_editor_admin_page() {
                                                                         type="checkbox"
                                                                         name="instance[new_section][feature_location]"
                                                                         value="1"
+                                                                        <?php
+                                                                        checked(
+                                                                                ! empty(
+                                                                                        $form_input[
+                                                                                                'new_section'
+                                                                                        ][
+                                                                                                'feature_location'
+                                                                                        ]
+                                                                                )
+                                                                        );
+                                                                        ?>
                                                                 >
                                                                 Ubicación
                                                         </label>
@@ -3024,6 +3384,17 @@ function bitacora_render_instance_editor_admin_page() {
                                                                         type="checkbox"
                                                                         name="instance[new_section][feature_comments]"
                                                                         value="1"
+                                                                        <?php
+                                                                        checked(
+                                                                                ! empty(
+                                                                                        $form_input[
+                                                                                                'new_section'
+                                                                                        ][
+                                                                                                'feature_comments'
+                                                                                        ]
+                                                                                )
+                                                                        );
+                                                                        ?>
                                                                 >
                                                                 Comentarios
                                                         </label>
@@ -3036,11 +3407,11 @@ function bitacora_render_instance_editor_admin_page() {
                         <h2>Agregar Tipo</h2>
 
                         <p>
-                                El nuevo Tipo puede asociarse a cualquier
-                                sección que ya forme parte de la PROPUESTA.
-                                Si acabás de crear una sección, primero
-                                previsualizala; en la siguiente vista ya
-                                aparecerá en esta lista.
+                                El nuevo Tipo puede asociarse a una sección
+                                existente o a la nueva sección que estés
+                                preparando arriba. Cuando la nueva sección
+                                tenga Nombre y Slug, aparecerá en esta lista
+                                marcada como <strong>— nueva</strong>.
                         </p>
 
                         <table class="form-table">
@@ -3052,9 +3423,32 @@ function bitacora_render_instance_editor_admin_page() {
                                                 <td>
                                                         <input
                                                                 type="text"
-                                                                class="regular-text"
+                                                                class="regular-text<?php
+                                                                echo $field_has_error(
+                                                                        'new_class.name'
+                                                                )
+                                                                        ? ' bitacora-field-error'
+                                                                        : '';
+                                                                ?>"
+                                                                id="bitacora-new-class-name"
                                                                 name="instance[new_class][name]"
-                                                                value=""
+                                                                value="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_class',
+                                                                                'name',
+                                                                                ''
+                                                                        )
+                                                                );
+                                                                ?>"
+                                                                aria-invalid="<?php
+                                                                echo $field_has_error(
+                                                                        'new_class.name'
+                                                                )
+                                                                        ? 'true'
+                                                                        : 'false';
+                                                                ?>"
                                                         >
                                                 </td>
                                         </tr>
@@ -3066,10 +3460,33 @@ function bitacora_render_instance_editor_admin_page() {
                                                 <td>
                                                         <input
                                                                 type="text"
-                                                                class="regular-text"
+                                                                class="regular-text<?php
+                                                                echo $field_has_error(
+                                                                        'new_class.slug'
+                                                                )
+                                                                        ? ' bitacora-field-error'
+                                                                        : '';
+                                                                ?>"
+                                                                id="bitacora-new-class-slug"
                                                                 name="instance[new_class][slug]"
-                                                                value=""
-                                                                placeholder="seccion-tipo"
+                                                                value="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_class',
+                                                                                'slug',
+                                                                                ''
+                                                                        )
+                                                                );
+                                                                ?>"
+                                                                placeholder="Ej.: otra-seccion-tipo"
+                                                                aria-invalid="<?php
+                                                                echo $field_has_error(
+                                                                        'new_class.slug'
+                                                                )
+                                                                        ? 'true'
+                                                                        : 'false';
+                                                                ?>"
                                                         >
                                                 </td>
                                         </tr>
@@ -3080,8 +3497,49 @@ function bitacora_render_instance_editor_admin_page() {
                                                 </th>
                                                 <td>
                                                         <select
+                                                                id="bitacora-new-class-scope"
+                                                                class="<?php
+                                                                echo $field_has_error(
+                                                                        'new_class.scope_id'
+                                                                )
+                                                                        ? 'bitacora-field-error'
+                                                                        : '';
+                                                                ?>"
                                                                 name="instance[new_class][scope_id]"
+                                                                data-requested-scope="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_class',
+                                                                                'scope_id',
+                                                                                ''
+                                                                        )
+                                                                );
+                                                                ?>"
+                                                                aria-invalid="<?php
+                                                                echo $field_has_error(
+                                                                        'new_class.scope_id'
+                                                                )
+                                                                        ? 'true'
+                                                                        : 'false';
+                                                                ?>"
                                                         >
+                                                                <option
+                                                                        value=""
+                                                                        <?php
+                                                                        selected(
+                                                                                '',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_class',
+                                                                                        'scope_id',
+                                                                                        ''
+                                                                                )
+                                                                        );
+                                                                        ?>
+                                                                >
+                                                                        — Seleccioná una sección —
+                                                                </option>
                                                                 <?php
                                                                 foreach (
                                                                         $scope_options
@@ -3094,6 +3552,18 @@ function bitacora_render_instance_editor_admin_page() {
                                                                                         $scope_slug
                                                                                 );
                                                                                 ?>"
+                                                                                <?php
+                                                                                selected(
+                                                                                        (string)
+                                                                                        $scope_slug,
+                                                                                        (string)
+                                                                                        $get_form_input(
+                                                                                                'new_class',
+                                                                                                'scope_id',
+                                                                                                ''
+                                                                                        )
+                                                                                );
+                                                                                ?>
                                                                         >
                                                                                 <?php
                                                                                 echo esc_html(
@@ -3108,6 +3578,17 @@ function bitacora_render_instance_editor_admin_page() {
                                                                         </option>
                                                                 <?php endforeach; ?>
                                                         </select>
+
+                                                        <p
+                                                                id="bitacora-new-class-scope-help"
+                                                                class="description"
+                                                                aria-live="polite"
+                                                        >
+                                                                Si este Tipo pertenece a una
+                                                                Sección nueva, completá arriba
+                                                                el Nombre y el Slug de esa
+                                                                Sección.
+                                                        </p>
                                                 </td>
                                         </tr>
 
@@ -3119,7 +3600,16 @@ function bitacora_render_instance_editor_admin_page() {
                                                         <input
                                                                 type="number"
                                                                 name="instance[new_class][order]"
-                                                                value="100"
+                                                                value="<?php
+                                                                echo esc_attr(
+                                                                        (string)
+                                                                        $get_form_input(
+                                                                                'new_class',
+                                                                                'order',
+                                                                                '100'
+                                                                        )
+                                                                );
+                                                                ?>"
                                                         >
                                                 </td>
                                         </tr>
@@ -3134,14 +3624,50 @@ function bitacora_render_instance_editor_admin_page() {
                                                         >
                                                                 <option
                                                                         value="active"
-                                                                        selected
+                                                                        <?php
+                                                                        selected(
+                                                                                'active',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_class',
+                                                                                        'state',
+                                                                                        'active'
+                                                                                )
+                                                                        );
+                                                                        ?>
                                                                 >
                                                                         Activo
                                                                 </option>
-                                                                <option value="hidden">
+                                                                <option
+                                                                        value="hidden"
+                                                                        <?php
+                                                                        selected(
+                                                                                'hidden',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_class',
+                                                                                        'state',
+                                                                                        'active'
+                                                                                )
+                                                                        );
+                                                                        ?>
+                                                                >
                                                                         Oculto
                                                                 </option>
-                                                                <option value="archived">
+                                                                <option
+                                                                        value="archived"
+                                                                        <?php
+                                                                        selected(
+                                                                                'archived',
+                                                                                (string)
+                                                                                $get_form_input(
+                                                                                        'new_class',
+                                                                                        'state',
+                                                                                        'active'
+                                                                                )
+                                                                        );
+                                                                        ?>
+                                                                >
                                                                         Archivado
                                                                 </option>
                                                         </select>
@@ -3224,6 +3750,290 @@ function bitacora_render_instance_editor_admin_page() {
                                 >Cancelar</a>
                         </p>
                 </form>
+
+                <script>
+                (function() {
+                        const sectionName =
+                                document.getElementById(
+                                        'bitacora-new-section-name'
+                                );
+                        const sectionSlug =
+                                document.getElementById(
+                                        'bitacora-new-section-slug'
+                                );
+                        const className =
+                                document.getElementById(
+                                        'bitacora-new-class-name'
+                                );
+                        const classSlug =
+                                document.getElementById(
+                                        'bitacora-new-class-slug'
+                                );
+                        const scope =
+                                document.getElementById(
+                                        'bitacora-new-class-scope'
+                                );
+                        const help =
+                                document.getElementById(
+                                        'bitacora-new-class-scope-help'
+                                );
+
+                        let requestedScope =
+                                scope
+                                        ? (
+                                                scope.getAttribute(
+                                                        'data-requested-scope'
+                                                )
+                                                || ''
+                                        )
+                                        : '';
+
+                        if (
+                                ! sectionName
+                                || ! sectionSlug
+                                || ! className
+                                || ! classSlug
+                                || ! scope
+                                || ! help
+                        ) {
+                                return;
+                        }
+
+
+                        function hasValue( fields ) {
+
+                                return fields.some(
+                                        function( field ) {
+
+                                                return (
+                                                        ''
+                                                        !== field.value.trim()
+                                                );
+                                        }
+                                );
+                        }
+
+
+                        function setHelp( message, warning ) {
+
+                                help.textContent = message;
+
+                                help.classList.toggle(
+                                        'bitacora-editor-warning',
+                                        Boolean( warning )
+                                );
+                        }
+
+
+                        function refreshScope() {
+
+                                const name =
+                                        sectionName.value.trim();
+
+                                const slug =
+                                        sectionSlug.value.trim();
+
+                                const oldDynamic =
+                                        scope.querySelector(
+                                                'option[data-bitacora-new-section="1"]'
+                                        );
+
+                                const wasDynamicSelected =
+                                        (
+                                                oldDynamic
+                                                && scope.value
+                                                        === oldDynamic.value
+                                        );
+
+                                if ( oldDynamic ) {
+                                        oldDynamic.remove();
+                                }
+
+
+                                if (
+                                        '' !== name
+                                        && '' !== slug
+                                ) {
+
+                                        const duplicate =
+                                                Array.from(
+                                                        scope.options
+                                                ).some(
+                                                        function( option ) {
+
+                                                                return (
+                                                                        option.value
+                                                                        === slug
+                                                                );
+                                                        }
+                                                );
+
+                                        if ( duplicate ) {
+                                                setHelp(
+                                                        'Ese Slug ya pertenece '
+                                                        + 'a una Sección '
+                                                        + 'existente.',
+                                                        true
+                                                );
+
+                                                return;
+                                        }
+
+
+                                        const option =
+                                                new Option(
+                                                        name
+                                                        + ' ('
+                                                        + slug
+                                                        + ') — nueva',
+                                                        slug
+                                                );
+
+                                        option.setAttribute(
+                                                'data-bitacora-new-section',
+                                                '1'
+                                        );
+
+                                        scope.appendChild(
+                                                option
+                                        );
+
+                                        if (
+                                                wasDynamicSelected
+                                                || requestedScope === slug
+                                        ) {
+                                                scope.value = slug;
+                                                requestedScope = '';
+                                        }
+
+
+                                        if ( scope.value === slug ) {
+                                                setHelp(
+                                                        'Este Tipo se asociará '
+                                                        + 'a la nueva Sección '
+                                                        + name
+                                                        + ' ('
+                                                        + slug
+                                                        + ').',
+                                                        false
+                                                );
+
+                                                return;
+                                        }
+
+
+                                        if (
+                                                hasValue(
+                                                        [
+                                                                className,
+                                                                classSlug,
+                                                        ]
+                                                )
+                                                && '' === scope.value
+                                        ) {
+                                                setHelp(
+                                                        'La nueva Sección ya '
+                                                        + 'está disponible. '
+                                                        + 'Seleccionála para '
+                                                        + 'asociar este Tipo.',
+                                                        true
+                                                );
+
+                                                return;
+                                        }
+
+
+                                        setHelp(
+                                                'La nueva Sección '
+                                                + name
+                                                + ' ('
+                                                + slug
+                                                + ') ya está disponible '
+                                                + 'en la lista.',
+                                                false
+                                        );
+
+                                        return;
+                                }
+
+
+                                if (
+                                        hasValue(
+                                                [
+                                                        className,
+                                                        classSlug,
+                                                ]
+                                        )
+                                        && '' === scope.value
+                                ) {
+
+                                        if (
+                                                hasValue(
+                                                        [
+                                                                sectionName,
+                                                                sectionSlug,
+                                                        ]
+                                                )
+                                        ) {
+                                                setHelp(
+                                                        'Completá Nombre y '
+                                                        + 'Slug de la nueva '
+                                                        + 'Sección para poder '
+                                                        + 'asociarle este Tipo.',
+                                                        true
+                                                );
+                                        } else {
+                                                setHelp(
+                                                        'Elegí una Sección. '
+                                                        + 'Si todavía no '
+                                                        + 'existe, completá '
+                                                        + 'arriba su Nombre '
+                                                        + 'y Slug.',
+                                                        true
+                                                );
+                                        }
+
+                                        return;
+                                }
+
+
+                                setHelp(
+                                        'Si este Tipo pertenece a una '
+                                        + 'Sección nueva, completá arriba '
+                                        + 'el Nombre y el Slug de esa '
+                                        + 'Sección.',
+                                        false
+                                );
+                        }
+
+
+                        [
+                                sectionName,
+                                sectionSlug,
+                                className,
+                                classSlug
+                        ].forEach(
+                                function( field ) {
+
+                                        field.addEventListener(
+                                                'input',
+                                                refreshScope
+                                        );
+                                }
+                        );
+
+                        scope.addEventListener(
+                                'change',
+                                function() {
+
+                                        requestedScope = '';
+                                        refreshScope();
+                                }
+                        );
+
+                        refreshScope();
+                }());
+                </script>
 
                 <p>
                         <em>
