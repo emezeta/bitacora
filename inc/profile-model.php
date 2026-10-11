@@ -2673,10 +2673,14 @@ function bitacora_build_instance_structure_reconciliation_plan(
          * Sólo se consideran core + secciones presentes en PROPUESTA.
          * Una página ya existente nunca se elimina:
          * - state=active  -> publish;
-         * - otro state   -> draft.
+         * - state=hidden  -> publish si la página ya existe;
+         * - state=archived -> draft.
+         *
+         * hidden retira navegación y creación, pero conserva la URL
+         * histórica de una sección que ya fue materializada.
          *
          * Si una sección no activa nunca tuvo página, no se crea una
-         * página draft innecesaria.
+         * página innecesaria.
          */
         $proposal_sections = array(
                 'notas' => array_merge(
@@ -2710,7 +2714,14 @@ function bitacora_build_instance_structure_reconciliation_plan(
                         ? (string) $section['state']
                         : 'active';
 
-                $status = 'active' === $state
+                $status = in_array(
+                        $state,
+                        array(
+                                'active',
+                                'hidden',
+                        ),
+                        true
+                )
                         ? 'publish'
                         : 'draft';
 
@@ -2765,10 +2776,14 @@ function bitacora_build_instance_structure_reconciliation_plan(
 
                 /*
                  * Sección no activa sin página previa: no crear nada.
+                 *
+                 * El publish de hidden sólo preserva una página histórica
+                 * ya existente; no materializa una página para una sección
+                 * que nunca estuvo activa.
                  */
                 if (
                         ! $page
-                        && 'publish' !== $status
+                        && 'active' !== $state
                 ) {
                         continue;
                 }

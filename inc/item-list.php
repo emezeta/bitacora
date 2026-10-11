@@ -295,6 +295,11 @@ function bitacora_get_new_section_item_url( $section ) {
     if (
         ! $section
         || is_wp_error( $section )
+        || 'active' !== bitacora_get_section_meta(
+            $section,
+            'bitacora_section_state',
+            ''
+        )
     ) {
         return '';
     }
@@ -357,11 +362,20 @@ function bitacora_render_section_list_shortcode(
         return '<p>La sección indicada no existe.</p>';
     }
 
+    $section_state = bitacora_get_section_meta(
+        $section,
+        'bitacora_section_state',
+        ''
+    );
+
     if (
-        'active' !== bitacora_get_section_meta(
-            $section,
-            'bitacora_section_state',
-            ''
+        ! in_array(
+            $section_state,
+            array(
+                'active',
+                'hidden',
+            ),
+            true
         )
     ) {
         return '<p>La sección no está activa.</p>';
@@ -439,10 +453,12 @@ function bitacora_render_section_list_shortcode(
         <?php endif; ?>
 
         <?php
-        obras_render_lista_actions(
-            $new_url,
-            $new_label
-        );
+        if ( '' !== $new_url ) {
+            obras_render_lista_actions(
+                $new_url,
+                $new_label
+            );
+        }
         ?>
 
         <form
