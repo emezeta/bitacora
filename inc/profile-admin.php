@@ -1931,6 +1931,37 @@ function bitacora_render_instance_editor_admin_page() {
                                                                 $plan[
                                                                         'proposal_fingerprint'
                                                                 ];
+
+                                                        /*
+                                                         * Una alta que alcanzó
+                                                         * una PREVIEW válida ya
+                                                         * forma parte de la
+                                                         * PROPUESTA.
+                                                         *
+                                                         * Desde este punto se
+                                                         * representa únicamente
+                                                         * mediante sections[] /
+                                                         * classes[] para evitar
+                                                         * reenviarla también
+                                                         * como new_section /
+                                                         * new_class.
+                                                         *
+                                                         * En una PREVIEW
+                                                         * inválida estas filas
+                                                         * no se limpian y siguen
+                                                         * siendo sticky.
+                                                         */
+                                                        unset(
+                                                                $form_input[
+                                                                        'new_section'
+                                                                ],
+                                                                $form_input[
+                                                                        'new_class'
+                                                                ]
+                                                        );
+
+                                                        $field_errors =
+                                                                array();
                                                 }
                                         }
                                 }
