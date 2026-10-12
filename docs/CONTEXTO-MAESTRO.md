@@ -1,10 +1,10 @@
 # Bitácora — Contexto Maestro de desarrollo
 
-**Revisión documental:** 2026-10-01
-**Estado técnico de referencia:** 2026-10-01
+**Revisión documental:** 2026-10-12
+**Estado técnico de referencia:** 2026-10-12
 **Rama:** `0.3.0-dev`  
 **Repo canónico:** `/home/dosmilun/repos/bitacora`  
-**HEAD verificado:** `2d6032a Add documental backup download`
+**HEAD verificado:** `d02000d Fix promoted structure preview round-trip`
 
 > Este documento describe el **estado vigente** del proyecto y debe servir como referencia
 > de continuidad entre chats y estaciones de trabajo. No pretende narrar toda la historia.
@@ -310,48 +310,60 @@ Esa decisión no condiciona el funcionamiento normal de Bitácora Engine.
 
 ---
 
-## Gestión común de Profiles y estructura de instancia
+## Infraestructura común; UX específica según operación
 
-**Decisión 2026-10-10:**
+**Revisión 2026-10-12:**
 
-La futura capacidad opcional de gestión debe reutilizar un mismo editor
-estructural para dos fuentes distintas:
+Se conserva una definición estructural canónica y un conjunto común de
+primitivas autoritativas del Engine, pero queda **SUPERADA** la decisión de
+exigir un único editor estructural para Templates/Profiles e instancia viva.
+
+La experiencia del prototipo de edición de instancia mostró que compartir
+modelo y backend no implica compartir necesariamente una misma interfaz humana.
 
 ```text
-Template / definición de Profile
+Template / definición externa
         ↓
-editor estructural
+interfaz propia del productor
         ↓
-definición reutilizable
+definición canónica
+        ↓
+frontera del Engine
 
 Instancia viva
         ↓
-extraer esqueleto
+interfaz de mantenimiento de instancia
         ↓
-editor estructural
+propuesta estructural canónica
         ↓
-propuesta estructural
+frontera del Engine
 ```
 
-El editor pertenece al productor/addon; Bitácora Engine conserva las
-operaciones autoritativas y de seguridad:
+Ambos caminos pueden reutilizar:
+
+```text
+- definición estructural canónica
+- validación
+- comparación
+- fingerprints
+- planner
+- reconciliación
+- verificación
+```
+
+Bitácora Engine conserva las operaciones autoritativas y de seguridad:
 
 ```text
 - validar definición
 - adoptar candidato como nuevo Profile
 - extraer estructura de una instancia
 - verificar estructura base
-- aplicar/reconciliar una propuesta sobre una instancia
+- aplicar/reconciliar una propuesta
 - verificar estructura resultante
 - recuperar PRE ante fallo de aplicación
 ```
 
-El addon no debe escribir directamente términos, termmeta, páginas ni otras
-representaciones internas de WordPress. Trabaja con la definición estructural;
-el Engine garantiza su traducción al runtime.
-
-La forma de empaquetado físico puede resolverse al implementar, pero la
-responsabilidad funcional queda ubicada fuera del Engine normal de uso.
+Compartir definición y backend no obliga a compartir una única UX.
 
 ---
 
@@ -1565,48 +1577,110 @@ complete la separación con el Constructor.
 
 # 15. Modificación estructural de instancia y PAUSA breve
 
-**Estado al 2026-10-10: CONTRATO FUNCIONAL DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN.**
+**Estado al 2026-10-12: IMPLEMENTACIÓN FUNCIONAL VERIFICADA.**
 
-La modificación estructural de una instancia viva no se realiza normalmente
-mientras la instancia está detenida.
-
-La instancia permanece **EN USO** durante la preparación y edición de la nueva
-estructura. `EN PAUSA` queda reducido a una ventana crítica breve destinada
-exclusivamente a aplicar una propuesta ya terminada y validada.
-
-Principio:
+La modificación estructural se prepara mientras la instancia permanece
+**EN USO**. `EN PAUSA` se limita a una ventana crítica breve destinada
+exclusivamente a aplicar una propuesta terminada y validada.
 
 > **PAUSA no es un modo de edición. Es la interrupción breve y exclusiva del
 > servicio necesaria para aplicar de forma segura una modificación estructural
 > previamente preparada.**
 
-Flujo objetivo:
+Flujo implementado:
 
 ```text
 INSTANCIA EN USO
         ↓
-1. EXTRAER PRE
-   fotografía del esqueleto estructural vigente
+EXTRAER PRE
         ↓
-2. EDITAR COPIA
-   la instancia continúa funcionando normalmente
+PREPARAR PROPUESTA
         ↓
-3. VALIDAR PROPUESTA
-   validar definición canónica
-   comparar nuevamente estructura viva contra PRE
+VALIDAR + verificar CURRENT == PRE
         ↓
-4. PAUSA BREVE
-   bloquear uso normal de la instancia
-   adquirir exclusividad de mantenimiento
+PAUSA breve + exclusividad
         ↓
-5. APLICAR / RECONCILIAR
+APLICAR / RECONCILIAR
         ↓
-6. EXTRAER Y VALIDAR POST
+EXTRAER Y VALIDAR POST
         ↓
-7. REANUDAR
-        ↓
-INSTANCIA EN USO
+ACTIVE
 ```
+
+Primitivas y capas ya implementadas y probadas:
+
+```text
+3746048  Add canonical instance structure extraction
+0ff5cb6  Add structural drift precondition guard
+4ef9d0d  Add structural definition comparison
+8634a1e  Add runtime structural evolution policy
+ddfc561  Make runtime structural evolution non-destructive
+69834cc  Add structural reconciliation planning
+1b93c5d  Add runtime maintenance pause primitive
+afcf92a  Require maintenance lock ownership
+54519af  Add structural reconciliation apply and rollback
+07801ec  Block runtime writes during maintenance pause
+a8ac949  Harden structural reconciliation rollback journal
+1c3f768  Preserve history for hidden sections
+bd343c8  Add structural reconciliation orchestrator
+d0c7b23  Add instance maintenance authorization
+740bfd7  Add instance structure preview editor
+5d9b1f2  Add instance structure additions preview
+e61238d  Add instance structure apply UI
+cec9e8e  Preserve core invariants during structure update
+9a5a200  Improve instance structure editor feedback
+d02000d  Fix promoted structure preview round-trip
+```
+
+Se verificaron, entre otros:
+
+```text
+- modificación y restauración humana de Bitácora core section
+- Preview sin escritura sobre runtime
+- fingerprints PRE / PROPUESTA
+- detección de drift
+- APPLY autoritativo
+- PAUSA + owner + lock + retorno a ACTIVE
+- recuperación hacia PRE
+- ocultación conservativa
+- alta estructural de Sección + Tipo + página
+- round-trip del formulario después de Preview
+- consumo correcto desde frontend y editor
+```
+
+Prueba humana de alta:
+
+```text
+Otra Sección
+    slug=otra-seccion
+    order=2
+    area=more
+    state=active
+
+TipoWoow
+    slug=otra-secc-tipo
+    scope=section
+    scope_id=otra-seccion
+    order=100
+    state=active
+```
+
+Resultado materializado:
+
+```text
+section term_id=330
+class term_id=331
+page ID=338
+runtime=active
+owner=0
+lock=free
+```
+
+La nueva Sección aparece bajo `Más`, `/otra-seccion/` funciona y el editor
+ofrece `TipoWoow` al crear una entrada en esa Sección.
+
+La pantalla monolítica usada para estas pruebas se considera un **prototipo
+funcional de integración**, no la UX objetivo definitiva.
 
 ## 15.1 Esqueleto de instancia
 
@@ -1762,7 +1836,7 @@ ON → OFF
 No se introducen combinaciones especiales ni dependencias preventivas entre
 features.
 
-## 15.4 Identidad técnica
+## 15.4 Identidad técnica y slugs
 
 Para objetos existentes:
 
@@ -1777,8 +1851,31 @@ permanecen estables.
 
 Los nombres y etiquetas visibles pueden cambiar sin recrear el objeto.
 
-Las altas reciben una identidad técnica nueva generada/determinada por
-Bitácora. El operador no necesita editar slugs manualmente.
+En las altas, Bitácora debe proponer automáticamente un slug razonable a partir
+del nombre, siguiendo el comportamiento habitual de WordPress.
+
+```text
+Nombre
+    ↓
+slug propuesto automáticamente
+```
+
+El operador no necesita definirlo, pero puede personalizarlo si tiene una razón
+para hacerlo.
+
+La edición manual del slug debe quedar en una zona secundaria o avanzada de la
+interfaz.
+
+Una vez materializado:
+
+```text
+slug
+    = identidad técnica estable
+    = no edición ordinaria
+```
+
+Una eventual modificación de identidad técnica sería otra clase de operación,
+no una modificación corriente del objeto.
 
 ## 15.5 Validación previa y huella PRE
 
@@ -1961,37 +2058,147 @@ accidentales.
 El expediente permanece asociado documentalmente a la instancia y puede
 incorporarse al Respaldo Documental final.
 
-## 15.11 Editor común y addon
+## 15.11 Separación entre Engine e interfaz
 
-La edición estructural no requiere un segundo editor específico para PAUSA.
-
-El futuro addon de gestión puede utilizar el mismo editor para:
+La frontera funcional queda:
 
 ```text
-Template / Profile
-        y
-esqueleto extraído de instancia viva
+INTERFAZ HUMANA
+        ↓
+operación concreta
+        ↓
+PROPUESTA estructural completa
+        ↓
+ENGINE
+        ↓
+validación / plan / PAUSA / reconciliación / verificación
 ```
 
-La diferencia está en el destino.
+El Engine no necesita conocer cómo fue preparada la propuesta.
 
-```text
-definición editada
-    ├── adoptar como NUEVO PROFILE
-    │       → nuevo UUID
-    │
-    └── aplicar a ESTA INSTANCIA
-            → conserva configured_profile
-            → conserva identidad histórica del Profile de origen
-```
+La experiencia del editor monolítico mostró que mezclar edición, altas y
+dependencias entre objetos en un mismo formulario introduce estados
+transitorios innecesariamente complejos.
+
+Por tanto:
+
+> **Compartir modelo, definición y backend no obliga a compartir una única
+> interfaz.**
 
 Modificar una instancia no modifica el Profile que la originó.
 
-Si el esqueleto de una instancia se guarda como definición reutilizable, se
-crea siempre un **nuevo Profile**, con nueva identidad generada por el Engine.
+Si el esqueleto de una instancia se convierte en definición reutilizable y se
+adopta, nace un **nuevo Profile** con nueva identidad.
 
-No se introduce un concepto obligatorio de Profile sucesor, padre/hijo o
-versionado de Profiles.
+
+## 15.12 UX objetivo de mantenimiento de instancia
+
+**DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN — 2026-10-12.**
+
+Primer nivel:
+
+```text
+INSTANCIA
+│
+├── VER ESTADO
+│
+└── EDITAR
+```
+
+### VER ESTADO
+
+Debe ofrecer un panorama del esqueleto actual útil para:
+
+```text
+- consulta
+- orientación
+- comparación
+- comprobación
+- apoyo a la toma de decisiones
+```
+
+Debe conservar la visión global. No debe ser el editor con los campos
+deshabilitados ni una exposición exhaustiva de metadatos.
+
+```text
+VER ESTADO
+    → visión global
+```
+
+### EDITAR
+
+Debe llevar progresivamente hacia una única operación concreta:
+
+```text
+EDITAR
+  │
+  └── SECCIONES
+       │
+       ├── CREAR
+       │
+       └── ELEGIR EXISTENTE
+            │
+            └── SECCIÓN
+                 │
+                 ├── MODIFICAR
+                 ├── OCULTAR / MOSTRAR
+                 │
+                 └── TIPOS
+                      │
+                      ├── CREAR
+                      │
+                      └── ELEGIR EXISTENTE
+                           │
+                           └── TIPO
+                                ├── MODIFICAR
+                                └── OCULTAR / MOSTRAR
+```
+
+```text
+EDITAR
+    → foco progresivo
+    → una cosa operativa por vez
+```
+
+### Relación Sección → Tipo
+
+El modelo operativo vigente es:
+
+```text
+Sección
+    → 0..N Tipos
+
+Tipo
+    → una sola Sección
+```
+
+La asociación se expresa mediante:
+
+```text
+scope=section
+scope_id=<slug de la Sección>
+```
+
+Por esta cardinalidad no se considera necesario, por ahora, un gestor global
+independiente de Tipos.
+
+Los Tipos se gestionan contextualmente desde su Sección.
+
+```text
+crear Sección
+    ↓
+aplicar
+    ↓
+Sección existente
+    ↓
+crear Tipo
+```
+
+Así desaparece la necesidad de crear simultáneamente dos objetos inexistentes
+con dependencia entre sí.
+
+La pantalla monolítica actualmente implementada permanece como banco de pruebas
+funcional, pero constituye **DEUDA ACTUAL de UX**.
 
 # 16. Organización `main|more`
 
@@ -2287,35 +2494,9 @@ Bocetos anteriores con `Planificación`, `Actividades`, `Recursos`, etc. están 
 
 ---
 
-# 20. Estado técnico operativo — 2026-10-01
+# 20. Estado técnico operativo — 2026-10-12
 
 ## Git
-
-Estado runtime/Profile más reciente verificado:
-
-```text
-2d6032a  Add documental backup download
-b5924a6  Add documental backup package
-bea2d7b  Add documental backup collector
-4faf81e  Show instance period in close warning
-defa588  Record Bitacora instance start time
-cd8197a  Separate profile use from Bitacora closing
-```
-
-Desde `cd8197a`, `Usar Perfil` y `Cerrar Bitácora` son operaciones separadas:
-
-```text
-instalación neutra
-    → Usar Perfil
-    → instancia EN USO
-
-instancia EN USO
-    → Cerrar Bitácora
-    → instalación neutra
-```
-
-`Usar Perfil` no destruye ni sustituye una instancia activa.
-
 
 ```text
 repo:
@@ -2324,17 +2505,26 @@ repo:
 branch:
 0.3.0-dev
 
-HEAD verificado:
-2291c2c Fix accepted profile adoption flow
+HEAD / origin:
+d02000dd70a741179b90b76457724cc97ab8b0ab
+d02000d Fix promoted structure preview round-trip
 
 worktree:
-limpio
+limpio al cierre de d02000d
 ```
 
-El warning/guard destructivo probado en UI quedó consolidado en el commit `e20211c`.
+Cadena reciente:
 
-Permanece conectado al flujo antiguo de cambio de Perfil; su traslado a `Cerrar Bitácora`
-forma parte del próximo refactor de interfaz.
+```text
+d02000d  Fix promoted structure preview round-trip
+9a5a200  Improve instance structure editor feedback
+cec9e8e  Preserve core invariants during structure update
+e61238d  Add instance structure apply UI
+5d9b1f2  Add instance structure additions preview
+740bfd7  Add instance structure preview editor
+d0c7b23  Add instance maintenance authorization
+bd343c8  Add structural reconciliation orchestrator
+```
 
 ## KOOPITA
 
@@ -2342,35 +2532,61 @@ forma parte del próximo refactor de interfaz.
 WP:
 /home/dosmilun/koopita.angiru.uy
 
-instancia actual:
+instancia:
 Eventos
 
-Perfil de origen:
+Profile de origen:
 Eventos
 c5a6cdce-8854-4491-bce5-ecc678fe90d9
 
 runtime:
-items=5
-comments=0
-attachments=2
-sections=9
-classes=44
+active
+
+maintenance owner:
+0
+
+maintenance lock:
+free
+
+fingerprint:
+5b2b56d09b5c5bf369ecceb784b23cc0194f73ffcb0e9031928838015db941b3
 ```
 
-El botón `Cancelar` de la confirmación destructiva fue probado el 2026-09-28 y conserva la
-instancia sin cambios.
-
-Catálogo observado:
+Después de la prueba humana quedan materializados intencionalmente:
 
 ```text
-Centro Educativo   bundled
-Construcción       bundled
-Depósito           bundled
-Eventos            bundled
-Perfil_pruebas00   stored
+Otra Sección
+    slug=otra-seccion
+    term_id=330
+    area=more
+    state=active
+
+TipoWoow
+    slug=otra-secc-tipo
+    term_id=331
+    scope=section
+    scope_id=otra-seccion
+
+Página
+    ID=338
+    slug=otra-seccion
+    status=publish
 ```
 
-La UI todavía presenta `DISPONIBLE/EN USO` y acciones del modelo anterior.
+Estructura resultante:
+
+```text
+sections=10
+classes=45
+```
+
+Verificación humana:
+
+```text
+- Otra Sección aparece bajo Más
+- /otra-seccion/ funciona
+- TipoWoow aparece al crear una entrada en Otra Sección
+```
 
 ## BITA
 
@@ -2378,9 +2594,7 @@ La UI todavía presenta `DISPONIBLE/EN USO` y acciones del modelo anterior.
 /home/bita020/bita.dreamhosters.com
 ```
 
-Ya se utilizó para probar materialización sucesiva de los cuatro bundled.
-
-Debe reutilizarse para la regresión final de 0.3.0.
+Continúa reservado para la regresión/fresh final de `0.3.0`.
 
 ---
 
@@ -2584,14 +2798,14 @@ adopta.
 | P03 | CERRADO | Entrada PHP de PROMOCIÓN implementada sobre adopción autoritativa común |
 | P04 | CERRADO | Adopción stored protegida por lock + transacción + rollback; REJECT sin Profile residual |
 | P05 | CERRADO | Library limitada a Profiles aceptados; autoría legacy retirada del Engine |
-| P06 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Gestión opcional mediante addon/productor con editor común de Templates/Profiles y esqueleto de instancia |
+| P06 | PENDIENTE DE ANÁLISIS | Gestión opcional de Templates mediante productor/addon; puede compartir definición y backend con instancia, pero no se presupone una UX común |
 | P07 | CERRADO | `Cerrar Bitácora` separado de `Usar Perfil`; commit `cd8197a` |
 | P08 | CERRADO | Warning/guard destructivo reutilizado y ampliado con período real de instancia |
 | P09 | CERRADO | `EN USO`/`DISPONIBLE` retirados como estados técnicos de Profile; `DISPONIBLE` queda sólo como UI contextual |
 | P10 | CERRADO | `Usar este perfil` sólo se ofrece y opera desde instalación neutra |
-| P11 | DECIDIDO / IMPLEMENTAR | Separar identidad técnica y etiqueta visible en editor/runtime |
-| P12 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Modificación estructural preparada en ACTIVE; PAUSA breve sólo para aplicar/verificar/recuperar |
-| P13 | DECIDIDO / IMPLEMENTAR | Ocultar Sección preserva historia, excluye navegación normal e impide nuevas entradas; mantiene referencias y búsqueda multisección |
+| P11 | CERRADO | Identidad técnica estable y etiqueta visible mutable verificadas en reconciliación y prueba humana |
+| P12 | CERRADO | Preparación en ACTIVE + PAUSA breve + lock + APPLY + verificación + recuperación implementados y probados |
+| P13 | CERRADO | Ocultar Sección preserva historia y referencias y la retira del uso normal futuro |
 | P14 | CERRADO | Ocultar Tipo lo retira del uso futuro sin alterar identidad, relaciones ni historia; MOSTRAR revierte la decisión |
 | P15 | DECIDIDO / IMPLEMENTAR | Exportar Profile como Template externo; no existe “importar Perfil” |
 | P16 | CERRADO | CREACIÓN desde Template externo implementada reutilizando la adopción autoritativa |
@@ -2607,28 +2821,35 @@ adopta.
 | P26 | CERRADO | Ciclo completo Template → CREACIÓN → adopción → Library → catálogo → DELETE verificado en KOOPITA |
 | P27 | CERRADO | Pipeline PROMOCIÓN verificado; los casos históricos de duplicación deberán actualizarse al nuevo criterio exacto |
 | P28 | CERRADO | RESPALDO DOCUMENTAL v1: collector + ZIP + descarga UI + prueba con entrada, comentarios y attachment físico |
+| P29 | DEUDA ACTUAL | Editor monolítico de instancia funciona como prototipo pero debe reemplazarse por UX progresiva/contextual |
+| P30 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | UX de instancia: `VER ESTADO` panorámico + `EDITAR` progresivo por Sección y sus Tipos |
+| P31 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Slug automático en altas, editable como opción secundaria; slug existente estable |
+| P32 | PENDIENTE DE ANÁLISIS | Resolver o documentar el acceso directo a archivos físicos durante PAUSA cuando el webserver puede servirlos sin pasar por WordPress |
 
 ---
 
-# 25. Pruebas pendientes para cerrar 0.3.0
+# 25. Trabajo pendiente para cerrar 0.3.0
 
-La antigua regresión integral de `Perfil_pruebas00` debe reinterpretarse a la luz de la
-separación Template/Perfil.
-
-No conviene invertir más trabajo en consolidar una UX de “Perfil incompleto” dentro del
-Engine si esa UI está destinada a convertirse en Constructor.
+Las primitivas estructurales principales del Engine ya están implementadas y
+probadas.
 
 Prioridades actuales:
 
-1. implementar extracción `instancia → definición canónica`;
-2. verificar round-trip sobre KOOPITA:
-   `Profile P → instancia sin cambios → esqueleto E`, con `E ≡ P`;
-3. definir/comprobar comparación determinista y huella estructural PRE;
-4. implementar reconciliación segura `PRE → PROPUESTA → POST`, incluida recuperación hacia PRE;
-5. incorporar rol/capability de Administrador Bitácora y guard operativo de la PAUSA breve;
-6. resolver bloqueo efectivo de enlaces compartibles y acceso directo a medios durante PAUSA;
-7. construir el addon/editor estructural común cuando las primitivas del Engine estén cerradas;
-8. ejecutar regresión bundled, BITA fresh, idempotencia y cierre de 0.3.0.
+1. cerrar el diseño UX de mantenimiento de instancia:
+   - `VER ESTADO`
+   - `EDITAR → SECCIONES`
+   - Tipos gestionados contextualmente dentro de su Sección;
+2. reemplazar gradualmente el editor monolítico por operaciones pequeñas sin
+   modificar la frontera autoritativa del Engine;
+3. resolver o documentar definitivamente el acceso directo a medios durante
+   PAUSA;
+4. ejecutar regresión bundled y fresh/idempotencia en BITA;
+5. probar capabilities pendientes sobre usuarios no administradores;
+6. realizar regresión final de `0.3.0`;
+7. preparar release `0.3.0`.
+
+No reabrir extracción, fingerprints, planner, reconciliación, PAUSA, lock,
+rollback o APPLY salvo que una regresión concreta demuestre un defecto.
 
 # 26. Convenciones operativas de terminal
 
@@ -2673,23 +2894,22 @@ No confundir bloques clásicos con bloques `cacli`.
 
 # 27. Punto de reentrada recomendado
 
-Estado conceptual al 2026-10-10:
+Estado al 2026-10-12:
+
+La infraestructura estructural de instancia está implementada y verificada.
 
 ```text
-La modificación estructural de una instancia ya no se diseña como
-una sesión larga de edición dentro de EN PAUSA.
-
-ACTIVE
+CURRENT
     ↓
 extraer PRE
     ↓
-editar PROPUESTA
+construir PROPUESTA
     ↓
 validar
     ↓
-verificar instancia viva == PRE
+verificar CURRENT == PRE
     ↓
-PAUSA breve
+PAUSA breve + lock
     ↓
 aplicar / reconciliar
     ↓
@@ -2698,64 +2918,87 @@ verificar POST
 ACTIVE
 ```
 
-Ante fallo de aplicación:
+La pantalla monolítica `EDITAR INSTANCIA` permitió demostrar integralmente este
+pipeline, pero no representa la UX objetivo.
+
+Dirección acordada:
 
 ```text
-registrar
-    ↓
-reconciliar hacia PRE
-    ↓
-si resultado == PRE
-    → ACTIVE
-    → corregir propuesta con la instancia funcionando
-
-si también falla recuperación
-    → permanecer PAUSED
-    → diagnóstico
+INSTANCIA
+│
+├── VER ESTADO
+│
+└── EDITAR
+     │
+     └── SECCIONES
+          │
+          ├── CREAR
+          │
+          └── ELEGIR
+               │
+               └── SECCIÓN
+                    │
+                    ├── MODIFICAR
+                    ├── OCULTAR / MOSTRAR
+                    │
+                    └── TIPOS
+                         │
+                         ├── CREAR
+                         │
+                         └── ELEGIR
+                              │
+                              └── TIPO
+                                   ├── MODIFICAR
+                                   └── OCULTAR / MOSTRAR
 ```
 
-El editor estructural pertenece al futuro addon/productor y puede operar sobre:
+Principios:
 
 ```text
-- Template / definición de Profile
-- esqueleto extraído de instancia viva
+VER ESTADO
+    → panorama del esqueleto
+    → consulta / comparación / comprobación
+
+EDITAR
+    → foco progresivo
+    → una operación concreta por vez
 ```
 
-Bitácora Engine conserva:
+Cardinalidad relevante:
 
 ```text
-- definición canónica
-- validación
-- adopción
-- extracción de estructura
-- comparación/huella
-- reconciliación
-- PAUSA técnica
-- verificación
-- recuperación PRE
+Sección → 0..N Tipos
+Tipo    → una sola Sección
 ```
 
-Próximo paso técnico recomendado:
+Por ello los Tipos se gestionan contextualmente desde su Sección.
+
+Slugs:
 
 ```text
-1. actualizar implementación de duplicación:
-       exacto    → REJECT
-       label     → exigir nombre distinto
-       similar   → warning
+alta
+    → propuesto automáticamente
+    → editable opcionalmente en zona secundaria
 
-2. implementar:
-       bitacora_get_instance_profile_definition()
-   o nombre equivalente
-
-3. probar:
-       Profile Eventos
-           ↓
-       instancia KOOPITA
-           ↓
-       extracción
-           ↓
-       equivalencia funcional con la definición de origen
+objeto existente
+    → identidad técnica estable
+    → no edición ordinaria
 ```
 
-No tocar todavía la interfaz del addon ni implementar una PAUSA completa antes
-de demostrar esta correspondencia.
+CURRENT de KOOPITA después de la prueba humana:
+
+```text
+Otra Sección
+    slug=otra-seccion
+    area=more
+
+TipoWoow
+    slug=otra-secc-tipo
+    scope_id=otra-seccion
+```
+
+**Próximo paso recomendado:**
+
+continuar el diseño UX empezando por el contenido y jerarquía visual de
+`VER ESTADO`, y luego la primera pantalla de `EDITAR → SECCIONES`, sin
+rediseñar el Engine estructural.
