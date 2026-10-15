@@ -547,8 +547,8 @@ function bitacora_register_instance_editor_admin_page() {
 
         add_submenu_page(
                 'edit.php?post_type=bitacora_item',
-                'Editar instancia',
-                'Instancia',
+                'Perfil Actual',
+                'Perfil Actual',
                 'maintain_bitacora_instance',
                 'bitacora-instance-editor',
                 'bitacora_render_instance_editor_admin_page'
@@ -2245,9 +2245,179 @@ function bitacora_render_instance_editor_admin_page() {
         $current_profile_id =
                 bitacora_get_configured_profile_id();
 
+        $instance_editor_mode =
+                isset( $_GET['mode'] )
+                        ? sanitize_key(
+                                wp_unslash(
+                                        $_GET['mode']
+                                )
+                        )
+                        : 'view';
+
+        if (
+                ! in_array(
+                        $instance_editor_mode,
+                        array(
+                                'view',
+                                'edit',
+                        ),
+                        true
+                )
+        ) {
+                $instance_editor_mode =
+                        'view';
+        }
+
         ?>
         <div class="wrap bitacora-instance-editor">
-                <h1>Editar instancia</h1>
+                <h1>Perfil Actual</h1>
+
+                <p>
+                        <a
+                                class="button <?php
+                                echo 'view' === $instance_editor_mode
+                                        ? 'button-primary'
+                                        : 'button-secondary';
+                                ?>"
+                                href="<?php echo esc_url(
+                                        bitacora_get_instance_editor_admin_url()
+                                ); ?>"
+                        >VER ESTADO</a>
+
+                        <a
+                                class="button <?php
+                                echo 'edit' === $instance_editor_mode
+                                        ? 'button-primary'
+                                        : 'button-secondary';
+                                ?>"
+                                href="<?php echo esc_url(
+                                        add_query_arg(
+                                                'mode',
+                                                'edit',
+                                                bitacora_get_instance_editor_admin_url()
+                                        )
+                                ); ?>"
+                        >EDITAR</a>
+                </p>
+
+                <?php if ( 'view' === $instance_editor_mode ) : ?>
+
+                        <?php
+                        $overview_sections =
+                                array(
+                                        'notas' =>
+                                                $form_definition['core'],
+                                )
+                                + $sections;
+                        ?>
+
+                        <h2>Estado actual</h2>
+
+                        <p>
+                                Visión general de la estructura actualmente
+                                materializada.
+                        </p>
+
+                        <table class="widefat striped">
+                                <thead>
+                                        <tr>
+                                                <th>Sección</th>
+                                                <th>Tipos</th>
+                                                <th>Estado</th>
+                                        </tr>
+                                </thead>
+                                <tbody>
+                                        <?php
+                                        foreach (
+                                                $overview_sections
+                                                as $overview_slug =>
+                                                $overview_section
+                                        ) :
+                                                $overview_type_count = 0;
+
+                                                foreach (
+                                                        $classes
+                                                        as $overview_class
+                                                ) {
+                                                        $overview_scope =
+                                                                isset(
+                                                                        $overview_class[
+                                                                                'scope_id'
+                                                                        ]
+                                                                )
+                                                                        ? (string)
+                                                                          $overview_class[
+                                                                                  'scope_id'
+                                                                          ]
+                                                                        : '';
+
+                                                        if (
+                                                                $overview_scope
+                                                                === $overview_slug
+                                                        ) {
+                                                                $overview_type_count++;
+                                                        }
+                                                }
+
+                                                $overview_name =
+                                                        isset(
+                                                                $overview_section[
+                                                                        'name'
+                                                                ]
+                                                        )
+                                                                ? (string)
+                                                                  $overview_section[
+                                                                          'name'
+                                                                  ]
+                                                                : '';
+
+                                                $overview_state =
+                                                        isset(
+                                                                $overview_section[
+                                                                        'state'
+                                                                ]
+                                                        )
+                                                                ? (string)
+                                                                  $overview_section[
+                                                                          'state'
+                                                                  ]
+                                                                : 'active';
+                                                ?>
+                                                <tr>
+                                                        <td>
+                                                                <strong><?php
+                                                                echo esc_html(
+                                                                        $overview_name
+                                                                );
+                                                                ?></strong>
+                                                        </td>
+                                                        <td>
+                                                                <?php
+                                                                echo esc_html(
+                                                                        number_format_i18n(
+                                                                                $overview_type_count
+                                                                        )
+                                                                );
+                                                                ?>
+                                                        </td>
+                                                        <td>
+                                                                <?php
+                                                                echo esc_html(
+                                                                        'active'
+                                                                        === $overview_state
+                                                                                ? 'Visible'
+                                                                                : 'Oculta'
+                                                                );
+                                                                ?>
+                                                        </td>
+                                                </tr>
+                                        <?php endforeach; ?>
+                                </tbody>
+                        </table>
+
+                <?php else : ?>
+
+                <h2>Editar</h2>
 
                 <p>
                         <a
@@ -2511,7 +2681,11 @@ function bitacora_render_instance_editor_admin_page() {
                 <form
                         method="post"
                         action="<?php echo esc_url(
-                                bitacora_get_instance_editor_admin_url()
+                                add_query_arg(
+                                        'mode',
+                                        'edit',
+                                        bitacora_get_instance_editor_admin_url()
+                                )
                         ); ?>"
                 >
                         <input
@@ -3902,6 +4076,8 @@ function bitacora_render_instance_editor_admin_page() {
                                 la PROPUESTA revisada.
                         </em>
                 </p>
+
+                <?php endif; ?>
         </div>
         <?php
 }
@@ -4516,8 +4692,8 @@ function bitacora_render_profiles_admin_page() {
                                                                                             bitacora_get_instance_editor_admin_url()
                                                                                         ); ?>"
                                                                                         class="button button-secondary"
-                                                                                        title="Edita la estructura de la instancia activa."
-                                                                                >EDITAR INSTANCIA</a>
+                                                                                        title="Consulta o modifica la estructura actualmente en uso."
+                                                                                >PERFIL ACTUAL</a>
                                                                         <?php endif; ?>
 
                                                                         <a
