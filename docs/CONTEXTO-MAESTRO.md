@@ -1,10 +1,10 @@
 # Bitácora — Contexto Maestro de desarrollo
 
-**Revisión documental:** 2026-10-12
-**Estado técnico de referencia:** 2026-10-12
+**Revisión documental:** 2026-10-15
+**Estado técnico de referencia:** 2026-10-15
 **Rama:** `0.3.0-dev`  
 **Repo canónico:** `/home/dosmilun/repos/bitacora`  
-**HEAD verificado:** `d02000d Fix promoted structure preview round-trip`
+**HEAD verificado:** `9f133d4 Update master context for instance structure editing`
 
 > Este documento describe el **estado vigente** del proyecto y debe servir como referencia
 > de continuidad entre chats y estaciones de trabajo. No pretende narrar toda la historia.
@@ -1838,6 +1838,11 @@ features.
 
 ## 15.4 Identidad técnica y slugs
 
+**Estado al 2026-10-15: IMPLEMENTADO Y VERIFICADO.**
+
+Los slugs pertenecen exclusivamente a la identidad técnica de la estructura.
+No son un dato de operación ni un campo de edición humana.
+
 Para objetos existentes:
 
 ```text
@@ -1849,33 +1854,100 @@ identidades WordPress
 
 permanecen estables.
 
-Los nombres y etiquetas visibles pueden cambiar sin recrear el objeto.
+Los nombres y etiquetas visibles pueden cambiar sin recrear el objeto ni
+modificar su identidad técnica.
 
-En las altas, Bitácora debe proponer automáticamente un slug razonable a partir
-del nombre, siguiendo el comportamiento habitual de WordPress.
+En las altas de Secciones y Tipos, Bitácora genera internamente el slug a
+partir del nombre.
 
 ```text
-Nombre
+Nombre visible
     ↓
-slug propuesto automáticamente
+sanitize_title()
+    ↓
+slug técnico interno
 ```
 
-El operador no necesita definirlo, pero puede personalizarlo si tiene una razón
-para hacerlo.
+La creación de un Tipo incorpora además el contexto de su Sección a la
+identidad generada.
 
-La edición manual del slug debe quedar en una zona secundaria o avanzada de la
-interfaz.
+Las colisiones se resuelven internamente mediante sufijos sucesivos.
 
-Una vez materializado:
+```text
+nombre
+    → slug
+
+colisión
+    → slug-2
+    → slug-3
+    → ...
+```
+
+El operador:
+
+```text
+- no introduce el slug
+- no lo edita
+- no necesita conocerlo
+- no lo ve en la interfaz ordinaria
+```
+
+Una vez nacido el objeto:
 
 ```text
 slug
     = identidad técnica estable
-    = no edición ordinaria
+    = no se regenera al renombrar
 ```
 
-Una eventual modificación de identidad técnica sería otra clase de operación,
-no una modificación corriente del objeto.
+Por lo tanto:
+
+```text
+crear
+    → genera identidad técnica una vez
+
+renombrar
+    → conserva identidad técnica
+
+Preview posterior
+    → conserva la misma identidad
+
+APPLY
+    → reconcilia utilizando esa identidad estable
+```
+
+No existe edición manual o avanzada del slug dentro del mantenimiento normal
+de la instancia.
+
+Una eventual modificación de identidad técnica sería otra clase de operación
+y no forma parte de la modificación estructural ordinaria.
+
+Verificación funcional 2026-10-15:
+
+```text
+PASS alta de Sección con slug automático
+PASS alta de Tipo con slug contextual automático
+PASS alta simultánea Sección + Tipo
+PASS resolución interna de referencia a nueva Sección
+PASS colisión con sufijo -2
+PASS round-trip después de Preview
+PASS renombrado sin regeneración de slug
+PASS validación de las propuestas por el Engine
+PASS fingerprint PRE idéntico antes/después de Preview
+PASS sin modificación del runtime durante Preview
+PASS prueba humana de creación y renombrado
+```
+
+La interfaz del prototipo fue limpiada para no mostrar slugs ni identidades
+técnicas en:
+
+```text
+- encabezados de Sección
+- formularios de alta
+- tabla de Tipos
+- selectores de Sección
+- Preview de reconciliación
+```
 
 ## 15.5 Validación previa y huella PRE
 
@@ -2073,6 +2145,39 @@ ENGINE
         ↓
 validación / plan / PAUSA / reconciliación / verificación
 ```
+
+La interfaz humana no debe trasladar al operador identificadores ni
+diagnósticos propios del Engine cuando no son necesarios para tomar una
+decisión.
+
+En particular, permanecen internos:
+
+```text
+- slugs
+- UUID de Profile
+- fingerprints PRE / PROPUESTA
+- códigos técnicos de acciones del planner
+- scope / scope_id
+- IDs WordPress
+```
+
+Estos datos pueden conservarse en formularios ocultos, logs, expedientes,
+diagnóstico o herramientas técnicas cuando sean necesarios para seguridad,
+trazabilidad o mantenimiento.
+
+Su ocultamiento visual no altera su función interna.
+
+En el Preview humano las acciones del planner se presentan mediante etiquetas
+funcionales.
+
+```text
+section.create → Crear Sección
+class.create   → Crear Tipo
+page.create    → Crear página de Sección
+```
+
+El código técnico de la acción permanece intacto dentro del Engine.
+
 
 El Engine no necesita conocer cómo fue preparada la propuesta.
 

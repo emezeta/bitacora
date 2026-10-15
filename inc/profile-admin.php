@@ -954,96 +954,92 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
         }
 
 
-        if (
-                isset( $input['new_section'] )
-                && is_array(
-                        $input['new_section']
-                )
-        ) {
-                $row =
-                        $input['new_section'];
+	$new_section_slug = '';
 
-                $name =
-                        isset( $row['name'] )
-                                ? trim(
-                                        sanitize_text_field(
-                                                (string) $row['name']
-                                        )
-                                )
-                                : '';
+	if (
+		isset( $input['new_section'] )
+		&& is_array(
+			$input['new_section']
+		)
+	) {
+		$row =
+			$input['new_section'];
 
-                $slug =
-                        isset( $row['slug'] )
-                                ? sanitize_title(
-                                        (string) $row['slug']
-                                )
-                                : '';
+		$name =
+			isset( $row['name'] )
+				? trim(
+					sanitize_text_field(
+						(string) $row['name']
+					)
+				)
+				: '';
 
-                /*
-                 * Fila completamente vacía: no hay alta solicitada.
-                 */
-                if (
-                        '' !== $name
-                        || '' !== $slug
-                ) {
-                        if (
-                                '' === $name
-                                || '' === $slug
-                        ) {
-                                $fields =
-                                        array();
+		/*
+		 * La presencia del Nombre solicita el alta.
+		 *
+		 * La identidad técnica se genera aquí una única vez.
+		 * Después del Preview la nueva Sección vuelve indexada
+		 * por este slug dentro de instance[sections][slug], por
+		 * lo que posteriores cambios de Nombre no lo regeneran.
+		 */
+		if ( '' !== $name ) {
+			$base_slug =
+				sanitize_title( $name );
 
-                                if ( '' === $name ) {
-                                        $fields[] =
-                                                'new_section.name';
-                                }
+			if ( '' === $base_slug ) {
+				return new WP_Error(
+					'bitacora_instance_editor_new_section_invalid',
+					'No fue posible generar la identidad técnica de la nueva Sección a partir de su nombre.',
+					array(
+						'fields' =>
+							array(
+								'new_section.name',
+							),
+					)
+				);
+			}
 
-                                if ( '' === $slug ) {
-                                        $fields[] =
-                                                'new_section.slug';
-                                }
+			$slug =
+				$base_slug;
 
-                                return new WP_Error(
-                                        'bitacora_instance_editor_new_section_invalid',
-                                        'La nueva sección requiere nombre y slug.',
-                                        array(
-                                                'fields' =>
-                                                        $fields,
-                                        )
-                                );
-                        }
+			$suffix = 2;
 
-                        if (
-                                isset(
-                                        $proposal['sections'][ $slug ]
-                                )
-                        ) {
-                                return new WP_Error(
-                                        'bitacora_instance_editor_new_section_duplicate',
-                                        'La nueva sección utiliza un slug que ya pertenece a la PROPUESTA.',
-                                        array(
-                                                'fields' =>
-                                                        array(
-                                                                'new_section.slug',
-                                                        ),
-                                        )
-                                );
-                        }
+			while (
+				'notas' === $slug
+				|| isset(
+					$proposal['sections'][ $slug ]
+				)
+			) {
+				$slug =
+					$base_slug
+					. '-'
+					. $suffix;
 
-                        $section =
-                                $build_new_section(
-                                        $row,
-                                        $slug
-                                );
+				$suffix++;
+			}
 
-                        if ( is_wp_error( $section ) ) {
-                                return $section;
-                        }
+			$section =
+				$build_new_section(
+					$row,
+					$slug
+				);
 
-                        $proposal['sections'][ $slug ] =
-                                $section;
-                }
-        }
+			if ( is_wp_error( $section ) ) {
+				return $section;
+			}
+
+			$proposal['sections'][ $slug ] =
+				$section;
+
+			/*
+			 * Permite que un Tipo creado en el mismo formulario
+			 * apunte a esta nueva Sección sin exponer su slug al
+			 * operador.
+			 */
+			$new_section_slug =
+				$slug;
+		}
+	}
 
 
         /*
@@ -1254,118 +1250,123 @@ function bitacora_build_instance_structure_proposal_from_admin_input(
         }
 
 
-        if (
-                isset( $input['new_class'] )
-                && is_array(
-                        $input['new_class']
-                )
-        ) {
-                $row =
-                        $input['new_class'];
+	if (
+		isset( $input['new_class'] )
+		&& is_array(
+			$input['new_class']
+		)
+	) {
+		$row =
+			$input['new_class'];
 
-                $name =
-                        isset( $row['name'] )
-                                ? trim(
-                                        sanitize_text_field(
-                                                (string) $row['name']
-                                        )
-                                )
-                                : '';
+		$name =
+			isset( $row['name'] )
+				? trim(
+					sanitize_text_field(
+						(string) $row['name']
+					)
+				)
+				: '';
 
-                $slug =
-                        isset( $row['slug'] )
-                                ? sanitize_title(
-                                        (string) $row['slug']
-                                )
-                                : '';
+		/*
+		 * Igual que con Secciones, sólo un Nombre no vacío
+		 * solicita realmente el alta.
+		 */
+		if ( '' !== $name ) {
+			$scope_id =
+				isset( $row['scope_id'] )
+					? sanitize_title(
+						(string)
+						$row['scope_id']
+					)
+					: '';
 
-                if (
-                        '' !== $name
-                        || '' !== $slug
-                ) {
-                        if (
-                                '' === $name
-                                || '' === $slug
-                        ) {
-                                $fields =
-                                        array();
+			/*
+			 * La UI utiliza esta referencia provisional cuando
+			 * el Tipo apunta a la Sección que se está creando
+			 * en el mismo Preview.
+			 */
+			if (
+				'__new_section__'
+				=== (string) (
+					$row['scope_id'] ?? ''
+				)
+			) {
+				$scope_id =
+					$new_section_slug;
+			}
 
-                                if ( '' === $name ) {
-                                        $fields[] =
-                                                'new_class.name';
-                                }
+			if ( '' === $scope_id ) {
+				return new WP_Error(
+					'bitacora_instance_editor_new_class_scope_required',
+					sprintf(
+						'El nuevo Tipo "%s" no tiene una Sección asignada. Seleccioná una Sección existente o la nueva Sección que estás preparando y volvé a previsualizar. No se aplicó ningún cambio.',
+						$name
+					),
+					array(
+						'fields' =>
+							array(
+								'new_class.scope_id',
+							),
+					)
+				);
+			}
 
-                                if ( '' === $slug ) {
-                                        $fields[] =
-                                                'new_class.slug';
-                                }
+			$base_slug =
+				sanitize_title(
+					$scope_id
+					. '-'
+					. $name
+				);
 
-                                return new WP_Error(
-                                        'bitacora_instance_editor_new_class_invalid',
-                                        'El nuevo Tipo requiere nombre y slug.',
-                                        array(
-                                                'fields' =>
-                                                        $fields,
-                                        )
-                                );
-                        }
+			if ( '' === $base_slug ) {
+				return new WP_Error(
+					'bitacora_instance_editor_new_class_invalid',
+					'No fue posible generar la identidad técnica del nuevo Tipo a partir de su nombre.',
+					array(
+						'fields' =>
+							array(
+								'new_class.name',
+							),
+					)
+				);
+			}
 
-                        if (
-                                isset(
-                                        $proposal['classes'][ $slug ]
-                                )
-                        ) {
-                                return new WP_Error(
-                                        'bitacora_instance_editor_new_class_duplicate',
-                                        'El nuevo Tipo utiliza un slug que ya pertenece a la PROPUESTA.',
-                                        array(
-                                                'fields' =>
-                                                        array(
-                                                                'new_class.slug',
-                                                        ),
-                                        )
-                                );
-                        }
+			$slug =
+				$base_slug;
 
-                        $scope_id =
-                                isset( $row['scope_id'] )
-                                        ? sanitize_title(
-                                                (string)
-                                                $row['scope_id']
-                                        )
-                                        : '';
+			$suffix = 2;
 
-                        if ( '' === $scope_id ) {
-                                return new WP_Error(
-                                        'bitacora_instance_editor_new_class_scope_required',
-                                        sprintf(
-                                                'El nuevo Tipo "%s" no tiene una Sección asignada. Seleccioná una Sección existente o la nueva Sección que estás preparando y volvé a previsualizar. No se aplicó ningún cambio.',
-                                                $name
-                                        ),
-                                        array(
-                                                'fields' =>
-                                                        array(
-                                                                'new_class.scope_id',
-                                                        ),
-                                        )
-                                );
-                        }
+			while (
+				isset(
+					$proposal['classes'][ $slug ]
+				)
+			) {
+				$slug =
+					$base_slug
+					. '-'
+					. $suffix;
 
+				$suffix++;
+			}
 
-                        $class =
-                                $build_new_class(
-                                        $row,
-                                        $slug
-                                );
+			$row['scope_id'] =
+				$scope_id;
 
-                        if ( is_wp_error( $class ) ) {
-                                return $class;
-                        }
+			$class =
+				$build_new_class(
+					$row,
+					$slug
+				);
 
-                        $proposal['classes'][ $slug ] =
-                                $class;
-                }
-        }
+			if ( is_wp_error( $class ) ) {
+				return $class;
+			}
+
+			$proposal['classes'][ $slug ] =
+				$class;
+		}
+	}
 
 
         return bitacora_get_canonical_profile_definition(
@@ -2260,30 +2261,10 @@ function bitacora_render_instance_editor_admin_page() {
                         <p>
                                 Estás editando la
                                 <strong>instancia materializada</strong>.
-                                Esta operación no modifica el Profile
-                                <code><?php
-                                echo esc_html(
-                                        $current_profile_id
-                                );
-                                ?></code>
+                                Esta operación no modifica el Perfil
                                 de la biblioteca.
                         </p>
-
-                        <p>
-                                Los slugs son identidad técnica y no se
-                                editan. Para retirar una estructura existente
-                                se cambia su estado; no se elimina.
-                        </p>
                 </div>
-
-                <p>
-                        <strong>PRE:</strong>
-                        <code><?php
-                        echo esc_html(
-                                $snapshot['fingerprint']
-                        );
-                        ?></code>
-                </p>
 
                 <?php if ( is_array( $apply_result ) ) : ?>
 
@@ -2336,6 +2317,27 @@ function bitacora_render_instance_editor_admin_page() {
                                 <?php
                                 $comparison =
                                         $preview['comparison'];
+
+                                $action_labels =
+                                        array(
+                                                'section.create' =>
+                                                        'Crear Sección',
+
+                                                'section.update' =>
+                                                        'Modificar Sección',
+
+                                                'class.create' =>
+                                                        'Crear Tipo',
+
+                                                'class.update' =>
+                                                        'Modificar Tipo',
+
+                                                'page.create' =>
+                                                        'Crear página de Sección',
+
+                                                'page.update' =>
+                                                        'Actualizar página de Sección',
+                                        );
                                 ?>
 
                                 <?php
@@ -2403,7 +2405,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                         <tr>
                                                                 <th>#</th>
                                                                 <th>Acción</th>
-                                                                <th>Identidad</th>
                                                         </tr>
                                                 </thead>
                                                 <tbody>
@@ -2427,24 +2428,31 @@ function bitacora_render_instance_editor_admin_page() {
                                                                                 ?>
                                                                         </td>
                                                                         <td>
-                                                                                <code><?php
+                                                                                <?php
+                                                                                $action_type =
+                                                                                        isset(
+                                                                                                $action[
+                                                                                                        'type'
+                                                                                                ]
+                                                                                        )
+                                                                                                ? (string)
+                                                                                                  $action[
+                                                                                                          'type'
+                                                                                                  ]
+                                                                                                : '';
+
                                                                                 echo esc_html(
-                                                                                        (string)
-                                                                                        $action[
-                                                                                                'type'
-                                                                                        ]
+                                                                                        isset(
+                                                                                                $action_labels[
+                                                                                                        $action_type
+                                                                                                ]
+                                                                                        )
+                                                                                                ? $action_labels[
+                                                                                                        $action_type
+                                                                                                ]
+                                                                                                : 'Cambio estructural'
                                                                                 );
-                                                                                ?></code>
-                                                                        </td>
-                                                                        <td>
-                                                                                <code><?php
-                                                                                echo esc_html(
-                                                                                        (string)
-                                                                                        $action[
-                                                                                                'identity'
-                                                                                        ]
-                                                                                );
-                                                                                ?></code>
+                                                                                ?>
                                                                         </td>
                                                                 </tr>
                                                         <?php endforeach; ?>
@@ -2652,12 +2660,6 @@ function bitacora_render_instance_editor_admin_page() {
 
                         <h2>Secciones</h2>
 
-                        <p>
-                                El slug se conserva como identidad.
-                                Estado <strong>Oculta</strong> retira la
-                                sección del uso normal conservando su historia.
-                        </p>
-
                         <?php
                         foreach (
                                 $sections
@@ -2680,12 +2682,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                                 : $slug
                                                 );
                                                 ?>
-                                                —
-                                                <code><?php
-                                                echo esc_html(
-                                                        $slug
-                                                );
-                                                ?></code>
                                         </summary>
 
                                         <input
@@ -2698,19 +2694,6 @@ function bitacora_render_instance_editor_admin_page() {
 
                                         <table class="form-table">
                                                 <tbody>
-                                                        <tr>
-                                                                <th scope="row">
-                                                                        Identidad
-                                                                </th>
-                                                                <td>
-                                                                        <code><?php
-                                                                        echo esc_html(
-                                                                                $slug
-                                                                        );
-                                                                        ?></code>
-                                                                </td>
-                                                        </tr>
-
                                                         <?php
                                                         foreach (
                                                                 array(
@@ -2970,7 +2953,6 @@ function bitacora_render_instance_editor_admin_page() {
                                 <thead>
                                         <tr>
                                                 <th>Tipo</th>
-                                                <th>Slug</th>
                                                 <th>Sección</th>
                                                 <th>Orden</th>
                                                 <th>Estado</th>
@@ -3019,13 +3001,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                                 >
                                                         </td>
 
-                                                        <td>
-                                                                <code><?php
-                                                                echo esc_html(
-                                                                        $slug
-                                                                );
-                                                                ?></code>
-                                                        </td>
 
                                                         <td>
                                                                 <select
@@ -3067,11 +3042,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                                                                 $scope_label
                                                                                         );
                                                                                         ?>
-                                                                                        (<?php
-                                                                                        echo esc_html(
-                                                                                                $scope_slug
-                                                                                        );
-                                                                                        ?>)
                                                                                 </option>
                                                                         <?php endforeach; ?>
                                                                 </select>
@@ -3153,11 +3123,6 @@ function bitacora_render_instance_editor_admin_page() {
 
                         <h2>Agregar sección</h2>
 
-                        <p>
-                                La nueva sección nace con un slug técnico que,
-                                una vez incorporado a la PROPUESTA, queda fijo.
-                        </p>
-
                         <table class="form-table">
                                 <tbody>
                                         <tr>
@@ -3189,44 +3154,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                                 aria-invalid="<?php
                                                                 echo $field_has_error(
                                                                         'new_section.name'
-                                                                )
-                                                                        ? 'true'
-                                                                        : 'false';
-                                                                ?>"
-                                                        >
-                                                </td>
-                                        </tr>
-
-                                        <tr>
-                                                <th scope="row">
-                                                        Slug
-                                                </th>
-                                                <td>
-                                                        <input
-                                                                type="text"
-                                                                class="regular-text<?php
-                                                                echo $field_has_error(
-                                                                        'new_section.slug'
-                                                                )
-                                                                        ? ' bitacora-field-error'
-                                                                        : '';
-                                                                ?>"
-                                                                id="bitacora-new-section-slug"
-                                                                name="instance[new_section][slug]"
-                                                                value="<?php
-                                                                echo esc_attr(
-                                                                        (string)
-                                                                        $get_form_input(
-                                                                                'new_section',
-                                                                                'slug',
-                                                                                ''
-                                                                        )
-                                                                );
-                                                                ?>"
-                                                                placeholder="Ej.: otra-seccion"
-                                                                aria-invalid="<?php
-                                                                echo $field_has_error(
-                                                                        'new_section.slug'
                                                                 )
                                                                         ? 'true'
                                                                         : 'false';
@@ -3440,9 +3367,8 @@ function bitacora_render_instance_editor_admin_page() {
                         <p>
                                 El nuevo Tipo puede asociarse a una sección
                                 existente o a la nueva sección que estés
-                                preparando arriba. Cuando la nueva sección
-                                tenga Nombre y Slug, aparecerá en esta lista
-                                marcada como <strong>— nueva</strong>.
+                                preparando arriba. En ese caso aparecerá
+                                en esta lista marcada como <strong>— nueva</strong>.
                         </p>
 
                         <table class="form-table">
@@ -3476,44 +3402,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                                 aria-invalid="<?php
                                                                 echo $field_has_error(
                                                                         'new_class.name'
-                                                                )
-                                                                        ? 'true'
-                                                                        : 'false';
-                                                                ?>"
-                                                        >
-                                                </td>
-                                        </tr>
-
-                                        <tr>
-                                                <th scope="row">
-                                                        Slug
-                                                </th>
-                                                <td>
-                                                        <input
-                                                                type="text"
-                                                                class="regular-text<?php
-                                                                echo $field_has_error(
-                                                                        'new_class.slug'
-                                                                )
-                                                                        ? ' bitacora-field-error'
-                                                                        : '';
-                                                                ?>"
-                                                                id="bitacora-new-class-slug"
-                                                                name="instance[new_class][slug]"
-                                                                value="<?php
-                                                                echo esc_attr(
-                                                                        (string)
-                                                                        $get_form_input(
-                                                                                'new_class',
-                                                                                'slug',
-                                                                                ''
-                                                                        )
-                                                                );
-                                                                ?>"
-                                                                placeholder="Ej.: otra-seccion-tipo"
-                                                                aria-invalid="<?php
-                                                                echo $field_has_error(
-                                                                        'new_class.slug'
                                                                 )
                                                                         ? 'true'
                                                                         : 'false';
@@ -3601,11 +3489,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                                                         $scope_label
                                                                                 );
                                                                                 ?>
-                                                                                (<?php
-                                                                                echo esc_html(
-                                                                                        $scope_slug
-                                                                                );
-                                                                                ?>)
                                                                         </option>
                                                                 <?php endforeach; ?>
                                                         </select>
@@ -3617,8 +3500,7 @@ function bitacora_render_instance_editor_admin_page() {
                                                         >
                                                                 Si este Tipo pertenece a una
                                                                 Sección nueva, completá arriba
-                                                                el Nombre y el Slug de esa
-                                                                Sección.
+                                                                su Nombre.
                                                         </p>
                                                 </td>
                                         </tr>
@@ -3788,17 +3670,9 @@ function bitacora_render_instance_editor_admin_page() {
                                 document.getElementById(
                                         'bitacora-new-section-name'
                                 );
-                        const sectionSlug =
-                                document.getElementById(
-                                        'bitacora-new-section-slug'
-                                );
                         const className =
                                 document.getElementById(
                                         'bitacora-new-class-name'
-                                );
-                        const classSlug =
-                                document.getElementById(
-                                        'bitacora-new-class-slug'
                                 );
                         const scope =
                                 document.getElementById(
@@ -3821,9 +3695,7 @@ function bitacora_render_instance_editor_admin_page() {
 
                         if (
                                 ! sectionName
-                                || ! sectionSlug
                                 || ! className
-                                || ! classSlug
                                 || ! scope
                                 || ! help
                         ) {
@@ -3861,8 +3733,7 @@ function bitacora_render_instance_editor_admin_page() {
                                 const name =
                                         sectionName.value.trim();
 
-                                const slug =
-                                        sectionSlug.value.trim();
+                                const slug = '__new_section__';
 
                                 const oldDynamic =
                                         scope.querySelector(
@@ -3881,42 +3752,12 @@ function bitacora_render_instance_editor_admin_page() {
                                 }
 
 
-                                if (
-                                        '' !== name
-                                        && '' !== slug
-                                ) {
-
-                                        const duplicate =
-                                                Array.from(
-                                                        scope.options
-                                                ).some(
-                                                        function( option ) {
-
-                                                                return (
-                                                                        option.value
-                                                                        === slug
-                                                                );
-                                                        }
-                                                );
-
-                                        if ( duplicate ) {
-                                                setHelp(
-                                                        'Ese Slug ya pertenece '
-                                                        + 'a una Sección '
-                                                        + 'existente.',
-                                                        true
-                                                );
-
-                                                return;
-                                        }
-
+                                if ( '' !== name ) {
 
                                         const option =
                                                 new Option(
                                                         name
-                                                        + ' ('
-                                                        + slug
-                                                        + ') — nueva',
+                                                        + ' — nueva',
                                                         slug
                                                 );
 
@@ -3943,9 +3784,7 @@ function bitacora_render_instance_editor_admin_page() {
                                                         'Este Tipo se asociará '
                                                         + 'a la nueva Sección '
                                                         + name
-                                                        + ' ('
-                                                        + slug
-                                                        + ').',
+                                                        + '.',
                                                         false
                                                 );
 
@@ -3957,7 +3796,6 @@ function bitacora_render_instance_editor_admin_page() {
                                                 hasValue(
                                                         [
                                                                 className,
-                                                                classSlug,
                                                         ]
                                                 )
                                                 && '' === scope.value
@@ -3977,9 +3815,7 @@ function bitacora_render_instance_editor_admin_page() {
                                         setHelp(
                                                 'La nueva Sección '
                                                 + name
-                                                + ' ('
-                                                + slug
-                                                + ') ya está disponible '
+                                                + ' ya está disponible '
                                                 + 'en la lista.',
                                                 false
                                         );
@@ -3992,7 +3828,6 @@ function bitacora_render_instance_editor_admin_page() {
                                         hasValue(
                                                 [
                                                         className,
-                                                        classSlug,
                                                 ]
                                         )
                                         && '' === scope.value
@@ -4002,15 +3837,13 @@ function bitacora_render_instance_editor_admin_page() {
                                                 hasValue(
                                                         [
                                                                 sectionName,
-                                                                sectionSlug,
                                                         ]
                                                 )
                                         ) {
                                                 setHelp(
-                                                        'Completá Nombre y '
-                                                        + 'Slug de la nueva '
-                                                        + 'Sección para poder '
-                                                        + 'asociarle este Tipo.',
+                                                        'Completá el Nombre de '
+                                                        + 'la nueva Sección para '
+                                                        + 'poder asociarle este Tipo.',
                                                         true
                                                 );
                                         } else {
@@ -4018,8 +3851,7 @@ function bitacora_render_instance_editor_admin_page() {
                                                         'Elegí una Sección. '
                                                         + 'Si todavía no '
                                                         + 'existe, completá '
-                                                        + 'arriba su Nombre '
-                                                        + 'y Slug.',
+                                                        + 'arriba su Nombre.',
                                                         true
                                                 );
                                         }
@@ -4031,8 +3863,7 @@ function bitacora_render_instance_editor_admin_page() {
                                 setHelp(
                                         'Si este Tipo pertenece a una '
                                         + 'Sección nueva, completá arriba '
-                                        + 'el Nombre y el Slug de esa '
-                                        + 'Sección.',
+                                        + 'su Nombre.',
                                         false
                                 );
                         }
@@ -4040,9 +3871,7 @@ function bitacora_render_instance_editor_admin_page() {
 
                         [
                                 sectionName,
-                                sectionSlug,
-                                className,
-                                classSlug
+                                className
                         ].forEach(
                                 function( field ) {
 
