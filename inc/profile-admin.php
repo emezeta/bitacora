@@ -2268,6 +2268,80 @@ function bitacora_render_instance_editor_admin_page() {
                         'view';
         }
 
+        $instance_editor_edit_view =
+                isset( $_GET['edit_view'] )
+                        ? sanitize_key(
+                                wp_unslash(
+                                        $_GET['edit_view']
+                                )
+                        )
+                        : 'root';
+
+        $allowed_edit_views =
+                array(
+                        'root',
+                        'core',
+                        'sections',
+                        'section',
+                        'section-new',
+                        'section-modify',
+                        'section-state',
+                        'section-types',
+                        'legacy',
+                );
+
+        if (
+                ! in_array(
+                        $instance_editor_edit_view,
+                        $allowed_edit_views,
+                        true
+                )
+        ) {
+                $instance_editor_edit_view =
+                        'root';
+        }
+
+        $section_ref =
+                isset( $_GET['section_ref'] )
+                        ? absint(
+                                $_GET['section_ref']
+                        )
+                        : 0;
+
+        $section_keys =
+                array_keys(
+                        $sections
+                );
+
+        $selected_section_slug =
+                (
+                        $section_ref > 0
+                        && isset(
+                                $section_keys[
+                                        $section_ref - 1
+                                ]
+                        )
+                )
+                        ? (string)
+                          $section_keys[
+                                  $section_ref - 1
+                          ]
+                        : '';
+
+        $selected_section =
+                (
+                        '' !== $selected_section_slug
+                        && isset(
+                                $sections[
+                                        $selected_section_slug
+                                ]
+                        )
+                )
+                        ? $sections[
+                                $selected_section_slug
+                        ]
+                        : null;
+
         ?>
         <div class="wrap bitacora-instance-editor">
                 <h1>Perfil Actual</h1>
@@ -2298,6 +2372,13 @@ function bitacora_render_instance_editor_admin_page() {
                                         )
                                 ); ?>"
                         >EDITAR</a>
+
+                        <a
+                                class="button button-secondary"
+                                href="<?php echo esc_url(
+                                        bitacora_get_profiles_admin_url()
+                                ); ?>"
+                        >VOLVER A PERFILES</a>
                 </p>
 
                 <?php if ( 'view' === $instance_editor_mode ) : ?>
@@ -2418,6 +2499,429 @@ function bitacora_render_instance_editor_admin_page() {
                 <?php else : ?>
 
                 <h2>Editar</h2>
+
+                <?php
+                if (
+                        'legacy'
+                        !== $instance_editor_edit_view
+                ) :
+                        ?>
+
+                        <?php
+                        if (
+                                'root'
+                                === $instance_editor_edit_view
+                        ) :
+                                ?>
+
+                                <p>
+                                        Elegí qué parte del Perfil Actual
+                                        querés modificar.
+                                </p>
+
+                                <p>
+                                        <a
+                                                class="button button-secondary"
+                                                href="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                array(
+                                                                        'mode' =>
+                                                                                'edit',
+                                                                        'edit_view' =>
+                                                                                'core',
+                                                                ),
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >SECCIÓN MAESTRA</a>
+
+                                        <a
+                                                class="button button-secondary"
+                                                href="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                array(
+                                                                        'mode' =>
+                                                                                'edit',
+                                                                        'edit_view' =>
+                                                                                'sections',
+                                                                ),
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >SECCIONES</a>
+                                </p>
+
+                        <?php
+                        elseif (
+                                'core'
+                                === $instance_editor_edit_view
+                        ) :
+                                ?>
+
+                                <p>
+                                        <a
+                                                href="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                'mode',
+                                                                'edit',
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >← Volver a Editar</a>
+                                </p>
+
+                                <h3>Sección Maestra</h3>
+
+                                <p>
+                                        <?php
+                                        echo esc_html(
+                                                isset(
+                                                        $form_definition[
+                                                                'core'
+                                                        ][
+                                                                'name'
+                                                        ]
+                                                )
+                                                        ? (string)
+                                                          $form_definition[
+                                                                  'core'
+                                                          ][
+                                                                  'name'
+                                                          ]
+                                                        : 'Bitácora'
+                                        );
+                                        ?>
+                                </p>
+
+                                <p>
+                                        <strong>MODIFICAR</strong>
+                                </p>
+
+                                <p class="description">
+                                        El formulario específico de esta
+                                        operación se extraerá del editor
+                                        técnico en la próxima vertical.
+                                </p>
+
+                        <?php
+                        elseif (
+                                'sections'
+                                === $instance_editor_edit_view
+                        ) :
+                                ?>
+
+                                <p>
+                                        <a
+                                                href="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                'mode',
+                                                                'edit',
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >← Volver a Editar</a>
+                                </p>
+
+                                <h3>Secciones</h3>
+
+                                <p>
+                                        <a
+                                                class="button button-secondary"
+                                                href="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                array(
+                                                                        'mode' =>
+                                                                                'edit',
+                                                                        'edit_view' =>
+                                                                                'section-new',
+                                                                ),
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >CREAR</a>
+                                </p>
+
+                                <table class="widefat striped">
+                                        <thead>
+                                                <tr>
+                                                        <th>Sección</th>
+                                                        <th>Estado</th>
+                                                        <th></th>
+                                                </tr>
+                                        </thead>
+                                        <tbody>
+                                                <?php
+                                                $section_position = 0;
+
+                                                foreach (
+                                                        $sections
+                                                        as $section
+                                                ) :
+                                                        $section_position++;
+
+                                                        $section_name =
+                                                                isset(
+                                                                        $section[
+                                                                                'name'
+                                                                        ]
+                                                                )
+                                                                        ? (string)
+                                                                          $section[
+                                                                                  'name'
+                                                                          ]
+                                                                        : '';
+
+                                                        $section_state =
+                                                                isset(
+                                                                        $section[
+                                                                                'state'
+                                                                        ]
+                                                                )
+                                                                        ? (string)
+                                                                          $section[
+                                                                                  'state'
+                                                                          ]
+                                                                        : 'active';
+                                                        ?>
+                                                        <tr>
+                                                                <td>
+                                                                        <strong><?php
+                                                                        echo esc_html(
+                                                                                $section_name
+                                                                        );
+                                                                        ?></strong>
+                                                                </td>
+                                                                <td>
+                                                                        <?php
+                                                                        echo esc_html(
+                                                                                'active'
+                                                                                === $section_state
+                                                                                        ? 'Visible'
+                                                                                        : 'Oculta'
+                                                                        );
+                                                                        ?>
+                                                                </td>
+                                                                <td>
+                                                                        <a
+                                                                                class="button button-small"
+                                                                                href="<?php echo esc_url(
+                                                                                        add_query_arg(
+                                                                                                array(
+                                                                                                        'mode' =>
+                                                                                                                'edit',
+                                                                                                        'edit_view' =>
+                                                                                                                'section',
+                                                                                                        'section_ref' =>
+                                                                                                                $section_position,
+                                                                                                ),
+                                                                                                bitacora_get_instance_editor_admin_url()
+                                                                                        )
+                                                                                ); ?>"
+                                                                        >ELEGIR</a>
+                                                                </td>
+                                                        </tr>
+                                                <?php endforeach; ?>
+                                        </tbody>
+                                </table>
+
+                        <?php
+                        elseif (
+                                'section'
+                                === $instance_editor_edit_view
+                        ) :
+                                ?>
+
+                                <p>
+                                        <a
+                                                href="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                array(
+                                                                        'mode' =>
+                                                                                'edit',
+                                                                        'edit_view' =>
+                                                                                'sections',
+                                                                ),
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >← Volver a Secciones</a>
+                                </p>
+
+                                <?php if ( is_array( $selected_section ) ) : ?>
+
+                                        <h3>
+                                                <?php
+                                                echo esc_html(
+                                                        isset(
+                                                                $selected_section[
+                                                                        'name'
+                                                                ]
+                                                        )
+                                                                ? (string)
+                                                                  $selected_section[
+                                                                          'name'
+                                                                  ]
+                                                                : ''
+                                                );
+                                                ?>
+                                        </h3>
+
+                                        <p>
+                                                <a
+                                                        class="button button-secondary"
+                                                        href="<?php echo esc_url(
+                                                                add_query_arg(
+                                                                        array(
+                                                                                'mode' =>
+                                                                                        'edit',
+                                                                                'edit_view' =>
+                                                                                        'section-modify',
+                                                                                'section_ref' =>
+                                                                                        $section_ref,
+                                                                        ),
+                                                                        bitacora_get_instance_editor_admin_url()
+                                                                )
+                                                        ); ?>"
+                                                >MODIFICAR</a>
+
+                                                <a
+                                                        class="button button-secondary"
+                                                        href="<?php echo esc_url(
+                                                                add_query_arg(
+                                                                        array(
+                                                                                'mode' =>
+                                                                                        'edit',
+                                                                                'edit_view' =>
+                                                                                        'section-state',
+                                                                                'section_ref' =>
+                                                                                        $section_ref,
+                                                                        ),
+                                                                        bitacora_get_instance_editor_admin_url()
+                                                                )
+                                                        ); ?>"
+                                                ><?php
+                                                echo esc_html(
+                                                        (
+                                                                isset(
+                                                                        $selected_section[
+                                                                                'state'
+                                                                        ]
+                                                                )
+                                                                && 'active'
+                                                                === $selected_section[
+                                                                        'state'
+                                                                ]
+                                                        )
+                                                                ? 'OCULTAR'
+                                                                : 'MOSTRAR'
+                                                );
+                                                ?></a>
+
+                                                <a
+                                                        class="button button-secondary"
+                                                        href="<?php echo esc_url(
+                                                                add_query_arg(
+                                                                        array(
+                                                                                'mode' =>
+                                                                                        'edit',
+                                                                                'edit_view' =>
+                                                                                        'section-types',
+                                                                                'section_ref' =>
+                                                                                        $section_ref,
+                                                                        ),
+                                                                        bitacora_get_instance_editor_admin_url()
+                                                                )
+                                                        ); ?>"
+                                                >TIPOS</a>
+                                        </p>
+
+                                <?php else : ?>
+
+                                        <div class="notice notice-warning inline">
+                                                <p>
+                                                        La Sección seleccionada
+                                                        ya no está disponible.
+                                                </p>
+                                        </div>
+
+                                <?php endif; ?>
+
+                        <?php
+                        elseif (
+                                in_array(
+                                        $instance_editor_edit_view,
+                                        array(
+                                                'section-new',
+                                                'section-modify',
+                                                'section-state',
+                                                'section-types',
+                                        ),
+                                        true
+                                )
+                        ) :
+                                ?>
+
+                                <p>
+                                        <a
+                                                href="<?php echo esc_url(
+                                                        'section-new'
+                                                        === $instance_editor_edit_view
+                                                                ? add_query_arg(
+                                                                        array(
+                                                                                'mode' =>
+                                                                                        'edit',
+                                                                                'edit_view' =>
+                                                                                        'sections',
+                                                                        ),
+                                                                        bitacora_get_instance_editor_admin_url()
+                                                                )
+                                                                : add_query_arg(
+                                                                        array(
+                                                                                'mode' =>
+                                                                                        'edit',
+                                                                                'edit_view' =>
+                                                                                        'section',
+                                                                                'section_ref' =>
+                                                                                        $section_ref,
+                                                                        ),
+                                                                        bitacora_get_instance_editor_admin_url()
+                                                                )
+                                                ); ?>"
+                                        >← Volver</a>
+                                </p>
+
+                                <h3>
+                                        <?php
+                                        $operation_titles =
+                                                array(
+                                                        'section-new' =>
+                                                                'Crear Sección',
+                                                        'section-modify' =>
+                                                                'Modificar Sección',
+                                                        'section-state' =>
+                                                                'Cambiar visibilidad',
+                                                        'section-types' =>
+                                                                'Tipos',
+                                                );
+
+                                        echo esc_html(
+                                                $operation_titles[
+                                                        $instance_editor_edit_view
+                                                ]
+                                        );
+                                        ?>
+                                </h3>
+
+                                <p class="description">
+                                        Esta operación queda preparada como
+                                        destino de navegación. Su formulario
+                                        específico se incorporará en la
+                                        siguiente vertical.
+                                </p>
+
+                        <?php endif; ?>
+
+                <?php else : ?>
 
                 <p>
                         <a
@@ -2682,8 +3186,12 @@ function bitacora_render_instance_editor_admin_page() {
                         method="post"
                         action="<?php echo esc_url(
                                 add_query_arg(
-                                        'mode',
-                                        'edit',
+                                        array(
+                                                'mode' =>
+                                                        'edit',
+                                                'edit_view' =>
+                                                        'legacy',
+                                        ),
                                         bitacora_get_instance_editor_admin_url()
                                 )
                         ); ?>"
@@ -4076,6 +4584,8 @@ function bitacora_render_instance_editor_admin_page() {
                                 la PROPUESTA revisada.
                         </em>
                 </p>
+
+                <?php endif; ?>
 
                 <?php endif; ?>
         </div>
