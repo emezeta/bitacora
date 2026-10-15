@@ -2245,6 +2245,69 @@ function bitacora_render_instance_editor_admin_page() {
         $current_profile_id =
                 bitacora_get_configured_profile_id();
 
+        $current_profile_label = '';
+
+        $profile_catalog =
+                bitacora_get_profile_catalog();
+
+        if ( is_array( $profile_catalog ) ) {
+                foreach (
+                        $profile_catalog
+                        as $catalog_profile
+                ) {
+                        if ( ! is_array( $catalog_profile ) ) {
+                                continue;
+                        }
+
+                        $catalog_profile_id =
+                                isset( $catalog_profile['id'] )
+                                        ? (string)
+                                          $catalog_profile['id']
+                                        : (
+                                                isset(
+                                                        $catalog_profile[
+                                                                'profile_id'
+                                                        ]
+                                                )
+                                                        ? (string)
+                                                          $catalog_profile[
+                                                                  'profile_id'
+                                                          ]
+                                                        : (
+                                                                isset(
+                                                                        $catalog_profile[
+                                                                                'uuid'
+                                                                        ]
+                                                                )
+                                                                        ? (string)
+                                                                          $catalog_profile[
+                                                                                  'uuid'
+                                                                          ]
+                                                                        : ''
+                                                        )
+                                        );
+
+                        if (
+                                (string) $current_profile_id
+                                !== $catalog_profile_id
+                        ) {
+                                continue;
+                        }
+
+                        if (
+                                isset(
+                                        $catalog_profile['label']
+                                )
+                        ) {
+                                $current_profile_label =
+                                        (string)
+                                        $catalog_profile['label'];
+                        }
+
+                        break;
+                }
+        }
+
         $instance_editor_mode =
                 isset( $_GET['mode'] )
                         ? sanitize_key(
@@ -2275,11 +2338,10 @@ function bitacora_render_instance_editor_admin_page() {
                                         $_GET['edit_view']
                                 )
                         )
-                        : 'root';
+                        : 'sections';
 
         $allowed_edit_views =
                 array(
-                        'root',
                         'core',
                         'sections',
                         'section',
@@ -2298,8 +2360,15 @@ function bitacora_render_instance_editor_admin_page() {
                 )
         ) {
                 $instance_editor_edit_view =
-                        'root';
+                        'sections';
         }
+
+        $editable_sections =
+                array(
+                        'notas' =>
+                                $form_definition['core'],
+                )
+                + $sections;
 
         $section_ref =
                 isset( $_GET['section_ref'] )
@@ -2310,7 +2379,7 @@ function bitacora_render_instance_editor_admin_page() {
 
         $section_keys =
                 array_keys(
-                        $sections
+                        $editable_sections
                 );
 
         $selected_section_slug =
@@ -2332,46 +2401,45 @@ function bitacora_render_instance_editor_admin_page() {
                 (
                         '' !== $selected_section_slug
                         && isset(
-                                $sections[
+                                $editable_sections[
                                         $selected_section_slug
                                 ]
                         )
                 )
-                        ? $sections[
+                        ? $editable_sections[
                                 $selected_section_slug
                         ]
                         : null;
 
+        $selected_section_is_core =
+                (
+                        'notas'
+                        === $selected_section_slug
+                );
+
         ?>
         <div class="wrap bitacora-instance-editor">
-                <h1>Perfil Actual</h1>
+                <h1>
+                        Perfil Actual<?php
+                        if (
+                                ''
+                                !== $current_profile_label
+                        ) :
+                                ?> — <?php
+                                echo esc_html(
+                                        $current_profile_label
+                                );
+                        endif;
+                        ?>
+                </h1>
 
                 <p>
                         <a
-                                class="button <?php
-                                echo 'view' === $instance_editor_mode
-                                        ? 'button-primary'
-                                        : 'button-secondary';
-                                ?>"
+                                class="button button-primary"
                                 href="<?php echo esc_url(
                                         bitacora_get_instance_editor_admin_url()
                                 ); ?>"
                         >VER ESTADO</a>
-
-                        <a
-                                class="button <?php
-                                echo 'edit' === $instance_editor_mode
-                                        ? 'button-primary'
-                                        : 'button-secondary';
-                                ?>"
-                                href="<?php echo esc_url(
-                                        add_query_arg(
-                                                'mode',
-                                                'edit',
-                                                bitacora_get_instance_editor_admin_url()
-                                        )
-                                ); ?>"
-                        >EDITAR</a>
 
                         <a
                                 class="button button-secondary"
@@ -2405,15 +2473,20 @@ function bitacora_render_instance_editor_admin_page() {
                                                 <th>Sección</th>
                                                 <th>Tipos</th>
                                                 <th>Estado</th>
+                                                <th>Acción</th>
                                         </tr>
                                 </thead>
                                 <tbody>
                                         <?php
+                                        $overview_position = 0;
+
                                         foreach (
                                                 $overview_sections
                                                 as $overview_slug =>
                                                 $overview_section
                                         ) :
+                                                $overview_position++;
+
                                                 $overview_type_count = 0;
 
                                                 foreach (
@@ -2491,6 +2564,36 @@ function bitacora_render_instance_editor_admin_page() {
                                                                 );
                                                                 ?>
                                                         </td>
+
+                                                        <td>
+                                                                <a
+                                                                        class="button button-small"
+                                                                        href="<?php echo esc_url(
+                                                                                'notas'
+                                                                                === $overview_slug
+                                                                                        ? add_query_arg(
+                                                                                                array(
+                                                                                                        'mode' =>
+                                                                                                                'edit',
+                                                                                                        'edit_view' =>
+                                                                                                                'core',
+                                                                                                ),
+                                                                                                bitacora_get_instance_editor_admin_url()
+                                                                                        )
+                                                                                        : add_query_arg(
+                                                                                                array(
+                                                                                                        'mode' =>
+                                                                                                                'edit',
+                                                                                                        'edit_view' =>
+                                                                                                                'section-modify',
+                                                                                                        'section_ref' =>
+                                                                                                                $overview_position,
+                                                                                                ),
+                                                                                                bitacora_get_instance_editor_admin_url()
+                                                                                        )
+                                                                        ); ?>"
+                                                                >EDITAR</a>
+                                                        </td>
                                                 </tr>
                                         <?php endforeach; ?>
                                 </tbody>
@@ -2509,50 +2612,6 @@ function bitacora_render_instance_editor_admin_page() {
 
                         <?php
                         if (
-                                'root'
-                                === $instance_editor_edit_view
-                        ) :
-                                ?>
-
-                                <p>
-                                        Elegí qué parte del Perfil Actual
-                                        querés modificar.
-                                </p>
-
-                                <p>
-                                        <a
-                                                class="button button-secondary"
-                                                href="<?php echo esc_url(
-                                                        add_query_arg(
-                                                                array(
-                                                                        'mode' =>
-                                                                                'edit',
-                                                                        'edit_view' =>
-                                                                                'core',
-                                                                ),
-                                                                bitacora_get_instance_editor_admin_url()
-                                                        )
-                                                ); ?>"
-                                        >SECCIÓN MAESTRA</a>
-
-                                        <a
-                                                class="button button-secondary"
-                                                href="<?php echo esc_url(
-                                                        add_query_arg(
-                                                                array(
-                                                                        'mode' =>
-                                                                                'edit',
-                                                                        'edit_view' =>
-                                                                                'sections',
-                                                                ),
-                                                                bitacora_get_instance_editor_admin_url()
-                                                        )
-                                                ); ?>"
-                                        >SECCIONES</a>
-                                </p>
-
-                        <?php
-                        elseif (
                                 'core'
                                 === $instance_editor_edit_view
                         ) :
@@ -2561,18 +2620,12 @@ function bitacora_render_instance_editor_admin_page() {
                                 <p>
                                         <a
                                                 href="<?php echo esc_url(
-                                                        add_query_arg(
-                                                                'mode',
-                                                                'edit',
-                                                                bitacora_get_instance_editor_admin_url()
-                                                        )
+                                                        bitacora_get_instance_editor_admin_url()
                                                 ); ?>"
-                                        >← Volver a Editar</a>
+                                        >← Volver al Perfil Actual</a>
                                 </p>
 
-                                <h3>Sección Maestra</h3>
-
-                                <p>
+                                <h3>
                                         <?php
                                         echo esc_html(
                                                 isset(
@@ -2591,17 +2644,338 @@ function bitacora_render_instance_editor_admin_page() {
                                                         : 'Bitácora'
                                         );
                                         ?>
-                                </p>
+                                </h3>
 
-                                <p>
-                                        <strong>MODIFICAR</strong>
-                                </p>
+                                <?php if ( is_array( $apply_result ) ) : ?>
 
-                                <p class="description">
-                                        El formulario específico de esta
-                                        operación se extraerá del editor
-                                        técnico en la próxima vertical.
-                                </p>
+                                        <div class="notice notice-success inline">
+                                                <p>
+                                                        <strong>
+                                                                Cambios aplicados.
+                                                        </strong>
+                                                        La Sección Maestra fue
+                                                        reconciliada y verificada
+                                                        por el Engine.
+                                                </p>
+                                        </div>
+
+                                <?php endif; ?>
+
+                                <?php if ( ! empty( $preview_errors ) ) : ?>
+
+                                        <div class="notice notice-error inline">
+                                                <p>
+                                                        <strong>
+                                                                La propuesta no
+                                                                puede previsualizarse:
+                                                        </strong>
+                                                </p>
+
+                                                <ul>
+                                                        <?php
+                                                        foreach (
+                                                                $preview_errors
+                                                                as $message
+                                                        ) :
+                                                                ?>
+                                                                <li>
+                                                                        <?php
+                                                                        echo esc_html(
+                                                                                $message
+                                                                        );
+                                                                        ?>
+                                                                </li>
+                                                        <?php endforeach; ?>
+                                                </ul>
+                                        </div>
+
+                                <?php elseif ( is_array( $preview ) ) : ?>
+
+                                        <div class="notice notice-success inline">
+                                                <p>
+                                                        <?php
+                                                        if (
+                                                                0
+                                                                === (int)
+                                                                $preview[
+                                                                        'action_count'
+                                                                ]
+                                                        ) :
+                                                                ?>
+                                                                La propuesta no
+                                                                produce cambios.
+                                                        <?php else : ?>
+                                                                Vista previa válida:
+                                                                <strong><?php
+                                                                echo esc_html(
+                                                                        number_format_i18n(
+                                                                                $preview[
+                                                                                        'action_count'
+                                                                                ]
+                                                                        )
+                                                                );
+                                                                ?></strong>
+                                                                cambio(s) preparado(s).
+                                                                Todavía no se aplicó
+                                                                ninguno.
+                                                        <?php endif; ?>
+                                                </p>
+                                        </div>
+
+                                <?php endif; ?>
+
+                                <form
+                                        method="post"
+                                        action="<?php echo esc_url(
+                                                add_query_arg(
+                                                        array(
+                                                                'mode' =>
+                                                                        'edit',
+                                                                'edit_view' =>
+                                                                        'core',
+                                                        ),
+                                                        bitacora_get_instance_editor_admin_url()
+                                                )
+                                        ); ?>"
+                                >
+                                        <input
+                                                type="hidden"
+                                                name="pre_fingerprint"
+                                                value="<?php echo esc_attr(
+                                                        $snapshot[
+                                                                'fingerprint'
+                                                        ]
+                                                ); ?>"
+                                        >
+
+                                        <?php
+                                        if (
+                                                ''
+                                                !==
+                                                $reviewed_proposal_fingerprint
+                                        ) :
+                                                ?>
+                                                <input
+                                                        type="hidden"
+                                                        name="reviewed_proposal_fingerprint"
+                                                        value="<?php echo esc_attr(
+                                                                $reviewed_proposal_fingerprint
+                                                        ); ?>"
+                                                >
+                                        <?php endif; ?>
+
+                                        <?php
+                                        wp_nonce_field(
+                                                'bitacora_edit_instance_structure',
+                                                'bitacora_instance_editor_nonce'
+                                        );
+                                        ?>
+
+                                        <input
+                                                type="hidden"
+                                                name="instance[core][_present]"
+                                                value="1"
+                                        >
+
+                                        <table class="form-table">
+                                                <tbody>
+                                                        <?php
+                                                        foreach (
+                                                                array(
+                                                                        'name' =>
+                                                                                'Nombre',
+                                                                        'singular' =>
+                                                                                'Singular',
+                                                                        'plural' =>
+                                                                                'Plural',
+                                                                        'subtitle' =>
+                                                                                'Subtítulo',
+                                                                        'new_label' =>
+                                                                                'Etiqueta nueva entrada',
+                                                                )
+                                                                as $key => $label
+                                                        ) :
+                                                                ?>
+                                                                <tr>
+                                                                        <th scope="row">
+                                                                                <?php
+                                                                                echo esc_html(
+                                                                                        $label
+                                                                                );
+                                                                                ?>
+                                                                        </th>
+                                                                        <td>
+                                                                                <input
+                                                                                        type="text"
+                                                                                        class="regular-text"
+                                                                                        name="instance[core][<?php
+                                                                                        echo esc_attr(
+                                                                                                $key
+                                                                                        );
+                                                                                        ?>]"
+                                                                                        value="<?php
+                                                                                        echo esc_attr(
+                                                                                                isset(
+                                                                                                        $form_definition[
+                                                                                                                'core'
+                                                                                                        ][
+                                                                                                                $key
+                                                                                                        ]
+                                                                                                )
+                                                                                                        ? $form_definition[
+                                                                                                                'core'
+                                                                                                          ][
+                                                                                                                $key
+                                                                                                          ]
+                                                                                                        : ''
+                                                                                        );
+                                                                                        ?>"
+                                                                                >
+                                                                        </td>
+                                                                </tr>
+                                                        <?php endforeach; ?>
+
+                                                        <tr>
+                                                                <th scope="row">
+                                                                        Capacidades
+                                                                </th>
+                                                                <td>
+                                                                        <?php
+                                                                        foreach (
+                                                                                array(
+                                                                                        'feature_file' =>
+                                                                                                'Archivo',
+                                                                                        'feature_location' =>
+                                                                                                'Ubicación',
+                                                                                        'feature_comments' =>
+                                                                                                'Comentarios',
+                                                                                )
+                                                                                as $key => $label
+                                                                        ) :
+                                                                                ?>
+                                                                                <label
+                                                                                        style="margin-right:20px"
+                                                                                >
+                                                                                        <input
+                                                                                                type="checkbox"
+                                                                                                name="instance[core][<?php
+                                                                                                echo esc_attr(
+                                                                                                        $key
+                                                                                                );
+                                                                                                ?>]"
+                                                                                                value="1"
+                                                                                                <?php
+                                                                                                checked(
+                                                                                                        ! empty(
+                                                                                                                $form_definition[
+                                                                                                                        'core'
+                                                                                                                ][
+                                                                                                                        $key
+                                                                                                                ]
+                                                                                                        )
+                                                                                                );
+                                                                                                ?>
+                                                                                        >
+                                                                                        <?php
+                                                                                        echo esc_html(
+                                                                                                $label
+                                                                                        );
+                                                                                        ?>
+                                                                                </label>
+                                                                        <?php endforeach; ?>
+                                                                </td>
+                                                        </tr>
+                                                </tbody>
+                                        </table>
+
+                                        <p class="description">
+                                                Esta es la Sección Maestra.
+                                                Su identidad y las propiedades
+                                                estructurales reservadas
+                                                permanecen bajo control del
+                                                sistema.
+                                        </p>
+
+                                        <table class="form-table">
+                                                <tbody>
+                                                        <tr>
+                                                                <th scope="row">
+                                                                        Tipos
+                                                                </th>
+                                                                <td>
+                                                                        <a
+                                                                                class="button button-secondary"
+                                                                                href="<?php echo esc_url(
+                                                                                        add_query_arg(
+                                                                                                array(
+                                                                                                        'mode' =>
+                                                                                                                'edit',
+                                                                                                        'edit_view' =>
+                                                                                                                'section-types',
+                                                                                                        'section_ref' =>
+                                                                                                                1,
+                                                                                                ),
+                                                                                                bitacora_get_instance_editor_admin_url()
+                                                                                        )
+                                                                                ); ?>"
+                                                                        >TIPOS</a>
+                                                                </td>
+                                                        </tr>
+                                                </tbody>
+                                        </table>
+
+                                        <p>
+                                                <button
+                                                        type="submit"
+                                                        class="button button-secondary"
+                                                        name="bitacora_instance_editor_action"
+                                                        value="preview"
+                                                >VISTA PREVIA</button>
+                                        </p>
+
+                                        <?php
+                                        if (
+                                                is_array( $preview )
+                                                && ! empty(
+                                                        $preview[
+                                                                'action_count'
+                                                        ]
+                                                )
+                                                && ''
+                                                !==
+                                                $reviewed_proposal_fingerprint
+                                        ) :
+                                                ?>
+
+                                                <div
+                                                        class="notice notice-warning inline"
+                                                >
+                                                        <p>
+                                                                <label>
+                                                                        <input
+                                                                                type="checkbox"
+                                                                                name="confirm_apply"
+                                                                                value="1"
+                                                                        >
+                                                                        Confirmo aplicar
+                                                                        exactamente los
+                                                                        cambios mostrados
+                                                                        en la vista previa.
+                                                                </label>
+                                                        </p>
+                                                </div>
+
+                                                <p>
+                                                        <button
+                                                                type="submit"
+                                                                class="button button-primary"
+                                                                name="bitacora_instance_editor_action"
+                                                                value="apply"
+                                                        >APLICAR</button>
+                                                </p>
+
+                                        <?php endif; ?>
+                                </form>
 
                         <?php
                         elseif (
@@ -2609,18 +2983,6 @@ function bitacora_render_instance_editor_admin_page() {
                                 === $instance_editor_edit_view
                         ) :
                                 ?>
-
-                                <p>
-                                        <a
-                                                href="<?php echo esc_url(
-                                                        add_query_arg(
-                                                                'mode',
-                                                                'edit',
-                                                                bitacora_get_instance_editor_admin_url()
-                                                        )
-                                                ); ?>"
-                                        >← Volver a Editar</a>
-                                </p>
 
                                 <h3>Secciones</h3>
 
@@ -2654,8 +3016,9 @@ function bitacora_render_instance_editor_admin_page() {
                                                 $section_position = 0;
 
                                                 foreach (
-                                                        $sections
-                                                        as $section
+                                                        $editable_sections
+                                                        as $section_slug =>
+                                                        $section
                                                 ) :
                                                         $section_position++;
 
@@ -2671,17 +3034,28 @@ function bitacora_render_instance_editor_admin_page() {
                                                                           ]
                                                                         : '';
 
+                                                        $section_is_core =
+                                                                (
+                                                                        'notas'
+                                                                        ===
+                                                                        $section_slug
+                                                                );
+
                                                         $section_state =
-                                                                isset(
-                                                                        $section[
-                                                                                'state'
-                                                                        ]
-                                                                )
-                                                                        ? (string)
-                                                                          $section[
-                                                                                  'state'
-                                                                          ]
-                                                                        : 'active';
+                                                                $section_is_core
+                                                                        ? 'active'
+                                                                        : (
+                                                                                isset(
+                                                                                        $section[
+                                                                                                'state'
+                                                                                        ]
+                                                                                )
+                                                                                        ? (string)
+                                                                                          $section[
+                                                                                                  'state'
+                                                                                          ]
+                                                                                        : 'active'
+                                                                        );
                                                         ?>
                                                         <tr>
                                                                 <td>
@@ -2770,52 +3144,68 @@ function bitacora_render_instance_editor_admin_page() {
                                                 <a
                                                         class="button button-secondary"
                                                         href="<?php echo esc_url(
-                                                                add_query_arg(
-                                                                        array(
-                                                                                'mode' =>
-                                                                                        'edit',
-                                                                                'edit_view' =>
-                                                                                        'section-modify',
-                                                                                'section_ref' =>
-                                                                                        $section_ref,
-                                                                        ),
-                                                                        bitacora_get_instance_editor_admin_url()
-                                                                )
+                                                                $selected_section_is_core
+                                                                        ? add_query_arg(
+                                                                                array(
+                                                                                        'mode' =>
+                                                                                                'edit',
+                                                                                        'edit_view' =>
+                                                                                                'core',
+                                                                                ),
+                                                                                bitacora_get_instance_editor_admin_url()
+                                                                        )
+                                                                        : add_query_arg(
+                                                                                array(
+                                                                                        'mode' =>
+                                                                                                'edit',
+                                                                                        'edit_view' =>
+                                                                                                'section-modify',
+                                                                                        'section_ref' =>
+                                                                                                $section_ref,
+                                                                                ),
+                                                                                bitacora_get_instance_editor_admin_url()
+                                                                        )
                                                         ); ?>"
                                                 >MODIFICAR</a>
 
-                                                <a
-                                                        class="button button-secondary"
-                                                        href="<?php echo esc_url(
-                                                                add_query_arg(
-                                                                        array(
-                                                                                'mode' =>
-                                                                                        'edit',
-                                                                                'edit_view' =>
-                                                                                        'section-state',
-                                                                                'section_ref' =>
-                                                                                        $section_ref,
-                                                                        ),
-                                                                        bitacora_get_instance_editor_admin_url()
-                                                                )
-                                                        ); ?>"
-                                                ><?php
-                                                echo esc_html(
-                                                        (
-                                                                isset(
-                                                                        $selected_section[
+                                                <?php
+                                                if (
+                                                        ! $selected_section_is_core
+                                                ) :
+                                                        ?>
+                                                        <a
+                                                                class="button button-secondary"
+                                                                href="<?php echo esc_url(
+                                                                        add_query_arg(
+                                                                                array(
+                                                                                        'mode' =>
+                                                                                                'edit',
+                                                                                        'edit_view' =>
+                                                                                                'section-state',
+                                                                                        'section_ref' =>
+                                                                                                $section_ref,
+                                                                                ),
+                                                                                bitacora_get_instance_editor_admin_url()
+                                                                        )
+                                                                ); ?>"
+                                                        ><?php
+                                                        echo esc_html(
+                                                                (
+                                                                        isset(
+                                                                                $selected_section[
+                                                                                        'state'
+                                                                                ]
+                                                                        )
+                                                                        && 'active'
+                                                                        === $selected_section[
                                                                                 'state'
                                                                         ]
                                                                 )
-                                                                && 'active'
-                                                                === $selected_section[
-                                                                        'state'
-                                                                ]
-                                                        )
-                                                                ? 'OCULTAR'
-                                                                : 'MOSTRAR'
-                                                );
-                                                ?></a>
+                                                                        ? 'OCULTAR'
+                                                                        : 'MOSTRAR'
+                                                        );
+                                                        ?></a>
+                                                <?php endif; ?>
 
                                                 <a
                                                         class="button button-secondary"
@@ -2848,11 +3238,441 @@ function bitacora_render_instance_editor_admin_page() {
 
                         <?php
                         elseif (
+                                'section-modify'
+                                === $instance_editor_edit_view
+                        ) :
+                                ?>
+
+                                <p>
+                                        <a
+                                                href="<?php echo esc_url(
+                                                        bitacora_get_instance_editor_admin_url()
+                                                ); ?>"
+                                        >← Volver al Perfil Actual</a>
+                                </p>
+
+                                <?php if ( is_array( $selected_section ) ) : ?>
+
+                                        <h3>
+                                                <?php
+                                                echo esc_html(
+                                                        isset(
+                                                                $selected_section[
+                                                                        'name'
+                                                                ]
+                                                        )
+                                                                ? (string)
+                                                                  $selected_section[
+                                                                          'name'
+                                                                  ]
+                                                                : ''
+                                                );
+                                                ?>
+                                        </h3>
+
+                                        <?php
+                                        if ( is_array( $apply_result ) ) :
+                                                ?>
+                                                <div
+                                                        class="notice notice-success inline"
+                                                >
+                                                        <p>
+                                                                <strong>
+                                                                        Cambios aplicados.
+                                                                </strong>
+                                                                La Sección fue
+                                                                reconciliada y
+                                                                verificada por
+                                                                el Engine.
+                                                        </p>
+                                                </div>
+                                        <?php endif; ?>
+
+                                        <?php
+                                        if (
+                                                ! empty(
+                                                        $preview_errors
+                                                )
+                                        ) :
+                                                ?>
+                                                <div
+                                                        class="notice notice-error inline"
+                                                >
+                                                        <ul>
+                                                                <?php
+                                                                foreach (
+                                                                        $preview_errors
+                                                                        as $message
+                                                                ) :
+                                                                        ?>
+                                                                        <li>
+                                                                                <?php
+                                                                                echo esc_html(
+                                                                                        $message
+                                                                                );
+                                                                                ?>
+                                                                        </li>
+                                                                <?php endforeach; ?>
+                                                        </ul>
+                                                </div>
+
+                                        <?php
+                                        elseif (
+                                                is_array( $preview )
+                                        ) :
+                                                ?>
+                                                <div
+                                                        class="notice notice-success inline"
+                                                >
+                                                        <p>
+                                                                <?php
+                                                                if (
+                                                                        0
+                                                                        === (int)
+                                                                        $preview[
+                                                                                'action_count'
+                                                                        ]
+                                                                ) :
+                                                                        ?>
+                                                                        La propuesta
+                                                                        no produce
+                                                                        cambios.
+                                                                <?php else : ?>
+                                                                        Vista previa
+                                                                        válida:
+                                                                        <strong><?php
+                                                                        echo esc_html(
+                                                                                number_format_i18n(
+                                                                                        $preview[
+                                                                                                'action_count'
+                                                                                        ]
+                                                                                )
+                                                                        );
+                                                                        ?></strong>
+                                                                        cambio(s)
+                                                                        preparado(s).
+                                                                <?php endif; ?>
+                                                        </p>
+                                                </div>
+                                        <?php endif; ?>
+
+                                        <form
+                                                method="post"
+                                                action="<?php echo esc_url(
+                                                        add_query_arg(
+                                                                array(
+                                                                        'mode' =>
+                                                                                'edit',
+                                                                        'edit_view' =>
+                                                                                'section-modify',
+                                                                        'section_ref' =>
+                                                                                $section_ref,
+                                                                ),
+                                                                bitacora_get_instance_editor_admin_url()
+                                                        )
+                                                ); ?>"
+                                        >
+                                                <input
+                                                        type="hidden"
+                                                        name="pre_fingerprint"
+                                                        value="<?php echo esc_attr(
+                                                                $snapshot[
+                                                                        'fingerprint'
+                                                                ]
+                                                        ); ?>"
+                                                >
+
+                                                <?php
+                                                if (
+                                                        ''
+                                                        !==
+                                                        $reviewed_proposal_fingerprint
+                                                ) :
+                                                        ?>
+                                                        <input
+                                                                type="hidden"
+                                                                name="reviewed_proposal_fingerprint"
+                                                                value="<?php echo esc_attr(
+                                                                        $reviewed_proposal_fingerprint
+                                                                ); ?>"
+                                                        >
+                                                <?php endif; ?>
+
+                                                <?php
+                                                wp_nonce_field(
+                                                        'bitacora_edit_instance_structure',
+                                                        'bitacora_instance_editor_nonce'
+                                                );
+                                                ?>
+
+                                                <input
+                                                        type="hidden"
+                                                        name="instance[sections][<?php
+                                                        echo esc_attr(
+                                                                $selected_section_slug
+                                                        );
+                                                        ?>][_present]"
+                                                        value="1"
+                                                >
+
+                                                <table class="form-table">
+                                                        <tbody>
+                                                                <?php
+                                                                foreach (
+                                                                        array(
+                                                                                'name' =>
+                                                                                        'Nombre',
+                                                                                'singular' =>
+                                                                                        'Singular',
+                                                                                'plural' =>
+                                                                                        'Plural',
+                                                                                'subtitle' =>
+                                                                                        'Subtítulo',
+                                                                                'new_label' =>
+                                                                                        'Etiqueta nueva entrada',
+                                                                        )
+                                                                        as $key => $label
+                                                                ) :
+                                                                        ?>
+                                                                        <tr>
+                                                                                <th scope="row">
+                                                                                        <?php
+                                                                                        echo esc_html(
+                                                                                                $label
+                                                                                        );
+                                                                                        ?>
+                                                                                </th>
+                                                                                <td>
+                                                                                        <input
+                                                                                                type="text"
+                                                                                                class="regular-text"
+                                                                                                name="instance[sections][<?php
+                                                                                                echo esc_attr(
+                                                                                                        $selected_section_slug
+                                                                                                );
+                                                                                                ?>][<?php
+                                                                                                echo esc_attr(
+                                                                                                        $key
+                                                                                                );
+                                                                                                ?>]"
+                                                                                                value="<?php
+                                                                                                echo esc_attr(
+                                                                                                        isset(
+                                                                                                                $selected_section[
+                                                                                                                        $key
+                                                                                                                ]
+                                                                                                        )
+                                                                                                                ? $selected_section[
+                                                                                                                        $key
+                                                                                                                  ]
+                                                                                                                : ''
+                                                                                                );
+                                                                                                ?>"
+                                                                                        >
+                                                                                </td>
+                                                                        </tr>
+                                                                <?php endforeach; ?>
+
+                                                                <tr>
+                                                                        <th scope="row">
+                                                                                Capacidades
+                                                                        </th>
+                                                                        <td>
+                                                                                <?php
+                                                                                foreach (
+                                                                                        array(
+                                                                                                'feature_file' =>
+                                                                                                        'Archivo',
+                                                                                                'feature_location' =>
+                                                                                                        'Ubicación',
+                                                                                                'feature_comments' =>
+                                                                                                        'Comentarios',
+                                                                                        )
+                                                                                        as $key => $label
+                                                                                ) :
+                                                                                        ?>
+                                                                                        <label
+                                                                                                style="margin-right:20px"
+                                                                                        >
+                                                                                                <input
+                                                                                                        type="checkbox"
+                                                                                                        name="instance[sections][<?php
+                                                                                                        echo esc_attr(
+                                                                                                                $selected_section_slug
+                                                                                                        );
+                                                                                                        ?>][<?php
+                                                                                                        echo esc_attr(
+                                                                                                                $key
+                                                                                                        );
+                                                                                                        ?>]"
+                                                                                                        value="1"
+                                                                                                        <?php
+                                                                                                        checked(
+                                                                                                                ! empty(
+                                                                                                                        $selected_section[
+                                                                                                                                $key
+                                                                                                                        ]
+                                                                                                                )
+                                                                                                        );
+                                                                                                        ?>
+                                                                                                >
+                                                                                                <?php
+                                                                                                echo esc_html(
+                                                                                                        $label
+                                                                                                );
+                                                                                                ?>
+                                                                                        </label>
+                                                                                <?php endforeach; ?>
+                                                                        </td>
+                                                                </tr>
+
+                                                                <tr>
+                                                                        <th scope="row">
+                                                                                Estado
+                                                                        </th>
+                                                                        <td>
+                                                                                <select
+                                                                                        name="instance[sections][<?php
+                                                                                        echo esc_attr(
+                                                                                                $selected_section_slug
+                                                                                        );
+                                                                                        ?>][state]"
+                                                                                >
+                                                                                        <option
+                                                                                                value="active"
+                                                                                                <?php
+                                                                                                selected(
+                                                                                                        isset(
+                                                                                                                $selected_section[
+                                                                                                                        'state'
+                                                                                                                ]
+                                                                                                        )
+                                                                                                                ? $selected_section[
+                                                                                                                        'state'
+                                                                                                                  ]
+                                                                                                                : 'active',
+                                                                                                        'active'
+                                                                                                );
+                                                                                                ?>
+                                                                                        >Visible</option>
+
+                                                                                        <option
+                                                                                                value="hidden"
+                                                                                                <?php
+                                                                                                selected(
+                                                                                                        isset(
+                                                                                                                $selected_section[
+                                                                                                                        'state'
+                                                                                                                ]
+                                                                                                        )
+                                                                                                                ? $selected_section[
+                                                                                                                        'state'
+                                                                                                                  ]
+                                                                                                                : 'active',
+                                                                                                        'hidden'
+                                                                                                );
+                                                                                                ?>
+                                                                                        >Oculta</option>
+                                                                                </select>
+                                                                        </td>
+                                                                </tr>
+
+                                                                <tr>
+                                                                        <th scope="row">
+                                                                                Tipos
+                                                                        </th>
+                                                                        <td>
+                                                                                <a
+                                                                                        class="button button-secondary"
+                                                                                        href="<?php echo esc_url(
+                                                                                                add_query_arg(
+                                                                                                        array(
+                                                                                                                'mode' =>
+                                                                                                                        'edit',
+                                                                                                                'edit_view' =>
+                                                                                                                        'section-types',
+                                                                                                                'section_ref' =>
+                                                                                                                        $section_ref,
+                                                                                                        ),
+                                                                                                        bitacora_get_instance_editor_admin_url()
+                                                                                                )
+                                                                                        ); ?>"
+                                                                                >TIPOS</a>
+                                                                        </td>
+                                                                </tr>
+                                                        </tbody>
+                                                </table>
+
+                                                <p>
+                                                        <button
+                                                                type="submit"
+                                                                class="button button-secondary"
+                                                                name="bitacora_instance_editor_action"
+                                                                value="preview"
+                                                        >VISTA PREVIA</button>
+                                                </p>
+
+                                                <?php
+                                                if (
+                                                        is_array( $preview )
+                                                        && ! empty(
+                                                                $preview[
+                                                                        'action_count'
+                                                                ]
+                                                        )
+                                                        && ''
+                                                        !==
+                                                        $reviewed_proposal_fingerprint
+                                                ) :
+                                                        ?>
+
+                                                        <div
+                                                                class="notice notice-warning inline"
+                                                        >
+                                                                <p>
+                                                                        <label>
+                                                                                <input
+                                                                                        type="checkbox"
+                                                                                        name="confirm_apply"
+                                                                                        value="1"
+                                                                                >
+                                                                                Confirmo aplicar
+                                                                                exactamente los
+                                                                                cambios mostrados
+                                                                                en la vista previa.
+                                                                        </label>
+                                                                </p>
+                                                        </div>
+
+                                                        <p>
+                                                                <button
+                                                                        type="submit"
+                                                                        class="button button-primary"
+                                                                        name="bitacora_instance_editor_action"
+                                                                        value="apply"
+                                                                >APLICAR</button>
+                                                        </p>
+
+                                                <?php endif; ?>
+                                        </form>
+
+                                <?php else : ?>
+
+                                        <div class="notice notice-warning inline">
+                                                <p>
+                                                        La Sección seleccionada
+                                                        ya no está disponible.
+                                                </p>
+                                        </div>
+
+                                <?php endif; ?>
+
+                        <?php
+                        elseif (
                                 in_array(
                                         $instance_editor_edit_view,
                                         array(
                                                 'section-new',
-                                                'section-modify',
                                                 'section-state',
                                                 'section-types',
                                         ),
@@ -2864,30 +3684,36 @@ function bitacora_render_instance_editor_admin_page() {
                                 <p>
                                         <a
                                                 href="<?php echo esc_url(
-                                                        'section-new'
-                                                        === $instance_editor_edit_view
-                                                                ? add_query_arg(
-                                                                        array(
-                                                                                'mode' =>
-                                                                                        'edit',
-                                                                                'edit_view' =>
-                                                                                        'sections',
-                                                                        ),
-                                                                        bitacora_get_instance_editor_admin_url()
-                                                                )
-                                                                : add_query_arg(
-                                                                        array(
-                                                                                'mode' =>
-                                                                                        'edit',
-                                                                                'edit_view' =>
-                                                                                        'section',
-                                                                                'section_ref' =>
-                                                                                        $section_ref,
-                                                                        ),
-                                                                        bitacora_get_instance_editor_admin_url()
-                                                                )
+                                                        bitacora_get_instance_editor_admin_url()
                                                 ); ?>"
-                                        >← Volver</a>
+                                        >← Volver al Perfil Actual</a>
+                                </p>
+
+                                <h3>
+                                        <?php
+                                        $operation_titles =
+                                                array(
+                                                        'section-new' =>
+                                                                'Crear Sección',
+                                                        'section-state' =>
+                                                                'Cambiar visibilidad',
+                                                        'section-types' =>
+                                                                'Tipos',
+                                                );
+
+                                        echo esc_html(
+                                                $operation_titles[
+                                                        $instance_editor_edit_view
+                                                ]
+                                        );
+                                        ?>
+                                </h3>
+
+                                <p class="description">
+                                        Esta operación queda preparada como
+                                        destino de navegación. Su formulario
+                                        específico se incorporará en la
+                                        siguiente vertical.
                                 </p>
 
                                 <h3>
