@@ -2198,12 +2198,33 @@ adopta, nace un **nuevo Profile** con nueva identidad.
 
 ## 15.12 UX objetivo de mantenimiento de instancia
 
-**DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN — 2026-10-12.**
+**DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN — revisión 2026-10-15.**
 
-Primer nivel:
+La interfaz humana debe abandonar como raíz operativa el término
+`INSTANCIA`.
+
+La estructura viva se presenta al operador como:
 
 ```text
-INSTANCIA
+PERFIL ACTUAL
+```
+
+`Perfil Actual` no es el Profile almacenado que originó la instancia.
+Es la estructura viva actualmente materializada y editable.
+
+Modificar el Perfil Actual:
+
+```text
+- modifica la estructura viva
+- conserva la identidad e historia de la instancia
+- no modifica el Profile almacenado de origen
+- no rematerializa la instancia desde la biblioteca
+```
+
+### Primer nivel
+
+```text
+PERFIL ACTUAL
 │
 ├── VER ESTADO
 │
@@ -2212,7 +2233,9 @@ INSTANCIA
 
 ### VER ESTADO
 
-Debe ofrecer un panorama del esqueleto actual útil para:
+Debe ofrecer una visión global y compacta del esqueleto actual.
+
+Su finalidad es:
 
 ```text
 - consulta
@@ -2222,72 +2245,77 @@ Debe ofrecer un panorama del esqueleto actual útil para:
 - apoyo a la toma de decisiones
 ```
 
-Debe conservar la visión global. No debe ser el editor con los campos
-deshabilitados ni una exposición exhaustiva de metadatos.
+No debe ser el editor con campos deshabilitados ni una exposición exhaustiva
+de metadatos internos.
 
-```text
-VER ESTADO
-    → visión global
-```
+La **SECCIÓN MAESTRA** aparece dentro de esa visión como una Sección más.
+No necesita tratamiento visual especial en VER ESTADO.
 
 ### EDITAR
 
-Debe llevar progresivamente hacia una única operación concreta:
+La edición debe llevar progresivamente hacia una única operación concreta.
 
 ```text
 EDITAR
-  │
-  └── SECCIONES
-       │
-       ├── CREAR
-       │
-       └── ELEGIR EXISTENTE
+│
+├── SECCIÓN MAESTRA
+│   └── MODIFICAR propiedades permitidas
+│
+└── SECCIONES
+    │
+    ├── CREAR
+    │
+    └── ELEGIR EXISTENTE
+        │
+        └── SECCIÓN
             │
-            └── SECCIÓN
-                 │
-                 ├── MODIFICAR
-                 ├── OCULTAR / MOSTRAR
-                 │
-                 └── TIPOS
-                      │
-                      ├── CREAR
-                      │
-                      └── ELEGIR EXISTENTE
-                           │
-                           └── TIPO
-                                ├── MODIFICAR
-                                └── OCULTAR / MOSTRAR
+            ├── MODIFICAR
+            ├── OCULTAR / MOSTRAR
+            │
+            └── TIPOS
+                │
+                ├── CREAR
+                │
+                └── ELEGIR EXISTENTE
+                    │
+                    └── TIPO
+                        ├── MODIFICAR
+                        └── OCULTAR / MOSTRAR
 ```
+
+Principio de interacción:
 
 ```text
 EDITAR
     → foco progresivo
-    → una cosa operativa por vez
+    → una operación humana por vez
 ```
+
+La SECCIÓN MAESTRA utiliza el mismo lenguaje visual que las demás Secciones,
+pero los atributos protegidos por el Engine no se ofrecen para edición.
 
 ### Relación Sección → Tipo
 
-El modelo operativo vigente es:
+El modelo operativo es:
 
 ```text
 Sección
     → 0..N Tipos
 
 Tipo
-    → una sola Sección
+    → exactamente una Sección
 ```
 
-La asociación se expresa mediante:
+Los Tipos se gestionan siempre dentro del contexto de su Sección.
 
-```text
-scope=section
-scope_id=<slug de la Sección>
-```
+No existe un gestor humano global de Tipos.
 
-Por esta cardinalidad no se considera necesario, por ahora, un gestor global
-independiente de Tipos.
+La asociación técnica mediante `scope` y `scope_id` permanece interna y no se
+expone al operador.
 
-Los Tipos se gestionan contextualmente desde su Sección.
+### Creación
+
+La creación sigue una secuencia humana simple.
 
 ```text
 crear Sección
@@ -2299,11 +2327,96 @@ Sección existente
 crear Tipo
 ```
 
-Así desaparece la necesidad de crear simultáneamente dos objetos inexistentes
-con dependencia entre sí.
+No es necesario que la UX final permita crear simultáneamente una Sección y
+un Tipo dependiente.
 
-La pantalla monolítica actualmente implementada permanece como banco de pruebas
-funcional, pero constituye **DEUDA ACTUAL de UX**.
+El soporte actualmente existente para esa operación simultánea se conserva
+como capacidad técnica probada, pero no define la UX objetivo.
+
+### Identidad y campos internos
+
+La interfaz ordinaria no expone:
+
+```text
+- slug
+- scope
+- scope_id
+- UUID
+- fingerprints
+- IDs WordPress
+- códigos del planner
+- identidad técnica
+```
+
+`order` y `area` tampoco se presentan como conceptos técnicos.
+
+Cuando sea necesario reorganizar Secciones, la interfaz debe expresar esa
+operación directamente mediante controles humanos de posición y ubicación.
+
+### Conservación histórica
+
+Una estructura ya materializada y potencialmente referenciada no se elimina
+desde la edición ordinaria.
+
+```text
+objeto existente
+    → modificar
+    → mostrar / ocultar
+    → conservar identidad e historia
+
+objeto nuevo todavía no aplicado
+    → puede descartarse
+```
+
+Ocultar una Sección o Tipo afecta su disponibilidad futura, no destruye el
+contenido histórico que lo referencia.
+
+### Frontera con el Engine
+
+La interfaz construye una propuesta estructural completa y la entrega a las
+primitivas autoritativas existentes.
+
+```text
+UI humana
+    ↓
+propuesta completa
+    ↓
+validación
+    ↓
+planner
+    ↓
+PAUSA breve
+    ↓
+reconciliación
+    ↓
+verificación
+```
+
+La UX no replica ni reemplaza esas responsabilidades.
+
+### Estado del prototipo actual
+
+La pantalla monolítica `EDITAR INSTANCIA` permanece como banco de pruebas
+funcional y prueba de integración del Engine.
+
+Constituye **DEUDA ACTUAL de UX**.
+
+Debe ser reemplazada progresivamente por la interfaz de `PERFIL ACTUAL`,
+reutilizando las primitivas existentes de:
+
+```text
+- extracción de estructura
+- construcción de propuesta
+- validación
+- fingerprints
+- Preview
+- Apply
+- reconciliación
+- rollback / recuperación
+```
+
+El objetivo del refactor es reemplazar la presentación y navegación humanas,
+no rediseñar el Engine.
 
 # 16. Organización `main|more`
 
