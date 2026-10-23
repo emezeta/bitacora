@@ -26,3 +26,7 @@ of the profile that created them.
 
 Profiles contain initial data only; they must not introduce permanent behavioral
 dependencies into the Bitácora core.
+
+## Development and AI Assistance
+
+This project is developed with substantial AI assistance and human oversight.
