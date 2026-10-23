@@ -1,10 +1,10 @@
 # Bitácora — Contexto Maestro de desarrollo
 
-**Revisión documental:** 2026-10-15
-**Estado técnico de referencia:** 2026-10-15
+**Revisión documental:** 2026-10-23
+**Estado técnico de referencia:** 2026-10-23
 **Rama:** `0.3.0-dev`  
 **Repo canónico:** `/home/dosmilun/repos/bitacora`  
-**HEAD verificado:** `9f133d4 Update master context for instance structure editing`
+**HEAD técnico previo a esta revisión:** `dac578d Simplify instance section visibility management`
 
 > Este documento describe el **estado vigente** del proyecto y debe servir como referencia
 > de continuidad entre chats y estaciones de trabajo. No pretende narrar toda la historia.
@@ -2196,227 +2196,96 @@ Si el esqueleto de una instancia se convierte en definición reutilizable y se
 adopta, nace un **nuevo Profile** con nueva identidad.
 
 
-## 15.12 UX objetivo de mantenimiento de instancia
+## 15.12 UX de mantenimiento de Perfil Actual — ESTADO VIGENTE
 
-**DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN — revisión 2026-10-15.**
+**Implementación y prueba humana verificadas al 2026-10-23.**
 
-La interfaz humana debe abandonar como raíz operativa el término
-`INSTANCIA`.
+`Perfil Actual` representa la estructura viva de la instancia,
+no el Perfil de origen de la biblioteca.
 
-La estructura viva se presenta al operador como:
+La pantalla principal presenta `Estado actual` con una lista de
+Secciones y una acción `EDITAR` individual. La Sección Maestra
+participa en la lista, pero mantiene sus invariantes protegidas.
 
-```text
-PERFIL ACTUAL
-```
+Cuando existen Secciones ocultas aparece la opción
+`Incluir secciones ocultas`; si no existen, el control no aparece.
 
-`Perfil Actual` no es el Profile almacenado que originó la instancia.
-Es la estructura viva actualmente materializada y editable.
+- Por defecto, sólo se muestran Secciones visibles.
+- Activar el control incorpora las ocultas, identificadas como `Oculta`.
+- Desactivarlo vuelve a excluirlas de la lista.
+- La opción afecta exclusivamente la presentación, nunca `state`.
+- `EDITAR` abre directamente la Sección elegida, incluso si está oculta.
+- La identidad de la Sección no depende del filtrado de filas.
 
-Modificar el Perfil Actual:
+Queda **SUPERADO** el recorrido intermedio
+`EDITAR ESTRUCTURA → SECCIONES OCULTAS → TRAER PARA EDITAR → ELEGIR`.
+No debe reconstruirse como navegación paralela.
 
-```text
-- modifica la estructura viva
-- conserva la identidad e historia de la instancia
-- no modifica el Profile almacenado de origen
-- no rematerializa la instancia desde la biblioteca
-```
+Las operaciones `OCULTAR/HACER VISIBLE` de Secciones se realizan
+mediante `VISTA PREVIA` y `APLICAR`, utilizando las garantías
+de validación, PAUSA, reconciliación y verificación del Engine.
+Ocultar preserva contenidos y referencias históricas.
 
-### Primer nivel
+Los Tipos se administran en el contexto de su Sección:
+una Sección tiene 0..N Tipos y cada Tipo pertenece a una Sección.
+No se introduce un gestor humano global de Tipos.
 
-```text
-PERFIL ACTUAL
-│
-├── VER ESTADO
-│
-└── EDITAR
-```
+La edición y creación contextual de Tipos se incorporó en
+`cd0ccd9`. Ello no implica que todas sus operaciones futuras
+estén completadas.
 
-### VER ESTADO
+Los slugs e identificadores estructurales permanecen internos.
+En altas se generan automáticamente; al renombrar un objeto,
+su identidad técnica permanece estable. No existe edición
+ordinaria u opcional del slug desde la interfaz.
 
-Debe ofrecer una visión global y compacta del esqueleto actual.
+Las operaciones de orden, ubicación y capacidades se mantienen
+sujetas a sus respectivos estados de implementación y pruebas.
+Compartir backend con el Engine no implica una UX monolítica.
 
-Su finalidad es:
+**Evidencia:** `dac578d`, desplegado en KOOPITA.
+La prueba humana de `Otra Sección` oculta confirmó el filtro
+condicional, acceso directo a `EDITAR` y conservación del estado.
+Resultado: **prueba sapiens PASS**.
 
-```text
-- consulta
-- orientación
-- comparación
-- comprobación
-- apoyo a la toma de decisiones
-```
+### Creación y mantenimiento contextual
 
-No debe ser el editor con campos deshabilitados ni una exposición exhaustiva
-de metadatos internos.
+La creación de estructura sigue una secuencia humana:
 
-La **SECCIÓN MAESTRA** aparece dentro de esa visión como una Sección más.
-No necesita tratamiento visual especial en VER ESTADO.
+1. crear una Sección;
+2. aplicar su creación;
+3. gestionar y crear sus Tipos dentro de esa Sección.
 
-### EDITAR
+El Engine admite técnicamente la creación simultánea de Sección
+y Tipos dependientes, pero esa posibilidad no constituye un
+requisito para la interfaz humana.
 
-La edición debe llevar progresivamente hacia una única operación concreta.
+### Ubicación y orden
 
-```text
-EDITAR
-│
-├── SECCIÓN MAESTRA
-│   └── MODIFICAR propiedades permitidas
-│
-└── SECCIONES
-    │
-    ├── CREAR
-    │
-    └── ELEGIR EXISTENTE
-        │
-        └── SECCIÓN
-            │
-            ├── MODIFICAR
-            ├── OCULTAR / MOSTRAR
-            │
-            └── TIPOS
-                │
-                ├── CREAR
-                │
-                └── ELEGIR EXISTENTE
-                    │
-                    └── TIPO
-                        ├── MODIFICAR
-                        └── OCULTAR / MOSTRAR
-```
+`area` y `order` son atributos estructurales internos.
 
-Principio de interacción:
-
-```text
-EDITAR
-    → foco progresivo
-    → una operación humana por vez
-```
-
-La SECCIÓN MAESTRA utiliza el mismo lenguaje visual que las demás Secciones,
-pero los atributos protegidos por el Engine no se ofrecen para edición.
-
-### Relación Sección → Tipo
-
-El modelo operativo es:
-
-```text
-Sección
-    → 0..N Tipos
-
-Tipo
-    → exactamente una Sección
-```
-
-Los Tipos se gestionan siempre dentro del contexto de su Sección.
-
-No existe un gestor humano global de Tipos.
-
-La asociación técnica mediante `scope` y `scope_id` permanece interna y no se
-expone al operador.
-
-### Creación
-
-La creación sigue una secuencia humana simple.
-
-```text
-crear Sección
-    ↓
-aplicar
-    ↓
-Sección existente
-    ↓
-crear Tipo
-```
-
-No es necesario que la UX final permita crear simultáneamente una Sección y
-un Tipo dependiente.
-
-El soporte actualmente existente para esa operación simultánea se conserva
-como capacidad técnica probada, pero no define la UX objetivo.
-
-### Identidad y campos internos
-
-La interfaz ordinaria no expone:
-
-```text
-- slug
-- scope
-- scope_id
-- UUID
-- fingerprints
-- IDs WordPress
-- códigos del planner
-- identidad técnica
-```
-
-`order` y `area` tampoco se presentan como conceptos técnicos.
-
-Cuando sea necesario reorganizar Secciones, la interfaz debe expresar esa
-operación directamente mediante controles humanos de posición y ubicación.
+La interfaz debe ofrecer controles comprensibles para reordenar
+Secciones y ubicarlas en `Menú Principal` o `Menú Secundario`,
+sin exigir al operador manipular esos atributos directamente.
 
 ### Conservación histórica
 
-Una estructura ya materializada y potencialmente referenciada no se elimina
-desde la edición ordinaria.
+Los objetos existentes y materializados conservan identidad,
+relaciones y contenido histórico.
 
-```text
-objeto existente
-    → modificar
-    → mostrar / ocultar
-    → conservar identidad e historia
+Pueden modificarse u ocultarse dentro de las operaciones
+permitidas, pero no eliminarse destructivamente.
 
-objeto nuevo todavía no aplicado
-    → puede descartarse
-```
+Los objetos nuevos, todavía no aplicados, pueden descartarse
+sin afectar la estructura materializada.
 
-Ocultar una Sección o Tipo afecta su disponibilidad futura, no destruye el
-contenido histórico que lo referencia.
+### Editor de integración
 
-### Frontera con el Engine
+El editor estructural monolítico conserva valor como prueba
+de integración del Engine, pero constituye deuda de interfaz.
 
-La interfaz construye una propuesta estructural completa y la entrega a las
-primitivas autoritativas existentes.
-
-```text
-UI humana
-    ↓
-propuesta completa
-    ↓
-validación
-    ↓
-planner
-    ↓
-PAUSA breve
-    ↓
-reconciliación
-    ↓
-verificación
-```
-
-La UX no replica ni reemplaza esas responsabilidades.
-
-### Estado del prototipo actual
-
-La pantalla monolítica `EDITAR INSTANCIA` permanece como banco de pruebas
-funcional y prueba de integración del Engine.
-
-Constituye **DEUDA ACTUAL de UX**.
-
-Debe ser reemplazada progresivamente por la interfaz de `PERFIL ACTUAL`,
-reutilizando las primitivas existentes de:
-
-```text
-- extracción de estructura
-- construcción de propuesta
-- validación
-- fingerprints
-- Preview
-- Apply
-- reconciliación
-- rollback / recuperación
-```
-
-El objetivo del refactor es reemplazar la presentación y navegación humanas,
-no rediseñar el Engine.
+Su sustitución progresiva debe reutilizar las operaciones
+autoritativas existentes, no duplicarlas ni rediseñarlas.
 
 # 16. Organización `main|more`
 
@@ -2712,7 +2581,7 @@ Bocetos anteriores con `Planificación`, `Actividades`, `Recursos`, etc. están 
 
 ---
 
-# 20. Estado técnico operativo — 2026-10-12
+# 20. Estado técnico operativo — 2026-10-23
 
 ## Git
 
@@ -2723,17 +2592,22 @@ repo:
 branch:
 0.3.0-dev
 
-HEAD / origin:
-d02000dd70a741179b90b76457724cc97ab8b0ab
-d02000d Fix promoted structure preview round-trip
+HEAD / origin antes de esta revisión documental:
+dac578d Simplify instance section visibility management
 
 worktree:
-limpio al cierre de d02000d
+limpio y sincronizado tras dac578d
 ```
 
 Cadena reciente:
 
 ```text
+dac578d  Simplify instance section visibility management
+c3b43b1  Document AI assistance and human oversight
+cd0ccd9  Add Perfil Actual type editing and creation UI
+6b70b0d  Simplify Perfil Actual section editing
+bee7a07  Add progressive Perfil Actual navigation
+4278f08  Add Perfil Actual maintenance shell
 d02000d  Fix promoted structure preview round-trip
 9a5a200  Improve instance structure editor feedback
 cec9e8e  Preserve core invariants during structure update
@@ -2805,6 +2679,23 @@ Verificación humana:
 - /otra-seccion/ funciona
 - TipoWoow aparece al crear una entrada en Otra Sección
 ```
+
+### Estado posterior verificado — 2026-10-23
+
+El registro anterior de alta estructural describe la prueba histórica,
+no necesariamente el estado actual de la instancia.
+
+En pruebas posteriores, `Otra Sección` fue ocultada y se comprobó
+que conserva su identidad, Tipos, contenido y referencias.
+
+El recorrido `Estado actual → Incluir secciones ocultas → EDITAR`
+se validó en KOOPITA: **prueba sapiens PASS**.
+
+`inc/profile-admin.php` quedó desplegado con el mismo hash que
+el repositorio en `dac578d`.
+
+No se reconfirmaron en esta revisión los conteos globales ni
+el fingerprint anterior; se conservan como datos históricos.
 
 ## BITA
 
@@ -3039,35 +2930,38 @@ adopta.
 | P26 | CERRADO | Ciclo completo Template → CREACIÓN → adopción → Library → catálogo → DELETE verificado en KOOPITA |
 | P27 | CERRADO | Pipeline PROMOCIÓN verificado; los casos históricos de duplicación deberán actualizarse al nuevo criterio exacto |
 | P28 | CERRADO | RESPALDO DOCUMENTAL v1: collector + ZIP + descarga UI + prueba con entrada, comentarios y attachment físico |
-| P29 | DEUDA ACTUAL | Editor monolítico de instancia funciona como prototipo pero debe reemplazarse por UX progresiva/contextual |
-| P30 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | UX de instancia: `VER ESTADO` panorámico + `EDITAR` progresivo por Sección y sus Tipos |
-| P31 | DECIDIDO / PENDIENTE DE IMPLEMENTACIÓN | Slug automático en altas, editable como opción secundaria; slug existente estable |
+| P29 | EN PROGRESO | Editor monolítico conserva función de integración; interfaz contextual parcialmente implementada, con operaciones pendientes |
+| P30 | CERRADO (ALCANCE PROBADO) | Estado actual con EDITAR directo e Incluir secciones ocultas condicional, validado humanamente en KOOPITA |
+| P31 | CERRADO | Slugs generados automáticamente, ocultos en la interfaz ordinaria y estables ante renombrados; edición manual descartada |
 | P32 | PENDIENTE DE ANÁLISIS | Resolver o documentar el acceso directo a archivos físicos durante PAUSA cuando el webserver puede servirlos sin pasar por WordPress |
 
 ---
 
 # 25. Trabajo pendiente para cerrar 0.3.0
 
-Las primitivas estructurales principales del Engine ya están implementadas y
-probadas.
+El Engine estructural dispone de extracción, validación, fingerprints,
+planner, PAUSA breve, reconciliación, verificación y recuperación PRE.
 
-Prioridades actuales:
+La interfaz contextual de Perfil Actual está parcialmente implementada.
+El recorrido de visibilidad de Secciones se encuentra validado.
 
-1. cerrar el diseño UX de mantenimiento de instancia:
-   - `VER ESTADO`
-   - `EDITAR → SECCIONES`
-   - Tipos gestionados contextualmente dentro de su Sección;
-2. reemplazar gradualmente el editor monolítico por operaciones pequeñas sin
-   modificar la frontera autoritativa del Engine;
-3. resolver o documentar definitivamente el acceso directo a medios durante
-   PAUSA;
-4. ejecutar regresión bundled y fresh/idempotencia en BITA;
-5. probar capabilities pendientes sobre usuarios no administradores;
-6. realizar regresión final de `0.3.0`;
-7. preparar release `0.3.0`.
+Prioridades de continuidad:
 
-No reabrir extracción, fingerprints, planner, reconciliación, PAUSA, lock,
-rollback o APPLY salvo que una regresión concreta demuestre un defecto.
+1. Auditar las operaciones contextuales de Secciones y Tipos todavía
+   incompletas y elegir una vertical pequeña para implementar y probar.
+2. Completar controles humanos de orden y ubicación de Secciones
+   (Menú Principal / Menú Secundario).
+3. Resolver o documentar el acceso directo a archivos físicos
+   durante PAUSA (P32).
+4. Probar capabilities pendientes (P19) y primera puesta en uso
+   desde una instalación neutra (P18).
+5. Ejecutar pruebas bundled y fresh/idempotencia en BITA (P20).
+6. Completar regresión final y preparar release 0.3.0 (P22).
+
+El § 24 es el registro autoritativo de pendientes. Esta sección
+solamente propone el orden de trabajo.
+
+No rediseñar el Engine estructural sin evidencia de regresión.
 
 # 26. Convenciones operativas de terminal
 
@@ -3112,111 +3006,44 @@ No confundir bloques clásicos con bloques `cacli`.
 
 # 27. Punto de reentrada recomendado
 
-Estado al 2026-10-12:
+**Referencia técnica previa a esta actualización documental:**
+`dac578d Simplify instance section visibility management`.
 
-La infraestructura estructural de instancia está implementada y verificada.
+Rama `0.3.0-dev`, sincronizada con `origin/0.3.0-dev`.
+Repositorio canónico: `/home/dosmilun/repos/bitacora`.
 
-```text
-CURRENT
-    ↓
-extraer PRE
-    ↓
-construir PROPUESTA
-    ↓
-validar
-    ↓
-verificar CURRENT == PRE
-    ↓
-PAUSA breve + lock
-    ↓
-aplicar / reconciliar
-    ↓
-verificar POST
-    ↓
-ACTIVE
-```
+KOOPITA:
+`/home/dosmilun/koopita.angiru.uy`
 
-La pantalla monolítica `EDITAR INSTANCIA` permitió demostrar integralmente este
-pipeline, pero no representa la UX objetivo.
+BITA:
+`/home/bita020/bita.dreamhosters.com`
 
-Dirección acordada:
+## Estado funcional
 
-```text
-INSTANCIA
-│
-├── VER ESTADO
-│
-└── EDITAR
-     │
-     └── SECCIONES
-          │
-          ├── CREAR
-          │
-          └── ELEGIR
-               │
-               └── SECCIÓN
-                    │
-                    ├── MODIFICAR
-                    ├── OCULTAR / MOSTRAR
-                    │
-                    └── TIPOS
-                         │
-                         ├── CREAR
-                         │
-                         └── ELEGIR
-                              │
-                              └── TIPO
-                                   ├── MODIFICAR
-                                   └── OCULTAR / MOSTRAR
-```
+- Perfil Actual muestra Estado actual y EDITAR por Sección.
+- Incluir secciones ocultas aparece sólo si existen.
+- El filtro es visual y no modifica el estado materializado.
+- EDITAR abre directamente la Sección elegida, incluso oculta.
+- OCULTAR/HACER VISIBLE requiere VISTA PREVIA y APLICAR.
+- Existen operaciones contextuales de creación y edición de Tipos.
+- El editor monolítico conserva valor como integración, no como UX final.
+- Otra Sección permanece oculta en KOOPITA.
+- Prueba humana del recorrido simplificado: PASS (2026-10-23).
 
-Principios:
+El Perfil de origen no cambia al mantener el Perfil Actual.
+La historia de Secciones y Tipos debe conservarse.
 
-```text
-VER ESTADO
-    → panorama del esqueleto
-    → consulta / comparación / comprobación
+## Próxima tarea
 
-EDITAR
-    → foco progresivo
-    → una operación concreta por vez
-```
+Verificar HEAD, origin y estado del repositorio después del commit
+de esta revisión documental. Consultar § 24 y § 25.
 
-Cardinalidad relevante:
+Auditar en el código las operaciones contextuales aún provisionales.
+Completar una vertical funcional pequeña, con inspección, parche
+protegido, lint, despliegue KOOPITA, prueba humana, commit y push.
 
-```text
-Sección → 0..N Tipos
-Tipo    → una sola Sección
-```
+No recuperar como propuesta vigente la navegación superada
+EDITAR ESTRUCTURA / SECCIONES OCULTAS / TRAER / ELEGIR.
 
-Por ello los Tipos se gestionan contextualmente desde su Sección.
-
-Slugs:
-
-```text
-alta
-    → propuesto automáticamente
-    → editable opcionalmente en zona secundaria
-
-objeto existente
-    → identidad técnica estable
-    → no edición ordinaria
-```
-
-CURRENT de KOOPITA después de la prueba humana:
-
-```text
-Otra Sección
-    slug=otra-seccion
-    area=more
-
-TipoWoow
-    slug=otra-secc-tipo
-    scope_id=otra-seccion
-```
-
-**Próximo paso recomendado:**
-
-continuar el diseño UX empezando por el contenido y jerarquía visual de
-`VER ESTADO`, y luego la primera pantalla de `EDITAR → SECCIONES`, sin
-rediseñar el Engine estructural.
+Los slugs son identidades técnicas automáticas y no se editan
+desde la interfaz humana ordinaria.
