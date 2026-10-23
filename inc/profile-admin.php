@@ -2515,6 +2515,19 @@ function bitacora_render_instance_editor_admin_page() {
                                                 $form_definition['core'],
                                 )
                                 + $sections;
+
+                        $overview_has_hidden = false;
+
+                        foreach ( $sections as $overview_candidate ) {
+                                if ( 'hidden' === (string) ( $overview_candidate['state'] ?? 'active' ) ) {
+                                        $overview_has_hidden = true;
+                                        break;
+                                }
+                        }
+
+                        $include_hidden = $overview_has_hidden
+                                && isset( $_GET['include_hidden'] )
+                                && '1' === (string) wp_unslash( $_GET['include_hidden'] );
                         ?>
 
                         <h2>Estado actual</h2>
@@ -2523,6 +2536,23 @@ function bitacora_render_instance_editor_admin_page() {
                                 Visión general de la estructura actualmente
                                 materializada.
                         </p>
+
+                        <?php if ( $overview_has_hidden ) : ?>
+                                <p>Este perfil contiene secciones ocultas.</p>
+                                <form method="get" action="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>">
+                                        <input type="hidden" name="post_type" value="bitacora_item">
+                                        <input type="hidden" name="page" value="bitacora-instance-editor">
+                                        <label>
+                                                <input type="checkbox" name="include_hidden" value="1"
+                                                       <?php checked( $include_hidden ); ?>
+                                                       onchange="this.form.submit()">
+                                                Incluir secciones ocultas
+                                        </label>
+                                        <noscript>
+                                                <button type="submit" class="button button-small">Actualizar lista</button>
+                                        </noscript>
+                                </form>
+                        <?php endif; ?>
 
                         <table class="widefat striped">
                                 <thead>
@@ -2543,6 +2573,20 @@ function bitacora_render_instance_editor_admin_page() {
                                                 $overview_section
                                         ) :
                                                 $overview_position++;
+
+                                                $overview_row_state = 'notas' === $overview_slug
+                                                        ? 'active'
+                                                        : (string) ( $overview_section['state'] ?? 'active' );
+
+                                                if (
+                                                        'active' !== $overview_row_state
+                                                        && (
+                                                                'hidden' !== $overview_row_state
+                                                                || ! $include_hidden
+                                                        )
+                                                ) {
+                                                        continue;
+                                                }
 
                                                 $overview_type_count = 0;
 
@@ -4211,12 +4255,135 @@ function bitacora_render_instance_editor_admin_page() {
                                         ?>
                                 </h3>
 
+                                <?php if ( 'section-state' === $instance_editor_edit_view ) : ?>
+                                        <?php
+                                        $pre_section = $snapshot['definition']['sections'][ $selected_section_slug ] ?? null;
+                                        $pre_state = is_array( $pre_section )
+                                                ? (string) ( $pre_section['state'] ?? 'active' )
+                                                : '';
+                                        $can_change_visibility = ! $selected_section_is_core
+                                                && in_array( $pre_state, array( 'active', 'hidden' ), true );
+                                        $target_state = 'active' === $pre_state ? 'hidden' : 'active';
+                                        ?>
+
+                                        <?php if ( is_array( $apply_result ) ) : ?>
+                                                <div class="notice notice-success inline">
+                                                        <p>Cambio de visibilidad aplicado y verificado.</p>
+                                                </div>
+                                                <p>
+                                                        <a href="<?php echo esc_url(
+                                                                add_query_arg(
+                                                                        array(
+                                                                                'mode' => 'edit',
+                                                                                'edit_view' => 'section',
+                                                                                'section_ref' => $section_ref,
+                                                                        ),
+                                                                        bitacora_get_instance_editor_admin_url()
+                                                                )
+                                                        ); ?>">← Volver a la Sección</a>
+                                                </p>
+                                        <?php elseif ( $can_change_visibility ) : ?>
+                                                <p>
+                                                        Sección: <strong><?php echo esc_html(
+                                                                (string) $pre_section['name']
+                                                        ); ?></strong>
+                                                </p>
+                                                <p>
+                                                        Operación: <strong><?php echo esc_html(
+                                                                'hidden' === $target_state
+                                                                        ? 'OCULTAR'
+                                                                        : 'HACER VISIBLE'
+                                                        ); ?></strong>
+                                                </p>
+                                                <p class="description">
+                                                        El contenido histórico se conserva.
+                                                        Una sección oculta sale de la navegación
+                                                        normal y no admite nuevas entradas.
+                                                </p>
+
+                                                <?php if ( ! empty( $preview_errors ) ) : ?>
+                                                        <div class="notice notice-error inline">
+                                                                <?php foreach ( $preview_errors as $message ) : ?>
+                                                                        <p><?php echo esc_html( $message ); ?></p>
+                                                                <?php endforeach; ?>
+                                                        </div>
+                                                <?php elseif ( is_array( $preview ) ) : ?>
+                                                        <div class="notice notice-success inline">
+                                                                <p>Vista previa válida:
+                                                                        <?php echo esc_html(
+                                                                                number_format_i18n( $preview['action_count'] )
+                                                                        ); ?> cambio(s) preparado(s).
+                                                                </p>
+                                                        </div>
+                                                <?php endif; ?>
+
+                                                <form method="post">
+                                                        <?php wp_nonce_field(
+                                                                'bitacora_edit_instance_structure',
+                                                                'bitacora_instance_editor_nonce'
+                                                        ); ?>
+                                                        <input type="hidden" name="pre_fingerprint"
+                                                               value="<?php echo esc_attr( $snapshot['fingerprint'] ); ?>">
+
+                                                        <?php if ( '' !== $reviewed_proposal_fingerprint ) : ?>
+                                                                <input type="hidden" name="reviewed_proposal_fingerprint"
+                                                                       value="<?php echo esc_attr( $reviewed_proposal_fingerprint ); ?>">
+                                                        <?php endif; ?>
+
+                                                        <input type="hidden"
+                                                               name="instance[sections][<?php echo esc_attr( $selected_section_slug ); ?>][_present]"
+                                                               value="1">
+                                                        <input type="hidden"
+                                                               name="instance[sections][<?php echo esc_attr( $selected_section_slug ); ?>][state]"
+                                                               value="<?php echo esc_attr( $target_state ); ?>">
+
+                                                        <?php foreach ( array(
+                                                                'feature_file',
+                                                                'feature_location',
+                                                                'feature_comments'
+                                                        ) as $feature ) : ?>
+                                                                <input type="hidden"
+                                                                       name="instance[sections][<?php echo esc_attr( $selected_section_slug ); ?>][<?php echo esc_attr( $feature ); ?>]"
+                                                                       value="<?php echo ! empty( $pre_section[ $feature ] ) ? '1' : '0'; ?>">
+                                                        <?php endforeach; ?>
+
+                                                        <p>
+                                                                <button type="submit" class="button button-secondary"
+                                                                        name="bitacora_instance_editor_action"
+                                                                        value="preview">VISTA PREVIA</button>
+                                                        </p>
+
+                                                        <?php if (
+                                                                is_array( $preview )
+                                                                && ! empty( $preview['action_count'] )
+                                                                && '' !== $reviewed_proposal_fingerprint
+                                                        ) : ?>
+                                                                <p>
+                                                                        <label>
+                                                                                <input type="checkbox" name="confirm_apply" value="1">
+                                                                                Confirmo aplicar el cambio de visibilidad revisado.
+                                                                        </label>
+                                                                </p>
+                                                                <p>
+                                                                        <button type="submit" class="button button-primary"
+                                                                                name="bitacora_instance_editor_action"
+                                                                                value="apply">APLICAR</button>
+                                                                </p>
+                                                        <?php endif; ?>
+                                                </form>
+                                        <?php else : ?>
+                                                <div class="notice notice-warning inline">
+                                                        <p>Esta Sección no admite cambios de visibilidad desde esta operación.</p>
+                                                </div>
+                                        <?php endif; ?>
+                                <?php else : ?>
                                 <p class="description">
                                         Esta operación queda preparada como
                                         destino de navegación. Su formulario
                                         específico se incorporará en la
                                         siguiente vertical.
                                 </p>
+                                <?php endif; ?>
 
 
                         <?php endif; ?>
