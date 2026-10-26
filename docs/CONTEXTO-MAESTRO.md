@@ -2196,6 +2196,49 @@ Si el esqueleto de una instancia se convierte en definición reutilizable y se
 adopta, nace un **nuevo Profile** con nueva identidad.
 
 
+## 15.11A Ruedo independiente y sustitución autónoma — DISEÑO ACORDADO
+
+El ruedo de edición es una definición estructural candidata,
+independiente de su origen y de cualquier instancia destinataria.
+
+Puede contener anomalías estructurales mientras se edita. Un archivo
+ilegible o incompatible con el formato de ruedo se rechaza al cargar.
+
+Se acuerda GUARDAR EDICIÓN, pendiente de implementación. El guardado
+conserva el estado resultante, sin historial de operaciones ni versiones
+de guardado. JSON es el formato preferido; el soporte físico permanece
+sin decidir. Versionar el formato para compatibilidad futura es distinto
+de versionar los guardados.
+
+El ruedo no requiere conservar un PRE histórico ni referencias a la
+instancia de origen.
+
+La validación estructural y la aplicabilidad a una instancia concreta
+son comprobaciones diferentes, ambas bajo autoridad del Engine.
+
+La aprobación humana de la propuesta ocurre antes de solicitar su
+sustitución. Una vez solicitada, la operación es autónoma:
+
+1. adquirir exclusividad y activar PAUSA;
+2. extraer PRE actual de la instancia destinataria;
+3. verificar compatibilidad, identidades, referencias e invariantes;
+4. reconciliar únicamente si la propuesta es aplicable;
+5. verificar POST y finalizar con OK o rechazo;
+6. ante fallo de aplicación, intentar recuperar PRE; si también falla
+   la recuperación, conservar PAUSA para diagnóstico.
+
+No se requiere una segunda confirmación humana.
+
+Este procedimiento es un objetivo de diseño acordado, NO una descripción
+del pipeline actualmente implementado y probado. Su adecuación técnica
+queda pendiente. No se sustituyen ni debilitan las garantías existentes.
+
+El Editor Bitácora y el futuro addon podrán reutilizar modelo,
+operaciones, validaciones y formato de intercambio. Se mantiene abierta
+la elección entre un editor común y dos editores con componentes
+compartidos. El addon no puede sustituir la estructura de una instancia
+viva; puede solicitar promoción de candidatos mediante el Engine.
+
 ## 15.12 UX de mantenimiento de Perfil Actual — ESTADO VIGENTE
 
 **Implementación y prueba humana verificadas al 2026-10-23.**
@@ -2260,6 +2303,38 @@ El Engine admite técnicamente la creación simultánea de Sección
 y Tipos dependientes, pero esa posibilidad no constituye un
 requisito para la interfaz humana.
 
+### Ordenador de Secciones — DISEÑO ACORDADO
+
+ORDENAR SECCIONES será una operación única para cambiar orden y
+ubicación entre Menú Principal y Menú Secundario.
+
+Acceso desde Perfil Actual, antes de la tabla Estado actual, con ayuda
+contextual que indique que las Secciones ocultas no participan.
+
+La descripción general será:
+"Visión general de la estructura del Perfil."
+
+El filtro Incluir secciones ocultas aparecerá solamente si existen
+Secciones ocultas y se ubicará después de la tabla, con información
+discreta, gris, pequeña y en cursiva.
+
+El menú de inicio dispone de dos páginas de 3 columnas y 2 filas.
+Las posiciones 1 y 2 de la primera página corresponden, de forma
+inamovible, a Sección Maestra y Nueva Entrada.
+
+Quedan cuatro posiciones móviles en Menú Principal y seis en Menú
+Secundario: diez Secciones móviles visibles como máximo.
+
+Las Secciones ocultas no participan en la ordenación. El ruedo puede
+contener temporalmente Secciones visibles sin orden, posiciones en
+conflicto o exceso de Secciones visibles, pero tales anomalías bloquean
+la sustitución hasta ser resueltas.
+
+El ordenador no necesita reproducir los botones grandes del menú final.
+Se priorizan controles simples, comprensibles y mantenibles.
+
+Reordenar Tipos permanece como mejora de baja prioridad.
+
 ### Ubicación y orden
 
 `area` y `order` son atributos estructurales internos.
@@ -2316,9 +2391,13 @@ No se implementan niveles anidados de `more` ni una paginación generalizada
 preventiva. Si un caso real necesitara más espacio, podrá evaluarse entonces
 un tercer dashboard.
 
-La cantidad práctica de Secciones que hoy caben cómodamente en los dos
-dashboards es una restricción de presentación, no una invariante del contrato
-estructural.
+La capacidad de los dos dashboards es una restricción de presentación
+y aplicabilidad al menú de inicio actual, no una invariante universal del
+formato de Template ni del ruedo de edición.
+
+Para aplicar una sustitución a esta instancia, el ordenador debe cumplir
+sus límites y posiciones reservadas. Una propuesta en edición puede
+contener anomalías, pero no trasladarlas a la instancia viva.
 
 `area` tampoco debe reutilizarse para expresar permisos o privacidad.
 
@@ -2934,6 +3013,8 @@ adopta.
 | P30 | CERRADO (ALCANCE PROBADO) | Estado actual con EDITAR directo e Incluir secciones ocultas condicional, validado humanamente en KOOPITA |
 | P31 | CERRADO | Slugs generados automáticamente, ocultos en la interfaz ordinaria y estables ante renombrados; edición manual descartada |
 | P32 | PENDIENTE DE ANÁLISIS | Resolver o documentar el acceso directo a archivos físicos durante PAUSA cuando el webserver puede servirlos sin pasar por WordPress |
+| P33 | ACORDADO / IMPLEMENTAR | GUARDAR EDICIÓN: formato portable de ruedo independiente, persistencia de estado sin historial y almacenamiento por definir |
+| P34 | ACORDADO / REVISAR IMPLEMENTACIÓN | Sustitución autónoma bajo exclusividad con extracción PRE actual, validación de aplicabilidad y sin segunda intervención humana | Resolver o documentar el acceso directo a archivos físicos durante PAUSA cuando el webserver puede servirlos sin pasar por WordPress |
 
 ---
 
